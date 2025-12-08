@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: profitdock
+    runtime: node
+    buildCommand: pnpm install && pnpm run build
+    startCommand: pnpm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_APP_ID
+        value: 114155
+      - key: VITE_OAUTH_PORTAL_URL
+        value: https://oauth.deriv.com
+      - key: DATABASE_URL
+        value: file:./prod.db
+      - key: PORT
+        value: 3000

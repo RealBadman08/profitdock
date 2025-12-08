@@ -1,0 +1,21 @@
+CREATE TABLE `bot_sessions` (
+	`id` int AUTO_INCREMENT NOT NULL,
+	`user_id` int NOT NULL,
+	`bot_name` varchar(255),
+	`bot_config` text,
+	`market` varchar(50),
+	`stake` int,
+	`duration` int,
+	`contract_type` varchar(20),
+	`total_stake` int DEFAULT 0,
+	`total_payout` int DEFAULT 0,
+	`runs` int DEFAULT 0,
+	`won` int DEFAULT 0,
+	`lost` int DEFAULT 0,
+	`profit` int DEFAULT 0,
+	`status` enum('running','paused','completed','stopped') NOT NULL DEFAULT 'completed',
+	`started_at` timestamp NOT NULL,
+	`ended_at` timestamp,
+	`created_at` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `bot_sessions_id` PRIMARY KEY(`id`)
+);

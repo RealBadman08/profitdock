@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - VITE_APP_ID=114155
+      - VITE_OAUTH_PORTAL_URL=https://oauth.deriv.com
+      - DATABASE_URL=file:./prod.db
+    volumes:
+      - ./data:/app/data
+    restart: always

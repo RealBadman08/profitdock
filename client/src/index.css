@@ -1,0 +1,239 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 8px;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Deriv-specific colors - REBRANDED */
+  --color-profit-bg: #1A1A1A;
+  --color-profit-accent: #D600AA;
+  --color-profit-text: #FFFFFF;
+  --color-profit-text-sub: #A3A3A3;
+  --color-profit-card: #262626;
+  --color-profit-border: #404040;
+}
+
+:root {
+  /* ProfitDock Theme: Charcoal Black & Magenta Purple */
+  --background: #1A1A1A; /* Charcoal Black */
+  --foreground: #FFFFFF; /* White */
+  
+  --card: #262626; /* Slightly lighter black */
+  --card-foreground: #FFFFFF;
+  
+  --popover: #262626;
+  --popover-foreground: #FFFFFF;
+  
+  --primary: #D600AA; /* Magenta Purple */
+  --primary-foreground: #FFFFFF;
+  
+  --secondary: #333333; /* Dark Gray */
+  --secondary-foreground: #FFFFFF;
+  
+  --muted: #333333;
+  --muted-foreground: #A3A3A3; /* Light Gray */
+  
+  --accent: #D600AA; /* Magenta */
+  --accent-foreground: #FFFFFF;
+  
+  --destructive: #EF4444; /* Standard Red */
+  --destructive-foreground: #FFFFFF;
+  
+  --border: #404040; /* Dark Border */
+  --input: #404040;
+  --ring: #D600AA; /* Magenta Ring */
+  
+  --chart-1: #D600AA;
+  --chart-2: #3B82F6; /* Blue */
+  --chart-3: #EF4444; /* Red */
+  --chart-4: #10B981; /* Green */
+  --chart-5: #F59E0B; /* Yellow */
+  
+  --sidebar: #1A1A1A;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #D600AA;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #262626;
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: #404040;
+  --sidebar-ring: #D600AA;
+  
+  --radius: 4px;
+}
+
+.dark {
+  /* Same as root since default is dark/black */
+  --background: #1A1A1A;
+  --foreground: #FFFFFF;
+  --card: #262626;
+  --card-foreground: #FFFFFF;
+  --popover: #262626;
+  --popover-foreground: #FFFFFF;
+  --primary: #D600AA;
+  --primary-foreground: #FFFFFF;
+  --secondary: #333333;
+  --secondary-foreground: #FFFFFF;
+  --muted: #333333;
+  --muted-foreground: #A3A3A3;
+  --accent: #D600AA;
+  --accent-foreground: #FFFFFF;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --border: #404040;
+  --input: #404040;
+  --ring: #D600AA;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+      max-width: 1280px;
+    }
+  }
+  
+  /* Deriv-Specific / ProfitDock Custom Components */
+  /* Re-styled to fit the new Charcoal/Magenta theme while keeping layout */
+  
+  .deriv-button-primary {
+    background-color: var(--primary);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 4px;
+    font-weight: 500;
+    transition: background-color 0.2s;
+  }
+  
+  .deriv-button-primary:hover {
+    filter: brightness(1.1);
+  }
+  
+  .deriv-button-buy {
+    background-color: #10B981; /* Green for Buy */
+    color: white;
+    padding: 16px 24px;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 16px;
+    width: 100%;
+    transition: filter 0.2s;
+  }
+  
+  .deriv-button-buy:hover {
+    filter: brightness(1.1);
+  }
+  
+  .deriv-button-sell {
+    background-color: #EF4444; /* Red for Sell */
+    color: white;
+    padding: 16px 24px;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 16px;
+    width: 100%;
+    transition: filter 0.2s;
+  }
+  
+  .deriv-button-sell:hover {
+    filter: brightness(1.1);
+  }
+  
+  .deriv-panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+  }
+  
+  .deriv-sidebar {
+    background: var(--sidebar);
+    border-right: 1px solid var(--sidebar-border);
+    width: 250px;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  
+  .deriv-input {
+    background: var(--input);
+    color: var(--foreground);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-size: 14px;
+    height: 40px;
+  }
+  
+  .deriv-input:focus {
+    outline: none;
+    border-color: var(--ring);
+    box-shadow: 0 0 0 1px var(--ring);
+  }
+}
