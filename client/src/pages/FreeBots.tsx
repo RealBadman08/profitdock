@@ -1,8 +1,8 @@
-import { useDeriv } from "@/contexts/DerivContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { botTemplates } from "@/data/botTemplates";
 import { useLocation } from "wouter";
-import { 
+import {
   Menu,
   MessageCircle,
   RefreshCw,
@@ -13,7 +13,8 @@ import {
 import { Link } from "wouter";
 
 export default function FreeBots() {
-  const { balance, accountType } = useDeriv();
+  const { balance, isDemo } = useAuth();
+  const accountType = isDemo ? 'demo' : 'real';
   const [, setLocation] = useLocation();
 
   const loadTemplate = (xml: string) => {
@@ -88,7 +89,7 @@ export default function FreeBots() {
             <Button variant="ghost" size="icon" className="text-white">
               <RefreshCw className="h-5 w-5" />
             </Button>
-            
+
             <div className="flex items-center gap-2 bg-gray-700 px-4 py-2 rounded-lg">
               <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
                 <span className="text-white text-xs font-bold">
@@ -154,7 +155,7 @@ export default function FreeBots() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button 
+                  <Button
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                     onClick={() => {
                       const template = botTemplates.find(t => t.name === bot.name);
@@ -179,7 +180,7 @@ export default function FreeBots() {
         <Button className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold">
           ⚠ Risk Disclaimer
         </Button>
-        
+
         <div className="flex items-center gap-4">
           <div className="text-white">
             <span className="text-gray-400">Bot status:</span> Not running

@@ -1,4 +1,4 @@
-import { useAuth } from "@/_core/hooks/useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,45 +11,47 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getLoginUrl } from "@/const";
-import { trpc } from "@/lib/trpc";
 import { Upload, FileText, Trash2, Download } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Link } from "wouter";
 
+interface StoredFile {
+  id: number;
+  filename: string;
+  mimeType: string;
+  fileSize: number;
+  category: string;
+  description?: string;
+  content: string; // Base64 content
+  createdAt: string;
+  url?: string; // Mock url
+}
+
 export default function FileStorage() {
-  const { user, loading: authLoading } = useAuth();
+  const { isAuthenticated, currentAccount } = useAuth();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [category, setCategory] = useState<"strategy" | "log" | "config" | "other">("strategy");
   const [description, setDescription] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [files, setFiles] = useState<StoredFile[]>([]);
 
-  const { data: files, isLoading, refetch } = trpc.files.list.useQuery(undefined, {
-    enabled: !!user,
-  });
+  useEffect(() => {
+    // Load files from local storage
+    const savedFiles = localStorage.getItem('profitdock_files');
+    if (savedFiles) {
+      try {
+        setFiles(JSON.parse(savedFiles));
+      } catch (e) {
+        console.error("Failed to parse files", e);
+      }
+    }
+  }, []);
 
-  const uploadMutation = trpc.files.upload.useMutation({
-    onSuccess: () => {
-      toast.success("File uploaded successfully");
-      setSelectedFile(null);
-      setDescription("");
-      refetch();
-    },
-    onError: (error) => {
-      toast.error(`Upload failed: ${error.message}`);
-    },
-  });
-
-  const deleteMutation = trpc.files.delete.useMutation({
-    onSuccess: () => {
-      toast.success("File deleted successfully");
-      refetch();
-    },
-    onError: (error) => {
-      toast.error(`Delete failed: ${error.message}`);
-    },
-  });
+  const saveFiles = (newFiles: StoredFile[]) => {
+    setFiles(newFiles);
+    localStorage.setItem('profitdock_files', JSON.stringify(newFiles));
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -65,33 +67,43 @@ export default function FileStorage() {
 
     setUploading(true);
     try {
-      // Convert file to base64
       const reader = new FileReader();
       reader.onload = async (e) => {
         const base64Data = e.target?.result as string;
-        const base64Content = base64Data.split(",")[1]; // Remove data:mime;base64, prefix
 
-        await uploadMutation.mutateAsync({
+        const newFile: StoredFile = {
+          id: Date.now(),
           filename: selectedFile.name,
           mimeType: selectedFile.type,
           fileSize: selectedFile.size,
           category,
-          description: description || undefined,
-          base64Data: base64Content,
-        });
+          description,
+          content: base64Data,
+          createdAt: new Date().toISOString(),
+          url: base64Data // Data URL works for download
+        };
 
+        const updatedFiles = [newFile, ...files];
+        saveFiles(updatedFiles);
+
+        toast.success("File uploaded successfully");
+        setSelectedFile(null);
+        setDescription("");
         setUploading(false);
       };
       reader.readAsDataURL(selectedFile);
     } catch (error) {
       setUploading(false);
       console.error("Upload error:", error);
+      toast.error("Upload failed");
     }
   };
 
   const handleDelete = (id: number) => {
     if (confirm("Are you sure you want to delete this file?")) {
-      deleteMutation.mutate({ id });
+      const updatedFiles = files.filter(f => f.id !== id);
+      saveFiles(updatedFiles);
+      toast.success("File deleted successfully");
     }
   };
 
@@ -102,27 +114,19 @@ export default function FileStorage() {
     return `${(kb / 1024).toFixed(2)} MB`;
   };
 
-  if (authLoading) {
+  if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Loading...</p>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Card className="bg-card border-border max-w-md">
+      <div className="min-h-screen bg-[#1A1A1A] flex items-center justify-center">
+        <Card className="bg-[#2A2A2A] border-gray-800 max-w-md">
           <CardHeader>
-            <CardTitle className="text-foreground">Authentication Required</CardTitle>
-            <CardDescription className="text-muted-foreground">
+            <CardTitle className="text-white">Authentication Required</CardTitle>
+            <CardDescription className="text-gray-400">
               Please log in to access file storage
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button asChild className="w-full bg-accent hover:bg-accent-glow text-white">
-              <a href={getLoginUrl()}>Log In</a>
+            <Button asChild className="w-full bg-[#C026D3] hover:bg-[#A021B3] text-white">
+              <Link href="/login">Log In</Link>
             </Button>
           </CardContent>
         </Card>
@@ -131,18 +135,18 @@ export default function FileStorage() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="min-h-screen bg-[#1A1A1A] text-white">
       {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b border-gray-800 bg-[#2A2A2A]/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Link href="/">
-              <a className="text-xl font-bold text-foreground hover:text-accent transition-colors">
+              <a className="text-xl font-bold text-white hover:text-[#C026D3] transition-colors">
                 ← Back to ProfitDock
               </a>
             </Link>
             <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">{user.name || user.email}</span>
+              <span className="text-sm text-gray-400">{currentAccount?.loginid}</span>
             </div>
           </div>
         </div>
@@ -150,60 +154,60 @@ export default function FileStorage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">
-        <h1 className="text-3xl font-bold mb-2 text-foreground">File Storage</h1>
-        <p className="text-muted-foreground mb-8">
-          Upload and manage your trading bot strategy files, logs, and configurations
+        <h1 className="text-3xl font-bold mb-2 text-white">File Storage</h1>
+        <p className="text-gray-400 mb-8">
+          Upload and manage your trading bot strategy files, logs, and configurations (Local Storage)
         </p>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           {/* Upload Section */}
-          <Card className="bg-card border-border">
+          <Card className="bg-[#2A2A2A] border-gray-800">
             <CardHeader>
-              <CardTitle className="text-foreground flex items-center gap-2">
+              <CardTitle className="text-white flex items-center gap-2">
                 <Upload className="w-5 h-5" />
                 Upload File
               </CardTitle>
-              <CardDescription className="text-muted-foreground">
+              <CardDescription className="text-gray-400">
                 Upload strategy files, logs, or configuration files
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="file" className="text-foreground">
+                <Label htmlFor="file" className="text-gray-300">
                   Select File
                 </Label>
                 <Input
                   id="file"
                   type="file"
                   onChange={handleFileSelect}
-                  className="bg-input border-border text-foreground"
+                  className="bg-[#1A1A1A] border-gray-700 text-white"
                 />
                 {selectedFile && (
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-gray-400">
                     Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
                   </p>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="category" className="text-foreground">
+                <Label htmlFor="category" className="text-gray-300">
                   Category
                 </Label>
                 <Select value={category} onValueChange={(v: any) => setCategory(v)}>
-                  <SelectTrigger className="bg-input border-border text-foreground">
+                  <SelectTrigger className="bg-[#1A1A1A] border-gray-700 text-white">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-popover border-border">
-                    <SelectItem value="strategy">Strategy</SelectItem>
-                    <SelectItem value="log">Log</SelectItem>
-                    <SelectItem value="config">Configuration</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                  <SelectContent className="bg-[#2A2A2A] border-gray-700">
+                    <SelectItem value="strategy" className="text-white">Strategy</SelectItem>
+                    <SelectItem value="log" className="text-white">Log</SelectItem>
+                    <SelectItem value="config" className="text-white">Configuration</SelectItem>
+                    <SelectItem value="other" className="text-white">Other</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-foreground">
+                <Label htmlFor="description" className="text-gray-300">
                   Description (Optional)
                 </Label>
                 <Textarea
@@ -211,14 +215,14 @@ export default function FileStorage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Add a description for this file..."
-                  className="bg-input border-border text-foreground"
+                  className="bg-[#1A1A1A] border-gray-700 text-white"
                 />
               </div>
 
               <Button
                 onClick={handleUpload}
                 disabled={!selectedFile || uploading}
-                className="w-full button-glow bg-accent hover:bg-accent-glow text-white"
+                className="w-full bg-[#C026D3] hover:bg-[#A021B3] text-white"
               >
                 {uploading ? "Uploading..." : "Upload File"}
               </Button>
@@ -226,37 +230,37 @@ export default function FileStorage() {
           </Card>
 
           {/* Stats Card */}
-          <Card className="bg-card border-border">
+          <Card className="bg-[#2A2A2A] border-gray-800">
             <CardHeader>
-              <CardTitle className="text-foreground">Storage Statistics</CardTitle>
-              <CardDescription className="text-muted-foreground">
-                ProfitDock file storage overview
+              <CardTitle className="text-white">Storage Statistics</CardTitle>
+              <CardDescription className="text-gray-400">
+                Local storage usage
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 gap-4">
-                <div className="card bg-muted/30 text-center">
-                  <p className="text-sm text-muted-foreground mb-1">Total Files</p>
-                  <p className="text-2xl font-bold text-foreground">{files?.length || 0}</p>
+                <div className="p-4 bg-[#1A1A1A] rounded-lg text-center">
+                  <p className="text-sm text-gray-400 mb-1">Total Files</p>
+                  <p className="text-2xl font-bold text-white">{files.length}</p>
                 </div>
-                <div className="card bg-muted/30 text-center">
-                  <p className="text-sm text-muted-foreground mb-1">Total Size</p>
-                  <p className="text-2xl font-bold text-accent">
+                <div className="p-4 bg-[#1A1A1A] rounded-lg text-center">
+                  <p className="text-sm text-gray-400 mb-1">Total Size</p>
+                  <p className="text-2xl font-bold text-[#C026D3]">
                     {formatFileSize(
-                      files?.reduce((acc, file) => acc + (file.fileSize || 0), 0) || 0
+                      files.reduce((acc, file) => acc + (file.fileSize || 0), 0)
                     )}
                   </p>
                 </div>
-                <div className="card bg-muted/30 text-center">
-                  <p className="text-sm text-muted-foreground mb-1">Strategies</p>
+                <div className="p-4 bg-[#1A1A1A] rounded-lg text-center">
+                  <p className="text-sm text-gray-400 mb-1">Strategies</p>
                   <p className="text-2xl font-bold text-green-500">
-                    {files?.filter((f) => f.category === "strategy").length || 0}
+                    {files.filter((f) => f.category === "strategy").length}
                   </p>
                 </div>
-                <div className="card bg-muted/30 text-center">
-                  <p className="text-sm text-muted-foreground mb-1">Logs</p>
+                <div className="p-4 bg-[#1A1A1A] rounded-lg text-center">
+                  <p className="text-sm text-gray-400 mb-1">Logs</p>
                   <p className="text-2xl font-bold text-blue-500">
-                    {files?.filter((f) => f.category === "log").length || 0}
+                    {files.filter((f) => f.category === "log").length}
                   </p>
                 </div>
               </div>
@@ -265,54 +269,54 @@ export default function FileStorage() {
         </div>
 
         {/* Files List */}
-        <Card className="bg-card border-border">
+        <Card className="bg-[#2A2A2A] border-gray-800">
           <CardHeader>
-            <CardTitle className="text-foreground">Your Files</CardTitle>
-            <CardDescription className="text-muted-foreground">
+            <CardTitle className="text-white">Your Files</CardTitle>
+            <CardDescription className="text-gray-400">
               Manage your uploaded files
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
-              <p className="text-center text-muted-foreground py-8">Loading files...</p>
-            ) : files && files.length > 0 ? (
+            {files && files.length > 0 ? (
               <div className="space-y-3">
                 {files.map((file) => (
                   <div
                     key={file.id}
-                    className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border"
+                    className="flex items-center justify-between p-4 rounded-lg bg-[#1A1A1A] border border-gray-700"
                   >
                     <div className="flex items-start gap-4 flex-1">
-                      <FileText className="w-8 h-8 text-accent flex-shrink-0 mt-1" />
+                      <FileText className="w-8 h-8 text-[#C026D3] flex-shrink-0 mt-1" />
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-foreground truncate">
+                        <h3 className="font-semibold text-white truncate">
                           {file.filename}
                         </h3>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-sm text-gray-400">
                           {file.category} • {formatFileSize(file.fileSize)} •{" "}
                           {new Date(file.createdAt).toLocaleDateString()}
                         </p>
                         {file.description && (
-                          <p className="text-sm text-muted-foreground mt-1">{file.description}</p>
+                          <p className="text-sm text-gray-500 mt-1">{file.description}</p>
                         )}
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        asChild
-                        className="border-border text-foreground hover:bg-accent/10"
-                      >
-                        <a href={file.url} target="_blank" rel="noopener noreferrer">
-                          <Download className="w-4 h-4" />
-                        </a>
-                      </Button>
+                      {file.url && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          asChild
+                          className="border-gray-700 text-white hover:bg-[#3A3A3A]"
+                        >
+                          <a href={file.url} download={file.filename}>
+                            <Download className="w-4 h-4" />
+                          </a>
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleDelete(file.id)}
-                        className="border-border text-destructive hover:bg-destructive/10"
+                        className="border-gray-700 text-red-500 hover:bg-red-900/20"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -322,9 +326,9 @@ export default function FileStorage() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <FileText className="w-16 h-16 text-muted-foreground mx-auto mb-4 opacity-50" />
-                <p className="text-muted-foreground">No files uploaded yet</p>
-                <p className="text-sm text-muted-foreground mt-1">
+                <FileText className="w-16 h-16 text-gray-600 mx-auto mb-4 opacity-50" />
+                <p className="text-gray-400">No files uploaded yet</p>
+                <p className="text-sm text-gray-500 mt-1">
                   Upload your first file to get started
                 </p>
               </div>

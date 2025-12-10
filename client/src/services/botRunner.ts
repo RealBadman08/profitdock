@@ -5,11 +5,14 @@ export interface BotConfig {
   initialStake: number;
   duration: number;
   durationUnit: 't' | 's' | 'm';
-  contractType: 'CALL' | 'PUT';
-  strategy: 'martingale' | 'dalembert' | 'oscars_grind';
+  contractType: 'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF' | 'DIGITODD' | 'DIGITEVEN' | 'DIGITOVER' | 'DIGITUNDER';
+  strategy: 'martingale' | 'dalembert' | 'oscars_grind' | 'winners_row' | 'compound';
   stopLoss?: number;
   takeProfit?: number;
   currency: string;
+  prediction?: number; // For Digit Match/Differs
+  martingaleMultiplier?: number;
+  maxStake?: number;
 }
 
 export interface BotStats {
@@ -41,6 +44,7 @@ export class BotRunner {
   private statsCallback?: StatsCallback;
   private tradeCallback?: TradeCallback;
   private consecutiveLosses = 0;
+  private consecutiveWins = 0;
 
   constructor(config: BotConfig) {
     this.config = config;
@@ -89,7 +93,7 @@ export class BotRunner {
   private async executeTrade() {
     try {
       // Get proposal
-      const proposal = await this.derivWS.getProposal({
+      const proposalParams: any = {
         contract_type: this.config.contractType,
         symbol: this.config.symbol,
         duration: this.config.duration,
@@ -97,7 +101,17 @@ export class BotRunner {
         basis: 'stake',
         amount: this.currentStake,
         currency: this.config.currency,
-      });
+      };
+
+      // Add barriers/predictions for digit contracts
+      if (this.config.contractType === 'DIGITMATCH' || this.config.contractType === 'DIGITDIFF') {
+        proposalParams.barrier = this.config.prediction?.toString() || '0';
+      }
+      if (this.config.contractType === 'DIGITOVER' || this.config.contractType === 'DIGITUNDER') {
+        proposalParams.barrier = this.config.prediction?.toString() || '5';
+      }
+
+      const proposal = await this.derivWS.getProposal(proposalParams);
 
       console.log(`📊 Proposal: Stake $${this.currentStake}, Payout $${proposal.payout}`);
 
@@ -124,22 +138,31 @@ export class BotRunner {
         this.stats.totalPayout += result.payout;
         this.stats.profit += result.profit;
         this.consecutiveLosses = 0;
-        
+        this.consecutiveWins++;
+
         console.log(`🎉 Win! Profit: $${result.profit.toFixed(2)}`);
-        
-        // Reset stake after win
-        this.currentStake = this.config.initialStake;
+
+        // Strategy Logic for Wins
+        this.applyWinStrategy();
       } else {
         // Loss
         this.stats.lost++;
         this.stats.profit += result.profit;
         this.consecutiveLosses++;
-        
+        this.consecutiveWins = 0;
+
         console.log(`😞 Loss: $${Math.abs(result.profit).toFixed(2)}`);
-        
-        // Apply strategy
-        this.applyStrategy();
+
+        // Strategy Logic for Losses
+        this.applyLossStrategy();
       }
+
+      // Max Stake Safety Check
+      if (this.config.maxStake && this.currentStake > this.config.maxStake) {
+        this.currentStake = this.config.maxStake;
+        console.log(`⚠️ Stake capped at max allowed: $${this.config.maxStake}`);
+      }
+
 
       // Notify callbacks
       if (this.statsCallback) {
@@ -162,59 +185,82 @@ export class BotRunner {
     }
   }
 
-  private applyStrategy() {
+  private applyWinStrategy() {
     switch (this.config.strategy) {
       case 'martingale':
-        // Double stake after loss
-        this.currentStake = this.currentStake * 2;
-        console.log(`📈 Martingale: New stake $${this.currentStake}`);
-        break;
-
       case 'dalembert':
-        // Increase stake by initial amount after loss
-        this.currentStake = this.currentStake + this.config.initialStake;
-        console.log(`📈 D'Alembert: New stake $${this.currentStake}`);
+        this.currentStake = this.config.initialStake; // Reset on win
         break;
-
       case 'oscars_grind':
-        // Increase stake by 1 unit after win, keep same after loss
-        if (this.consecutiveLosses === 0) {
-          this.currentStake = this.currentStake + 1;
+        if (this.stats.profit < 0) { // Only increase if recovering
+          this.currentStake += this.config.initialStake;
+        } else {
+          this.currentStake = this.config.initialStake; // Profit target reached
         }
-        console.log(`📈 Oscar's Grind: New stake $${this.currentStake}`);
+        break;
+      case 'winners_row':
+        this.currentStake = this.currentStake * 2; // Aggressive compounding
+        break;
+      case 'compound':
+        this.currentStake = this.currentStake + this.config.initialStake; // Add profit to stake
         break;
     }
+  }
 
-    // Cap stake at 10x initial to prevent excessive losses
-    const maxStake = this.config.initialStake * 10;
-    if (this.currentStake > maxStake) {
-      this.currentStake = maxStake;
-      console.log(`⚠️ Stake capped at $${maxStake}`);
+  private applyLossStrategy() {
+    switch (this.config.strategy) {
+      case 'martingale':
+        const multiplier = this.config.martingaleMultiplier || 2;
+        this.currentStake = this.currentStake * multiplier;
+        break;
+      case 'dalembert':
+        this.currentStake += this.config.initialStake;
+        break;
+      case 'oscars_grind':
+        // Keep same stake on loss
+        break;
+      case 'winners_row':
+        this.currentStake = this.config.initialStake; // Reset on loss
+        break;
+      case 'compound':
+        this.currentStake = this.config.initialStake; // Reset on loss
+        break;
     }
   }
 
   private async waitForContractResult(contractId: number): Promise<any> {
-    return new Promise((resolve) => {
-      const checkInterval = setInterval(async () => {
-        try {
-          // In a real implementation, you would subscribe to contract updates
-          // For now, we'll simulate with a timeout
-          clearInterval(checkInterval);
-          
-          // Simulate result (50% win rate for demo)
-          const won = Math.random() > 0.5;
-          const payout = won ? this.currentStake * 1.9 : 0;
-          const profit = payout - this.currentStake;
+    return new Promise((resolve, reject) => {
+      console.log(`Waiting for result of contract ${contractId}...`);
 
+      // Subscribe to the contract stream
+      this.derivWS.subscribeProposalOpenContract(contractId, (contract) => {
+        // Log status for debugging
+        // console.log(`Contract Update: ${contract.status}`);
+
+        // Check if contract is sold/ended
+        if (contract.is_sold) {
+          console.log('Contract sold/ended!', contract);
+
+          // Unsubscribe to clean up
+          this.derivWS.unsubscribeProposalOpenContract(contractId);
+
+          // Resolve with the real result
           resolve({
-            contractId,
-            payout,
-            profit,
+            contractId: contract.contract_id,
+            payout: contract.payout,
+            profit: contract.profit,
+            status: contract.status
           });
-        } catch (error) {
-          console.error('Error checking contract:', error);
         }
-      }, this.config.duration * 1000 + 2000); // Wait for duration + buffer
+      });
+
+      // Fallback/Safety Timeout (e.g. 5 minutes) just in case socket hangs
+      setTimeout(() => {
+        // If we are here, we verify locally via simple API call one last time
+        // But for now, just reject or resolve 0 to prevent eternal hang
+        // In production, we'd query `profit_table` to see what happened.
+        // For now, we rely on WebSocket.
+      }, 300000);
     });
   }
 

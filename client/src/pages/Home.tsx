@@ -6,7 +6,7 @@ export default function Home() {
 
   useEffect(() => {
     // Redirect to the trading page
-    setLocation("/trade");
+    setLocation("/trading");
   }, [setLocation]);
 
   return (

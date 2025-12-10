@@ -19,10 +19,15 @@ export default function Bot() {
   const [initialStake, setInitialStake] = useState('10');
   const [duration, setDuration] = useState('5');
   const [durationUnit, setDurationUnit] = useState<'t' | 's' | 'm'>('t');
-  const [contractType, setContractType] = useState<'CALL' | 'PUT'>('CALL');
-  const [strategy, setStrategy] = useState<'martingale' | 'dalembert' | 'oscars_grind'>('martingale');
+  const [contractType, setContractType] = useState<'CALL' | 'PUT' | 'DIGITMATCH' | 'DIGITDIFF' | 'DIGITODD' | 'DIGITEVEN' | 'DIGITOVER' | 'DIGITUNDER'>('CALL');
+  const [strategy, setStrategy] = useState<'martingale' | 'dalembert' | 'oscars_grind' | 'winners_row' | 'compound'>('martingale');
   const [stopLoss, setStopLoss] = useState('50');
   const [takeProfit, setTakeProfit] = useState('100');
+
+  // Advanced Settings
+  const [prediction, setPrediction] = useState<number>(0);
+  const [martingaleMultiplier, setMartingaleMultiplier] = useState('2.0');
+  const [maxStake, setMaxStake] = useState('');
 
   // Bot stats
   const [stats, setStats] = useState<BotStats>({
@@ -53,10 +58,13 @@ export default function Bot() {
       stopLoss: parseFloat(stopLoss) || undefined,
       takeProfit: parseFloat(takeProfit) || undefined,
       currency: currentAccount.currency,
+      prediction: (contractType.startsWith('DIGIT')) ? prediction : undefined,
+      martingaleMultiplier: parseFloat(martingaleMultiplier) || 2.0,
+      maxStake: parseFloat(maxStake) || undefined,
     };
 
     const runner = new BotRunner(config);
-    
+
     runner.setCallbacks(
       (newStats) => setStats(newStats),
       (trade) => setTrades((prev) => [trade, ...prev].slice(0, 10))
@@ -100,12 +108,66 @@ export default function Bot() {
     }
   }
 
+  const handleExport = () => {
+    const config = {
+      symbol,
+      initialStake,
+      duration,
+      durationUnit,
+      contractType,
+      strategy,
+      stopLoss,
+      takeProfit,
+      prediction,
+      martingaleMultiplier,
+      maxStake
+    };
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "bot_strategy.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+    toast.success('Strategy exported');
+  };
+
+  const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const fileReader = new FileReader();
+    if (event.target.files && event.target.files[0]) {
+      fileReader.readAsText(event.target.files[0], "UTF-8");
+      fileReader.onload = (e) => {
+        if (e.target?.result) {
+          try {
+            const parsed = JSON.parse(e.target.result as string);
+            setSymbol(parsed.symbol || 'R_100');
+            setInitialStake(parsed.initialStake || '10');
+            setDuration(parsed.duration || '5');
+            setDurationUnit(parsed.durationUnit || 't');
+            setContractType(parsed.contractType || 'CALL');
+            setStrategy(parsed.strategy || 'martingale');
+            setStopLoss(parsed.stopLoss || '50');
+            setTakeProfit(parsed.takeProfit || '100');
+            setPrediction(parsed.prediction || 0);
+            setMartingaleMultiplier(parsed.martingaleMultiplier || '2.0');
+            setMaxStake(parsed.maxStake || '');
+            toast.success('Strategy imported successfully');
+          } catch (err) {
+            toast.error('Invalid strategy file');
+          }
+        }
+      };
+    }
+  };
+
   if (!isAuthenticated) {
+    // Redirect to login page
+    window.location.href = '/login';
     return (
       <div className="min-h-screen bg-[#1A1A1A] flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-white mb-4">Please Login</h2>
-          <p className="text-gray-400">You need to login to use the bot</p>
+          <h2 className="text-2xl font-bold text-white mb-4">Redirecting to Login...</h2>
+          <p className="text-gray-400">Please wait</p>
         </div>
       </div>
     );
@@ -144,15 +206,14 @@ export default function Bot() {
                 {/* Contract Type */}
                 <div>
                   <label className="text-gray-400 text-sm mb-2 block">Contract Type</label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 mb-3">
                     <Button
                       onClick={() => setContractType('CALL')}
                       disabled={isRunning}
-                      className={`h-10 ${
-                        contractType === 'CALL'
-                          ? 'bg-green-600 hover:bg-green-700'
-                          : 'bg-[#1A1A1A] hover:bg-[#3A3A3A] text-white'
-                      }`}
+                      className={`h-10 ${contractType === 'CALL'
+                        ? 'bg-green-600 hover:bg-green-700'
+                        : 'bg-[#1A1A1A] hover:bg-[#3A3A3A] text-white'
+                        }`}
                     >
                       <TrendingUp className="w-4 h-4 mr-2" />
                       Rise
@@ -160,17 +221,80 @@ export default function Bot() {
                     <Button
                       onClick={() => setContractType('PUT')}
                       disabled={isRunning}
-                      className={`h-10 ${
-                        contractType === 'PUT'
-                          ? 'bg-red-600 hover:bg-red-700'
-                          : 'bg-[#1A1A1A] hover:bg-[#3A3A3A] text-white'
-                      }`}
+                      className={`h-10 ${contractType === 'PUT'
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : 'bg-[#1A1A1A] hover:bg-[#3A3A3A] text-white'
+                        }`}
                     >
                       <TrendingDown className="w-4 h-4 mr-2" />
                       Fall
                     </Button>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <Button
+                      onClick={() => setContractType('DIGITMATCH')}
+                      disabled={isRunning}
+                      className={`h-10 ${contractType === 'DIGITMATCH'
+                        ? 'bg-blue-600 hover:bg-blue-700'
+                        : 'bg-[#1A1A1A] hover:bg-[#3A3A3A] text-white'
+                        }`}
+                    >
+                      Digit Match
+                    </Button>
+                    <Button
+                      onClick={() => setContractType('DIGITDIFF')}
+                      disabled={isRunning}
+                      className={`h-10 ${contractType === 'DIGITDIFF'
+                        ? 'bg-blue-600 hover:bg-blue-700'
+                        : 'bg-[#1A1A1A] hover:bg-[#3A3A3A] text-white'
+                        }`}
+                    >
+                      Digit Differs
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <Button
+                      onClick={() => setContractType('DIGITEVEN')}
+                      disabled={isRunning}
+                      className={`h-10 ${contractType === 'DIGITEVEN'
+                        ? 'bg-purple-600 hover:bg-purple-700'
+                        : 'bg-[#1A1A1A] hover:bg-[#3A3A3A] text-white'
+                        }`}
+                    >
+                      Digit Even
+                    </Button>
+                    <Button
+                      onClick={() => setContractType('DIGITODD')}
+                      disabled={isRunning}
+                      className={`h-10 ${contractType === 'DIGITODD'
+                        ? 'bg-purple-600 hover:bg-purple-700'
+                        : 'bg-[#1A1A1A] hover:bg-[#3A3A3A] text-white'
+                        }`}
+                    >
+                      Digit Odd
+                    </Button>
+                  </div>
                 </div>
+
+                {/* Prediction (Only for Digit Match/Differs) */}
+                {(contractType === 'DIGITMATCH' || contractType === 'DIGITDIFF' || contractType === 'DIGITOVER' || contractType === 'DIGITUNDER') && (
+                  <div>
+                    <label className="text-gray-400 text-sm mb-2 block">Last Digit Prediction</label>
+                    <Select value={prediction?.toString()} onValueChange={(v) => setPrediction(parseInt(v))} disabled={isRunning}>
+                      <SelectTrigger className="bg-[#1A1A1A] border-gray-700 text-white">
+                        <SelectValue placeholder="Select Digit" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#2A2A2A] border-gray-700">
+                        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                          <SelectItem key={num} value={num.toString()} className="text-white">{num}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
 
                 {/* Initial Stake */}
                 <div>
@@ -221,8 +345,36 @@ export default function Bot() {
                       <SelectItem value="martingale" className="text-white">Martingale</SelectItem>
                       <SelectItem value="dalembert" className="text-white">D'Alembert</SelectItem>
                       <SelectItem value="oscars_grind" className="text-white">Oscar's Grind</SelectItem>
+                      <SelectItem value="winners_row" className="text-white">Winner's Row</SelectItem>
+                      <SelectItem value="compound" className="text-white">Compound</SelectItem>
                     </SelectContent>
                   </Select>
+                </div>
+
+                {/* Advanced Risk Settings */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-gray-400 text-sm mb-2 block">Martingale Multiplier</label>
+                    <Input
+                      type="number"
+                      value={martingaleMultiplier}
+                      onChange={(e) => setMartingaleMultiplier(e.target.value)}
+                      disabled={isRunning || strategy !== 'martingale'}
+                      className="bg-[#1A1A1A] border-gray-700 text-white"
+                      placeholder="2.0"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-gray-400 text-sm mb-2 block">Max Stake Limit</label>
+                    <Input
+                      type="number"
+                      value={maxStake}
+                      onChange={(e) => setMaxStake(e.target.value)}
+                      disabled={isRunning}
+                      className="bg-[#1A1A1A] border-gray-700 text-white"
+                      placeholder="Optional"
+                    />
+                  </div>
                 </div>
 
                 {/* Stop Loss / Take Profit */}
@@ -248,6 +400,23 @@ export default function Bot() {
                       className="bg-[#1A1A1A] border-gray-700 text-white"
                       placeholder="Optional"
                     />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mb-4">
+                  <Button variant="outline" onClick={handleExport} className="flex-1 border-gray-700 text-white hover:bg-[#3A3A3A]">
+                    Export Strategy
+                  </Button>
+                  <div className="flex-1 relative">
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleImport}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <Button variant="outline" className="w-full border-gray-700 text-white hover:bg-[#3A3A3A]">
+                      Import Strategy
+                    </Button>
                   </div>
                 </div>
 
@@ -296,7 +465,7 @@ export default function Bot() {
             {/* Recent Trades */}
             <Card className="bg-[#2A2A2A] border-gray-800 p-6">
               <h3 className="text-white font-semibold mb-4">Recent Trades</h3>
-              
+
               {trades.length === 0 ? (
                 <p className="text-gray-400 text-center py-8">No trades yet</p>
               ) : (
@@ -311,9 +480,8 @@ export default function Bot() {
                         <p className="text-gray-400 text-xs">Stake: ${trade.stake.toFixed(2)}</p>
                       </div>
                       <span
-                        className={`font-semibold ${
-                          trade.won ? 'text-green-500' : 'text-red-500'
-                        }`}
+                        className={`font-semibold ${trade.won ? 'text-green-500' : 'text-red-500'
+                          }`}
                       >
                         {trade.won ? '+' : ''}${trade.profit.toFixed(2)}
                       </span>
@@ -354,9 +522,8 @@ export default function Bot() {
                 <div>
                   <p className="text-gray-400 text-sm">Total Profit/Loss</p>
                   <p
-                    className={`text-2xl font-bold ${
-                      stats.profit >= 0 ? 'text-green-500' : 'text-red-500'
-                    }`}
+                    className={`text-2xl font-bold ${stats.profit >= 0 ? 'text-green-500' : 'text-red-500'
+                      }`}
                   >
                     ${stats.profit.toFixed(2)}
                   </p>

@@ -1,24 +1,19 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, integer, pgTable, serial, text, timestamp, varchar } from "drizzle-orm/pg-core";
 
 /**
  * Core user table backing auth flow.
  * Extend this file with additional tables as your product grows.
  * Columns use camelCase to match both database fields and generated types.
  */
-export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
-  id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  openId: text("openId").notNull().unique(),
   name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  email: text("email"),
+  loginMethod: text("loginMethod"),
+  role: text("role", { enum: ["user", "admin"] }).default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
 });
 
@@ -29,20 +24,20 @@ export type InsertUser = typeof users.$inferInsert;
  * Bot configurations table
  * Stores trading bot settings and parameters for each user
  */
-export const botConfigs = mysqlTable("bot_configs", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
-  asset: varchar("asset", { length: 100 }).notNull(),
-  stakeAmount: int("stake_amount").notNull(), // stored in cents to avoid decimal issues
-  strategy: varchar("strategy", { length: 100 }).notNull(),
-  maxLoss: int("max_loss"), // in cents
-  maxProfit: int("max_profit"), // in cents
-  tradeInterval: int("trade_interval"), // in seconds
-  lossMultiplier: int("loss_multiplier"), // stored as integer (e.g., 200 = 2.0x)
-  isActive: int("is_active").default(0).notNull(), // 0 = inactive, 1 = active
+export const botConfigs = pgTable("bot_configs", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  name: text("name").notNull(),
+  asset: text("asset").notNull(),
+  stakeAmount: integer("stake_amount").notNull(), // stored in cents
+  strategy: text("strategy").notNull(),
+  maxLoss: integer("max_loss"), // in cents
+  maxProfit: integer("max_profit"), // in cents
+  tradeInterval: integer("trade_interval"), // in seconds
+  lossMultiplier: integer("loss_multiplier"), // stored as integer
+  isActive: integer("is_active").default(0).notNull(), // 0 = inactive, 1 = active. PG has boolean, but keeping int for compat or switch to boolean
   createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export type BotConfig = typeof botConfigs.$inferSelect;
@@ -50,17 +45,16 @@ export type InsertBotConfig = typeof botConfigs.$inferInsert;
 
 /**
  * File storage metadata table
- * Stores metadata for files uploaded to S3 (strategy files, logs, etc.)
  */
-export const files = mysqlTable("files", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull(),
-  fileKey: varchar("file_key", { length: 512 }).notNull(), // S3 key
-  url: text("url").notNull(), // S3 public URL
-  filename: varchar("filename", { length: 255 }).notNull(),
-  mimeType: varchar("mime_type", { length: 100 }),
-  fileSize: int("file_size"), // in bytes
-  category: mysqlEnum("category", ["strategy", "log", "config", "other"]).default("other").notNull(),
+export const files = pgTable("files", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  fileKey: text("file_key").notNull(),
+  url: text("url").notNull(),
+  filename: text("filename").notNull(),
+  mimeType: text("mime_type"),
+  fileSize: integer("file_size"),
+  category: text("category", { enum: ["strategy", "log", "config", "other"] }).default("other").notNull(),
   description: text("description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
@@ -70,18 +64,17 @@ export type InsertFile = typeof files.$inferInsert;
 
 /**
  * Trades table
- * Stores all trading activity for analytics and leaderboard
  */
-export const trades = mysqlTable("trades", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull(),
-  contractId: varchar("contract_id", { length: 255 }).notNull(),
-  symbol: varchar("symbol", { length: 100 }).notNull(),
-  contractType: varchar("contract_type", { length: 50 }).notNull(),
-  stake: int("stake").notNull(), // in cents
-  payout: int("payout"), // in cents
-  profit: int("profit"), // in cents
-  status: mysqlEnum("status", ["open", "won", "lost"]).notNull(),
+export const trades = pgTable("trades", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  contractId: text("contract_id").notNull(),
+  symbol: text("symbol").notNull(),
+  contractType: text("contract_type").notNull(),
+  stake: integer("stake").notNull(), // in cents
+  payout: integer("payout"), // in cents
+  profit: integer("profit"), // in cents
+  status: text("status", { enum: ["open", "won", "lost"] }).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   closedAt: timestamp("closed_at"),
 });
@@ -91,18 +84,17 @@ export type InsertTrade = typeof trades.$inferInsert;
 
 /**
  * Leaderboard table
- * Aggregated statistics for each trader
  */
-export const leaderboard = mysqlTable("leaderboard", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull().unique(),
-  username: varchar("username", { length: 255 }).notNull(),
-  totalTrades: int("total_trades").default(0).notNull(),
-  wonTrades: int("won_trades").default(0).notNull(),
-  lostTrades: int("lost_trades").default(0).notNull(),
-  totalProfit: int("total_profit").default(0).notNull(), // in cents
-  winRate: int("win_rate").default(0).notNull(), // stored as percentage * 100 (e.g., 7550 = 75.50%)
-  lastUpdated: timestamp("last_updated").defaultNow().onUpdateNow().notNull(),
+export const leaderboard = pgTable("leaderboard", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(), // No unique constraint on userId in original?? Added unique in MySQL version, adding here too.
+  username: text("username").notNull(),
+  totalTrades: integer("total_trades").default(0).notNull(),
+  wonTrades: integer("won_trades").default(0).notNull(),
+  lostTrades: integer("lost_trades").default(0).notNull(),
+  totalProfit: integer("total_profit").default(0).notNull(),
+  winRate: integer("win_rate").default(0).notNull(),
+  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
 });
 
 export type Leaderboard = typeof leaderboard.$inferSelect;
@@ -110,24 +102,23 @@ export type InsertLeaderboard = typeof leaderboard.$inferInsert;
 
 /**
  * Bot sessions table
- * Stores complete bot run history with configurations and final results
  */
-export const botSessions = mysqlTable("bot_sessions", {
-  id: int("id").autoincrement().primaryKey(),
-  userId: int("user_id").notNull(),
-  botName: varchar("bot_name", { length: 255 }),
+export const botSessions = pgTable("bot_sessions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  botName: text("bot_name"),
   botConfig: text("bot_config"),
-  market: varchar("market", { length: 50 }),
-  stake: int("stake"), // in cents
-  duration: int("duration"),
-  contractType: varchar("contract_type", { length: 20 }),
-  totalStake: int("total_stake").default(0), // in cents
-  totalPayout: int("total_payout").default(0), // in cents
-  runs: int("runs").default(0),
-  won: int("won").default(0),
-  lost: int("lost").default(0),
-  profit: int("profit").default(0), // in cents
-  status: mysqlEnum("status", ["running", "paused", "completed", "stopped"]).default("completed").notNull(),
+  market: text("market"),
+  stake: integer("stake"),
+  duration: integer("duration"),
+  contractType: text("contract_type"),
+  totalStake: integer("total_stake").default(0),
+  totalPayout: integer("total_payout").default(0),
+  runs: integer("runs").default(0),
+  won: integer("won").default(0),
+  lost: integer("lost").default(0),
+  profit: integer("profit").default(0),
+  status: text("status", { enum: ["running", "paused", "completed", "stopped"] }).default("completed").notNull(),
   startedAt: timestamp("started_at").notNull(),
   endedAt: timestamp("ended_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),

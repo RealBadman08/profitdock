@@ -5,7 +5,7 @@ import * as Blockly from "blockly";
 const defineCustomBlocks = () => {
   // Trade Parameters Block
   Blockly.Blocks['trade_parameters'] = {
-    init: function() {
+    init: function () {
       this.appendDummyInput()
         .appendField("Trade Parameters");
       this.appendValueInput("MARKET")
@@ -25,7 +25,7 @@ const defineCustomBlocks = () => {
 
   // Purchase Condition Block
   Blockly.Blocks['purchase_condition'] = {
-    init: function() {
+    init: function () {
       this.appendDummyInput()
         .appendField("Purchase when")
         .appendField(new Blockly.FieldDropdown([
@@ -47,7 +47,7 @@ const defineCustomBlocks = () => {
 
   // RSI Indicator Block
   Blockly.Blocks['indicator_rsi'] = {
-    init: function() {
+    init: function () {
       this.appendDummyInput()
         .appendField("RSI")
         .appendField(new Blockly.FieldDropdown([
@@ -65,7 +65,7 @@ const defineCustomBlocks = () => {
 
   // Moving Average Block
   Blockly.Blocks['indicator_ma'] = {
-    init: function() {
+    init: function () {
       this.appendDummyInput()
         .appendField("Moving Average")
         .appendField(new Blockly.FieldNumber(14), "PERIOD")
@@ -85,7 +85,7 @@ const defineCustomBlocks = () => {
 
   // Sell Condition Block
   Blockly.Blocks['sell_condition'] = {
-    init: function() {
+    init: function () {
       this.appendDummyInput()
         .appendField("Sell when");
       this.appendStatementInput("CONDITIONS")
@@ -100,7 +100,7 @@ const defineCustomBlocks = () => {
 
   // Restart Trading Block
   Blockly.Blocks['restart_trading'] = {
-    init: function() {
+    init: function () {
       this.appendDummyInput()
         .appendField("Restart trading after")
         .appendField(new Blockly.FieldDropdown([
@@ -115,6 +115,26 @@ const defineCustomBlocks = () => {
       this.setHelpUrl("");
     }
   };
+  // Execute Trade Block
+  Blockly.Blocks['execute_trade'] = {
+    init: function () {
+      this.appendDummyInput()
+        .appendField("Purchase Contract")
+        .appendField(new Blockly.FieldDropdown([
+          ["Call", "CALL"],
+          ["Put", "PUT"],
+          ["Digit Match", "DIGITMATCH"],
+          ["Digit Differs", "DIGITDIFF"]
+        ]), "TYPE");
+      this.setPreviousStatement(true, null);
+      this.setNextStatement(true, null);
+      this.setColour(160);
+      this.setTooltip("Execute a trade");
+      this.setHelpUrl("");
+    }
+  };
+
+  // Logic Boolean (Standard override if needed, but usually built-in)
 };
 
 interface BlocklyWorkspaceProps {
@@ -150,6 +170,7 @@ export default function BlocklyWorkspace({ onWorkspaceChange, initialXml }: Bloc
           colour: "160",
           contents: [
             { kind: "block", type: "purchase_condition" },
+            { kind: "block", type: "execute_trade" },
           ],
         },
         {

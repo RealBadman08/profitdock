@@ -3,7 +3,8 @@ import { Link, useLocation } from 'wouter';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LogOut, TrendingUp, Bot, DollarSign } from 'lucide-react';
+import { LogOut, TrendingUp, Bot, DollarSign, BarChart2, Activity, BookOpen, Users } from 'lucide-react';
+import Footer from '@/components/Footer';
 
 interface LayoutProps {
   children: ReactNode;
@@ -16,10 +17,14 @@ export default function Layout({ children }: LayoutProps) {
   const navItems = [
     { path: '/trading', label: 'Trading', icon: TrendingUp },
     { path: '/bot', label: 'Bot', icon: Bot },
+    { path: '/charts', label: 'Charts', icon: BarChart2 },
+    { path: '/scanner', label: 'Scanner', icon: Activity },
+    { path: '/journal', label: 'Journal', icon: BookOpen },
+    { path: '/copy-trading', label: 'Copy Trading', icon: Users },
   ];
 
   return (
-    <div className="min-h-screen bg-[#1A1A1A]">
+    <div className="min-h-screen bg-[#1A1A1A] flex flex-col">
       {/* Header */}
       <header className="bg-[#2A2A2A] border-b border-gray-800">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -126,16 +131,10 @@ export default function Layout({ children }: LayoutProps) {
       </header>
 
       {/* Main Content */}
-      <main>{children}</main>
+      <main className="flex-1">{children}</main>
 
-      {/* Footer */}
-      <footer className="bg-[#2A2A2A] border-t border-gray-800 mt-12">
-        <div className="max-w-7xl mx-auto px-6 py-6">
-          <p className="text-gray-400 text-sm text-center">
-            ⚠️ Trading derivatives carries significant risk. Only trade with money you can afford to lose.
-          </p>
-        </div>
-      </footer>
+      {/* Footer with Social Media */}
+      <Footer />
     </div>
   );
 }

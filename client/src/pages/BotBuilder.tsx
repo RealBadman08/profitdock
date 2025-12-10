@@ -3,7 +3,7 @@ import { BotEngine } from "@/services/botEngine";
 import BotConfigDialog from "@/components/BotConfigDialog";
 import BlocklyWorkspace from "@/components/BlocklyWorkspace";
 import { useDeriv } from "@/contexts/DerivContext";
-import { trpc } from "@/lib/trpc";
+// import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
   Menu,
@@ -35,8 +35,8 @@ export default function BotBuilder() {
   const [profitHistory, setProfitHistory] = useState<{ time: number, profit: number }[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
 
-  const createSession = trpc.botSessions.create.useMutation();
-  const updateSession = trpc.botSessions.update.useMutation();
+  // const createSession = trpc.botSessions.create.useMutation();
+  // const updateSession = trpc.botSessions.update.useMutation();
 
   // Update profit history when stats change
   const updateProfitHistory = (newStats: typeof stats) => {
@@ -95,13 +95,9 @@ export default function BotBuilder() {
       setBotRunning(false);
       setBotStatus('stopped');
 
-      // Update final session status
+      // Update final session status locally if needed
       if (currentSessionId) {
-        await updateSession.mutateAsync({
-          sessionId: currentSessionId,
-          stats,
-          status: 'stopped',
-        });
+        // localStorage logic here if tracking sessions list
         setCurrentSessionId(null);
       }
     } else {
@@ -120,6 +116,7 @@ export default function BotBuilder() {
     }
   };
 
+
   const startBot = async () => {
     const apiToken = localStorage.getItem('deriv_token');
     if (!apiToken) {
@@ -127,43 +124,57 @@ export default function BotBuilder() {
       return;
     }
 
-    // Create bot session in database
-    try {
-      const session = await createSession.mutateAsync({
-        botName: 'Custom Bot',
-        botConfig: localStorage.getItem('bot_config') || '',
-        market: botConfig.market,
-        stake: Math.round(botConfig.stake * 100), // Convert to cents
-        duration: botConfig.duration,
-        contractType: botConfig.contractType,
-      });
-      setCurrentSessionId(session.insertId as number);
-    } catch (error) {
-      console.error('Failed to create session:', error);
-    }
+    // Generate a local session ID
+    const newSessionId = Date.now();
+    setCurrentSessionId(newSessionId);
 
     const engine = new BotEngine(apiToken);
     engine.setCallbacks(
       (newStats) => {
         setStats(newStats);
         updateProfitHistory(newStats);
-
-        // Update session in database
-        if (currentSessionId) {
-          updateSession.mutate({
-            sessionId: currentSessionId,
-            stats: newStats,
-          });
-        }
+        // Stats are local only for now
       },
       (trade) => setTransactions(prev => [trade, ...prev])
     );
 
+    // Generate Code from Blocks
+    let generatedCode = '';
     try {
+      if (window.Blockly) {
+        // Ensure generators are init
+        const { initBlocklyGenerators } = await import('@/services/blocklyGenerators');
+        initBlocklyGenerators();
+
+        // Generate
+        const workspace = Blockly.getMainWorkspace();
+        // Note: In React we might need reference. 
+        // But Blockly.getMainWorkspace() usually works if only 1 workspace.
+
+        const { javascriptGenerator } = await import('blockly/javascript');
+        generatedCode = javascriptGenerator.workspaceToCode(workspace);
+        console.log("GENERATED CODE:\n", generatedCode);
+      }
+    } catch (e) {
+      console.error("Code generation failed:", e);
+    }
+
+    try {
+      // Loop wrapper
+      // We wrap the generated code in a loop so it runs continuously
+      const robustCode = `
+         while(bot.isRunning()) {
+             await bot.sleep(1000); // 1s tick check
+             // User logic
+             ${generatedCode}
+         }
+      `;
+
       await engine.start({
         xml: localStorage.getItem('bot_config') || '',
         ...botConfig,
-      });
+      }, robustCode);
+
       botEngineRef.current = engine;
       setBotRunning(true);
       setBotStatus('running');

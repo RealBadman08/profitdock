@@ -5,7 +5,7 @@
  */
 
 const DERIV_WS_URL = 'wss://ws.derivws.com/websockets/v3';
-const APP_ID = 113977;
+const APP_ID = 114155;
 
 export interface DerivAccount {
   loginid: string;
@@ -21,6 +21,9 @@ export interface ActiveSymbol {
   market_display_name: string;
   submarket: string;
   submarket_display_name: string;
+  display_order: number;
+  symbol_type: string;
+  is_trading_suspended: number;
 }
 
 export interface Tick {
@@ -123,6 +126,8 @@ export class DerivWebSocket {
     }
   }
 
+
+
   private send(request: any): Promise<any> {
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -166,9 +171,9 @@ export class DerivWebSocket {
   }
 
   // Market Data
-  async getActiveSymbols(): Promise<ActiveSymbol[]> {
+  async getActiveSymbols(active_symbols: string = 'full'): Promise<ActiveSymbol[]> {
     const response = await this.send({
-      active_symbols: 'brief',
+      active_symbols,
       product_type: 'basic',
     });
     return response.active_symbols || [];
@@ -200,7 +205,7 @@ export class DerivWebSocket {
     this.send({
       ticks_history: symbol,
       adjust_start_time: 1,
-      count: 50,
+      count: 1000,
       end: 'latest',
       start: 1,
       style: 'candles',
@@ -234,6 +239,42 @@ export class DerivWebSocket {
   }
 
   // Trading
+  subscribeProposal(params: {
+    contract_type: string;
+    symbol: string;
+    duration: number;
+    duration_unit: string;
+    basis: string;
+    amount: number;
+    currency: string;
+    barrier?: string;
+  }, callback: (proposal: Proposal) => void): void {
+    const reqId = Date.now(); // Unique ID for this subscription request tracking if needed, but we use msg_type
+
+    this.send({
+      proposal: 1,
+      subscribe: 1,
+      ...params,
+    });
+
+    this.messageCallbacks.set('proposal', (data) => {
+      if (data.proposal) {
+        callback({
+          id: data.proposal.id,
+          ask_price: data.proposal.ask_price,
+          payout: data.proposal.payout,
+          spot: data.proposal.spot,
+          display_value: data.proposal.display_value,
+        });
+      }
+    });
+  }
+
+  unsubscribeProposal(): void {
+    this.send({ forget_all: 'proposal' });
+    this.messageCallbacks.delete('proposal');
+  }
+
   async getProposal(params: {
     contract_type: string;
     symbol: string;
@@ -242,6 +283,7 @@ export class DerivWebSocket {
     basis: string;
     amount: number;
     currency: string;
+    barrier?: string;
   }): Promise<Proposal> {
     const response = await this.send({
       proposal: 1,
@@ -272,6 +314,57 @@ export class DerivWebSocket {
     return this.send({
       sell: contractId,
       price: price,
+    });
+  }
+
+  // Real-time Contract Updates (The Core of "No Simulation")
+  subscribeProposalOpenContract(contractId: number, callback: (contract: any) => void): void {
+    this.send({
+      proposal_open_contract: 1,
+      contract_id: contractId,
+      subscribe: 1
+    });
+
+    // Use a unique key for this contract's callback to avoid collisions
+    const key = `contract_${contractId}`;
+    this.messageCallbacks.set(key, (data) => {
+      if (data.proposal_open_contract && data.proposal_open_contract.contract_id === contractId) {
+        callback(data.proposal_open_contract);
+      }
+    });
+
+    // Also listen to general stream just in case
+    if (!this.messageCallbacks.has('proposal_open_contract')) {
+      this.messageCallbacks.set('proposal_open_contract', (data) => {
+        // We can route general updates here if needed, but the specific key above handles it best
+        // This fallback ensures we don't miss packets if logic changes
+        if (data.proposal_open_contract) {
+          const id = data.proposal_open_contract.contract_id;
+          const specificCallback = this.messageCallbacks.get(`contract_${id}`);
+          if (specificCallback) {
+            specificCallback(data);
+          }
+        }
+      });
+    }
+  }
+
+  unsubscribeProposalOpenContract(contractId: number): void {
+    // forgetting specific stream is cleaner
+    this.send({ forget_all: 'proposal_open_contract' }); // simpler to just forget all for now or track IDs
+    this.messageCallbacks.delete(`contract_${contractId}`);
+  }
+
+  // Copy Trading
+  async copyStart(token: string): Promise<any> {
+    return this.send({
+      copy_start: token
+    });
+  }
+
+  async copyStop(token: string): Promise<any> {
+    return this.send({
+      copy_stop: token
     });
   }
 

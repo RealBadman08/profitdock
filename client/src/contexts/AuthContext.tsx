@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { getDerivWS, DerivAccount } from '@/services/derivWebSocket';
 
-const APP_ID = 113977;
+const APP_ID = 114155;
 const OAUTH_URL = 'https://oauth.deriv.com/oauth2/authorize';
 
 interface AuthContextType {
@@ -20,8 +20,9 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [token, setToken] = useState<string | null>(null);
+  // Initialize state synchronously from localStorage if possible
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => !!localStorage.getItem('deriv_token'));
+  const [token, setToken] = useState<string | null>(() => localStorage.getItem('deriv_token'));
   const [accounts, setAccounts] = useState<DerivAccount[]>([]);
   const [currentAccount, setCurrentAccount] = useState<DerivAccount | null>(null);
   const [balance, setBalance] = useState(0);
@@ -51,10 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function authenticateWithToken(authToken: string) {
     try {
       setLoading(true);
-      
+
       // Authorize with Deriv
       const authResponse = await derivWS.authorize(authToken);
-      
+
       if (authResponse.error) {
         throw new Error(authResponse.error.message);
       }
@@ -88,17 +89,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     } catch (error) {
       console.error('Authentication failed:', error);
-      localStorage.removeItem('deriv_token');
-      localStorage.removeItem('selected_account');
-      setIsAuthenticated(false);
-      setToken(null);
+      // Only clear if it was an invalid token error
+      if (error instanceof Error && (error.message.includes('InvalidToken') || error.message.includes('expired'))) {
+        localStorage.removeItem('deriv_token');
+        localStorage.removeItem('selected_account');
+        setIsAuthenticated(false);
+        setToken(null);
+      }
       setLoading(false);
     }
   }
 
   function login() {
     const redirectUri = `${window.location.origin}/oauth/callback`;
-    const oauthUrl = `${OAUTH_URL}?app_id=${APP_ID}&l=EN&brand=deriv`;
+    // Ensure we use the correct app ID and redirect URI
+    const oauthUrl = `https://oauth.deriv.com/oauth2/authorize?app_id=${APP_ID}&l=EN&brand=profitdock`;
     window.location.href = oauthUrl;
   }
 
@@ -116,18 +121,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccounts([]);
     setCurrentAccount(null);
     setBalance(0);
+    // Force reload to clear any in-memory state
+    window.location.href = '/login';
   }
 
   async function switchAccount(loginid: string) {
     try {
-      const response = await derivWS.switchAccount(loginid);
-      
-      if (response.error) {
-        throw new Error(response.error.message);
+      // Get token for target account
+      const tokensStr = localStorage.getItem('deriv_tokens');
+      let targetToken: string | undefined;
+
+      if (tokensStr) {
+        const tokens = JSON.parse(tokensStr);
+        targetToken = tokens[loginid];
       }
 
-      // Update current account
-      const account = accounts.find((acc) => acc.loginid === loginid);
+      if (!targetToken) {
+        // Fallback or error if we don't have the token
+        console.warn(`No token found for ${loginid}, attempting switch without token (might fail if scopes differ)`);
+        // Try old method just in case
+        const response = await derivWS.switchAccount(loginid);
+        if (response.error) throw new Error(response.error.message);
+      } else {
+        // Re-authorize with new token is the most reliable way to switch context
+        const authResponse = await derivWS.authorize(targetToken);
+        if (authResponse.error) throw new Error(authResponse.error.message);
+
+        // Update active token in storage
+        localStorage.setItem('deriv_token', targetToken);
+        setToken(targetToken);
+      }
+
+      // Update current account state
+      const accountList = await derivWS.getAccountList(); // Refresh list to get updated balance
+      setAccounts(accountList);
+
+      const account = accountList.find((acc) => acc.loginid === loginid);
       if (account) {
         setCurrentAccount(account);
         setBalance(account.balance);
