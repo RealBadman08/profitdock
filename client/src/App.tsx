@@ -5,6 +5,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import Layout from "./components/Layout";
+import { DerivProvider } from "./contexts/DerivContext";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import Dashboard from "./pages/Dashboard";
@@ -143,14 +144,18 @@ function Router() {
   );
 }
 
+
+
 function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
           <AuthProvider>
-            <Toaster />
-            <Router />
+            <DerivProvider>
+              <Toaster />
+              <Router />
+            </DerivProvider>
           </AuthProvider>
         </TooltipProvider>
       </ThemeProvider>
