@@ -151,12 +151,12 @@ function App() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
         <TooltipProvider>
-          <AuthProvider>
-            <DerivProvider>
+          <DerivProvider>
+            <AuthProvider>
               <Toaster />
               <Router />
-            </DerivProvider>
-          </AuthProvider>
+            </AuthProvider>
+          </DerivProvider>
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

@@ -3,8 +3,7 @@ import { javascriptGenerator } from 'blockly/javascript';
 
 export const initBlocklyGenerators = () => {
     // Initialize the generator
-    // @ts-ignore
-    Blockly.JavaScript = javascriptGenerator;
+
 
     // Trade Parameters Block Generator
     // @ts-ignore
