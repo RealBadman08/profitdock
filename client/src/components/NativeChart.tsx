@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { createChart, ColorType, IChartApi, ISeriesApi, Time } from 'lightweight-charts';
+import * as LightweightCharts from 'lightweight-charts';
 import { getDerivWS, Tick } from '@/services/derivWebSocket';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,8 +19,8 @@ const SYMBOLS = [
 
 export default function NativeChart() {
     const chartContainerRef = useRef<HTMLDivElement>(null);
-    const [chart, setChart] = useState<IChartApi | null>(null);
-    const [series, setSeries] = useState<ISeriesApi<"Area"> | null>(null);
+    const [chart, setChart] = useState<LightweightCharts.IChartApi | null>(null);
+    const [series, setSeries] = useState<LightweightCharts.ISeriesApi<"Area"> | null>(null);
     const [symbol, setSymbol] = useState('R_100');
     const [loading, setLoading] = useState(true);
     const ws = getDerivWS();
@@ -29,9 +29,9 @@ export default function NativeChart() {
         if (!chartContainerRef.current) return;
 
         // Initialize Chart
-        const newChart = createChart(chartContainerRef.current, {
+        const newChart = LightweightCharts.createChart(chartContainerRef.current, {
             layout: {
-                background: { type: ColorType.Solid, color: '#1A1A1A' },
+                background: { type: LightweightCharts.ColorType.Solid, color: '#1A1A1A' },
                 textColor: '#d1d5db',
             },
             grid: {
@@ -46,7 +46,12 @@ export default function NativeChart() {
             },
         });
 
-        const newSeries = newChart.addAreaSeries({
+        if (!newChart) {
+            console.error("Chart creation failed");
+            return;
+        }
+
+        const newSeries = newChart.addSeries(LightweightCharts.AreaSeries, {
             lineColor: '#C026D3',
             topColor: 'rgba(192, 38, 211, 0.4)',
             bottomColor: 'rgba(192, 38, 211, 0.0)',
@@ -81,7 +86,7 @@ export default function NativeChart() {
                 ws.subscribeTicks(symbol, (tick) => {
                     setLoading(false);
                     series.update({
-                        time: tick.epoch as Time,
+                        time: tick.epoch as LightweightCharts.Time,
                         value: tick.quote
                     });
                 });
