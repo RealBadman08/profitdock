@@ -1,7 +1,7 @@
 # Netlify build settings
 [build]
   # Build command
-  command = "pnpm install && pnpm run build"
+  command = "pnpm run build"
   
   # Directory to publish (output directory from vite build)
   publish = "dist/public"

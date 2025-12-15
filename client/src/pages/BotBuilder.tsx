@@ -286,17 +286,8 @@ export default function BotBuilder() {
 
         {/* Right Sidebar - Blocks Menu & Stats */}
         <div className="w-96 bg-gray-800 border-l border-gray-700 flex flex-col">
-          {/* Blocks Menu */}
-          <div className="flex-1 p-4 overflow-y-auto">
-            <h3 className="text-white font-semibold mb-4">Blocks Menu</h3>
-            <div className="space-y-2">
-              {["Trade Parameters", "Purchase Conditions", "Sell Conditions", "Restart Conditions", "Logic", "Math", "Text", "Variables"].map((category) => (
-                <div key={category} className="bg-gray-700 rounded-lg p-3 cursor-pointer hover:bg-gray-650">
-                  <p className="text-white text-sm font-medium">{category}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* Stats Panel Only - Blocks Menu Removed */}
+
 
           {/* Stats Panel */}
           <div className="border-t border-gray-700 p-4">
