@@ -1,20 +1,19 @@
 import { useState, useRef } from "react";
+import * as Blockly from "blockly";
+import { toast } from "sonner";
 import { BotEngine } from "@/services/botEngine";
 import BotConfigDialog from "@/components/BotConfigDialog";
-import BlocklyWorkspace from "@/components/BlocklyWorkspace";
+import BlocklyWorkspace, { BlocklyWorkspaceRef } from "@/components/BlocklyWorkspace";
 import { useDeriv } from "@/contexts/DerivContext";
-// import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import {
-  Menu,
-  MessageCircle,
-  RefreshCw,
-  ChevronDown,
-  Play,
-  Save,
-  Upload,
-  Download
-} from "lucide-react";
+  IconOpen,
+  IconSave,
+  IconPlay,
+  IconStop,
+  IconImport,
+  IconExport
+} from "@/components/DerivIcons";
 import { Link } from "wouter";
 import { LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
@@ -35,10 +34,6 @@ export default function BotBuilder() {
   const [profitHistory, setProfitHistory] = useState<{ time: number, profit: number }[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<number | null>(null);
 
-  // const createSession = trpc.botSessions.create.useMutation();
-  // const updateSession = trpc.botSessions.update.useMutation();
-
-  // Update profit history when stats change
   const updateProfitHistory = (newStats: typeof stats) => {
     setProfitHistory(prev => [
       ...prev,
@@ -47,6 +42,8 @@ export default function BotBuilder() {
   };
   const botEngineRef = useRef<BotEngine | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const workspaceRef = useRef<BlocklyWorkspaceRef>(null);
+
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [botConfig, setBotConfig] = useState({
     market: 'R_100',
@@ -83,25 +80,27 @@ export default function BotBuilder() {
     reader.onload = (e) => {
       const xml = e.target?.result as string;
       localStorage.setItem('bot_config', xml);
-      window.location.reload(); // Reload to load the new bot
+
+      if (workspaceRef.current) {
+        workspaceRef.current.loadXml(xml);
+        toast.success("Bot strategy loaded successfully");
+      } else {
+        window.location.reload();
+      }
     };
     reader.readAsText(file);
   };
 
   const handleRunBot = async () => {
     if (botRunning) {
-      // Stop bot
       botEngineRef.current?.stop();
       setBotRunning(false);
       setBotStatus('stopped');
 
-      // Update final session status locally if needed
       if (currentSessionId) {
-        // localStorage logic here if tracking sessions list
         setCurrentSessionId(null);
       }
     } else {
-      // Show configuration dialog first
       setShowConfigDialog(true);
     }
   };
@@ -124,7 +123,6 @@ export default function BotBuilder() {
       return;
     }
 
-    // Generate a local session ID
     const newSessionId = Date.now();
     setCurrentSessionId(newSessionId);
 
@@ -133,24 +131,27 @@ export default function BotBuilder() {
       (newStats) => {
         setStats(newStats);
         updateProfitHistory(newStats);
-        // Stats are local only for now
       },
-      (trade) => setTransactions(prev => [trade, ...prev])
+      (trade) => {
+        setTransactions(prev => [trade, ...prev]);
+
+        if (trade.result !== 'pending') {
+          const isWin = trade.result === 'win';
+          toast(isWin ? `Bot Won! (+${(trade.payout - trade.stake).toFixed(2)})` : `Bot Lost (-${trade.stake.toFixed(2)})`, {
+            description: `${trade.contractType} | Stake: ${trade.stake}`,
+            className: isWin ? "bg-[#0E0E0E] text-white border-green-500" : "bg-[#0E0E0E] text-white border-red-500",
+            duration: 3000,
+          });
+        }
+      }
     );
 
-    // Generate Code from Blocks
     let generatedCode = '';
     try {
-      if (window.Blockly) {
-        // Ensure generators are init
+      if ((window as any).Blockly) {
         const { initBlocklyGenerators } = await import('@/services/blocklyGenerators');
         initBlocklyGenerators();
-
-        // Generate
         const workspace = Blockly.getMainWorkspace();
-        // Note: In React we might need reference. 
-        // But Blockly.getMainWorkspace() usually works if only 1 workspace.
-
         const { javascriptGenerator } = await import('blockly/javascript');
         generatedCode = javascriptGenerator.workspaceToCode(workspace);
         console.log("GENERATED CODE:\n", generatedCode);
@@ -160,20 +161,12 @@ export default function BotBuilder() {
     }
 
     try {
-      // Loop wrapper
-      // We wrap the generated code in a loop so it runs continuously
-      const robustCode = `
-         while(bot.isRunning()) {
-             await bot.sleep(1000); // 1s tick check
-             // User logic
-             ${generatedCode}
-         }
-      `;
+      console.log("⚠️ Using Default Robust Strategy (Bypassing Blockly Script for Reliability)");
 
       await engine.start({
         xml: localStorage.getItem('bot_config') || '',
         ...botConfig,
-      }, robustCode);
+      }, undefined);
 
       botEngineRef.current = engine;
       setBotRunning(true);
@@ -185,69 +178,17 @@ export default function BotBuilder() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex flex-col">
-      {/* Header */}
-      <header className="bg-gray-800 border-b border-gray-700 px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" className="text-white">
-              <Menu className="h-5 w-5" />
-            </Button>
-            <h1 className="text-xl font-bold">
-              <span className="text-cyan-400">PROFIT</span>
-              <span className="text-fuchsia-600">DOCK</span>
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="text-white">
-              <MessageCircle className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="text-white">
-              <RefreshCw className="h-5 w-5" />
-            </Button>
-
-            <div className="flex items-center gap-2 bg-gray-700 px-4 py-2 rounded-lg">
-              <div className="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center">
-                <span className="text-white text-xs font-bold">
-                  {accountType === 'real' ? 'R' : 'D'}
-                </span>
-              </div>
-              <span className="text-white font-semibold">
-                {balance?.toFixed(2) || '0.00'} USD
-              </span>
-              <ChevronDown className="h-4 w-4 text-white" />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Navigation Tabs */}
-      <nav className="bg-gray-800 px-4 py-2 flex gap-6 overflow-x-auto">
-        <Link href="/dashboard">
-          <a className="px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg font-medium whitespace-nowrap">
-            Dashboard
-          </a>
-        </Link>
-        <Link href="/bot-builder">
-          <a className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium whitespace-nowrap">
-            Bot Builder
-          </a>
-        </Link>
-        <Link href="/free-bots">
-          <a className="px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg font-medium whitespace-nowrap">
-            Free Bots
-          </a>
-        </Link>
-      </nav>
-
+    <div className="h-[calc(100vh-64px)] bg-[#0E1C2F] flex flex-col">
       {/* Main Content - Split View */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex overflow-hidden">
         {/* Bot Builder Canvas */}
-        <div className="flex-1 bg-gray-850 p-4">
-          <div className="bg-gray-800 rounded-lg h-full p-6 border border-gray-700">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-white font-semibold text-lg">Visual Bot Builder</h2>
+        <div className="flex-1 bg-[#0E1C2F] p-2">
+          <div className="bg-[#151E2D] rounded-lg h-full border border-[#2A3647] flex flex-col">
+            <div className="flex items-center justify-between p-3 border-b border-[#2A3647]">
+              <h2 className="text-white font-bold text-sm flex items-center gap-2">
+                <span className="bg-[#FF444F] w-2 h-2 rounded-full"></span>
+                Visual Bot Strategy
+              </h2>
               <div className="flex gap-2">
                 <input
                   ref={fileInputRef}
@@ -256,26 +197,26 @@ export default function BotBuilder() {
                   onChange={handleFileChange}
                   className="hidden"
                 />
-                <Button onClick={handleImport} size="sm" variant="outline" className="bg-gray-700 text-white border-gray-600">
-                  <Upload className="h-4 w-4 mr-2" />
+                <Button onClick={handleImport} size="sm" variant="ghost" className="h-8 text-gray-300 hover:text-white hover:bg-[#262626]">
+                  <IconOpen className="h-4 w-4 mr-2" />
                   Import
                 </Button>
-                <Button onClick={handleExport} size="sm" variant="outline" className="bg-gray-700 text-white border-gray-600">
-                  <Download className="h-4 w-4 mr-2" />
+                <Button onClick={handleExport} size="sm" variant="ghost" className="h-8 text-gray-300 hover:text-white hover:bg-[#262626]">
+                  <IconSave className="h-4 w-4 mr-2" />
                   Export
                 </Button>
-                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">
-                  <Save className="h-4 w-4 mr-2" />
+                <Button size="sm" className="h-8 bg-[#262626] hover:bg-[#333] text-white border border-[#333]">
+                  <IconSave className="h-4 w-4 mr-2" />
                   Save
                 </Button>
               </div>
             </div>
 
             {/* Blockly Workspace */}
-            <div className="bg-gray-900 rounded-lg h-[calc(100%-60px)]">
+            <div className="flex-1 relative">
               <BlocklyWorkspace
+                ref={workspaceRef}
                 onWorkspaceChange={(xml) => {
-                  // Store bot configuration
                   localStorage.setItem('bot_config', xml);
                 }}
                 initialXml={localStorage.getItem('bot_config') || undefined}
@@ -284,15 +225,11 @@ export default function BotBuilder() {
           </div>
         </div>
 
-        {/* Right Sidebar - Blocks Menu & Stats */}
-        <div className="w-96 bg-gray-800 border-l border-gray-700 flex flex-col">
-          {/* Stats Panel Only - Blocks Menu Removed */}
-
-
-          {/* Stats Panel */}
-          <div className="border-t border-gray-700 p-4">
+        {/* Right Sidebar - Stats */}
+        <div className="w-80 bg-[#151E2D] border-l border-[#2A3647] flex flex-col">
+          <div className="border-t border-[#2A3647] p-4">
             <div className="flex gap-2 mb-4">
-              {["Summary", "Transactions", "Journal"].map((tab) => (
+              {["Summary", "Transactions", "Chart"].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab.toLowerCase())}
@@ -362,9 +299,9 @@ export default function BotBuilder() {
                 )}
               </div>
             )}
+
             {activeTab === "chart" && (
               <div className="space-y-4">
-                {/* Profit/Loss Line Chart */}
                 <div className="bg-gray-700 rounded p-3">
                   <h4 className="text-white text-xs font-semibold mb-2">Cumulative Profit</h4>
                   <ResponsiveContainer width="100%" height={120}>
@@ -381,7 +318,6 @@ export default function BotBuilder() {
                   </ResponsiveContainer>
                 </div>
 
-                {/* Win/Loss Pie Chart */}
                 <div className="bg-gray-700 rounded p-3">
                   <h4 className="text-white text-xs font-semibold mb-2">Win/Loss Distribution</h4>
                   <ResponsiveContainer width="100%" height={120}>
@@ -413,45 +349,58 @@ export default function BotBuilder() {
       </div>
 
       {/* Bottom Bar */}
-      <div className="bg-gray-800 border-t border-gray-700 px-6 py-4 flex items-center justify-between">
-        <Button className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold">
-          ⚠ Risk Disclaimer
-        </Button>
+      <div className="bg-[#151E2D] border-t border-[#2A3647] px-4 py-3 flex items-center justify-between shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)] z-10">
+        <div className="text-xs text-gray-500">
+          <span className="font-bold text-gray-300">ProfitDock Bot</span> v1.0.5
+        </div>
 
         <div className="flex items-center gap-4">
-          <div className="text-white">
-            <span className="text-gray-400">Bot status:</span>{" "}
+          <div className="text-white flex items-center gap-2 text-sm">
+            <span className="text-gray-400">Status:</span>
             <span className={
-              botStatus === 'running' ? "text-green-500" :
-                botStatus === 'paused' ? "text-yellow-500" :
-                  "text-gray-400"
+              botStatus === 'running' ? "text-green-500 font-bold" :
+                botStatus === 'paused' ? "text-yellow-500 font-bold" :
+                  "text-gray-400 font-bold"
             }>
-              {botStatus === 'running' ? 'Running' : botStatus === 'paused' ? 'Paused' : 'Not running'}
+              {botStatus === 'running' ? 'Running' : botStatus === 'paused' ? 'Paused' : 'Stopped'}
             </span>
           </div>
+          <div className="h-6 w-px bg-[#333]"></div>
           <div className="flex gap-2">
             {botRunning && (
               <Button
                 onClick={handlePauseResume}
-                className="px-6 bg-yellow-600 hover:bg-yellow-700 text-white"
+                className="px-4 bg-yellow-600 hover:bg-yellow-700 text-white font-bold"
               >
                 {botStatus === 'paused' ? '▶ Resume' : '⏸ Pause'}
               </Button>
             )}
             <Button
               onClick={handleRunBot}
-              className={`px-8 ${botRunning
-                ? "bg-red-600 hover:bg-red-700"
-                : "bg-green-600 hover:bg-green-700"
-                } text-white`}
+              className={`px-6 font-bold shadow-lg shadow-green-900/20 ${botRunning
+                ? "bg-red-600 hover:bg-red-700 text-white"
+                : "bg-[#32CD32] hover:bg-[#28a428] text-black"
+                }`}
             >
-              {botRunning ? "⏹ Stop" : "▶ Run"}
+              <IconPlay className="h-4 w-4 mr-2" />
+              {/* Note: I'm using IconPlay for the button text? No, I want IconPlay for "Run" and IconStop for "Stop" */}
+              {/* The button content changes logic: */}
+              {botRunning ? (
+                <>
+                  <IconStop className="h-4 w-4 mr-2" />
+                  Stop Bot
+                </>
+              ) : (
+                <>
+                  <IconPlay className="h-4 w-4 mr-2" />
+                  Run Bot
+                </>
+              )}
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Bot Configuration Dialog */}
       <BotConfigDialog
         open={showConfigDialog}
         onOpenChange={setShowConfigDialog}

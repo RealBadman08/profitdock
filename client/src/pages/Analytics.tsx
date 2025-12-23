@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
-import { createChart, ColorType } from "lightweight-charts";
+import { createChart, ColorType, CandlestickSeries } from "lightweight-charts";
+import DigitDiffer from "@/components/analysis/DigitDiffer";
 
 export default function Analytics() {
   const { isConnected, isAuthorized, balance, accountInfo } = useDeriv();
@@ -37,7 +38,7 @@ export default function Analytics() {
       height: 400,
     });
 
-    const candlestickSeries = (newChart as any).addCandlestickSeries({
+    const candlestickSeries = (newChart as any).addSeries(CandlestickSeries, {
       upColor: "#26a69a",
       downColor: "#ef5350",
       borderVisible: false,
@@ -221,19 +222,32 @@ export default function Analytics() {
           </Card>
         </div>
 
-        {/* Chart Section */}
+        {/* Analysis Tools Section */}
         <Card className="bg-card border-border mb-8">
           <CardHeader>
             <CardTitle className="text-foreground flex items-center gap-2">
               <Activity className="w-5 h-5" />
-              Price Chart & Technical Analysis
+              Advanced Analysis Tools
             </CardTitle>
             <CardDescription className="text-muted-foreground">
-              Advanced charting with technical indicators
+              Real-time statistical analysis for digits and trends
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div ref={chartContainerRef} className="w-full" />
+            <Tabs defaultValue="digits" className="w-full">
+              <TabsList className="grid w-full grid-cols-2 bg-[#1A1A1A] mb-6">
+                <TabsTrigger value="digits">Digit Differ</TabsTrigger>
+                <TabsTrigger value="technical">Technical Analysis</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="digits">
+                <DigitDiffer />
+              </TabsContent>
+
+              <TabsContent value="technical">
+                <div ref={chartContainerRef} className="w-full min-h-[400px]" />
+              </TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 
@@ -377,9 +391,8 @@ export default function Analytics() {
                       </div>
                       <div className="text-right">
                         <p
-                          className={`font-semibold ${
-                            trade.result === "Win" ? "text-green-500" : "text-red-500"
-                          }`}
+                          className={`font-semibold ${trade.result === "Win" ? "text-green-500" : "text-red-500"
+                            }`}
                         >
                           {trade.result === "Win" ? "+" : "-"}$
                           {trade.result === "Win"

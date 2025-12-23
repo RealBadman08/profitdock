@@ -10,6 +10,9 @@ interface AuthContextType {
   accounts: DerivAccount[];
   currentAccount: DerivAccount | null;
   balance: number;
+  displayBalance: number; // Balance shown to user - frozen during trades
+  freezeBalance: () => void; // Call when trade starts
+  unfreezeBalance: () => void; // Call when trade ends
   isDemo: boolean;
   login: () => void;
   logout: () => void;
@@ -26,9 +29,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accounts, setAccounts] = useState<DerivAccount[]>([]);
   const [currentAccount, setCurrentAccount] = useState<DerivAccount | null>(null);
   const [balance, setBalance] = useState(0);
+  const [frozenBalance, setFrozenBalance] = useState<number | null>(null); // Frozen balance during trades
   const [loading, setLoading] = useState(true);
 
   const derivWS = getDerivWS();
+
+  // Compute display balance - use frozen if set, otherwise real balance
+  const displayBalance = frozenBalance !== null ? frozenBalance : balance;
 
   // Check for existing token on mount
   useEffect(() => {
@@ -75,8 +82,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           (acc) => acc.loginid === authResponse.authorize.loginid
         );
         if (current) {
-          setCurrentAccount(current);
-          setBalance(current.balance);
+          // Merge authoritative balance from authorize response
+          const authoritativeAccount = {
+            ...current,
+            balance: Number(authResponse.authorize.balance)
+          };
+          setCurrentAccount(authoritativeAccount);
+          setBalance(Number(authResponse.authorize.balance));
         }
       }
 
@@ -150,8 +162,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Update active token in storage
         localStorage.setItem('deriv_token', targetToken);
         setToken(targetToken);
+
+        // Use authoritative data from response
+        if (authResponse.authorize) {
+          const authBalance = Number(authResponse.authorize.balance);
+          setBalance(authBalance);
+
+          // Update account list but override current account with auth data
+          const accountList = await derivWS.getAccountList();
+          setAccounts(accountList);
+
+          const current = accountList.find((acc) => acc.loginid === authResponse.authorize.loginid);
+          if (current) {
+            setCurrentAccount({
+              ...current,
+              balance: authBalance
+            });
+          }
+          localStorage.setItem('selected_account', loginid);
+          return; // Exit early as we handled state
+        }
       }
 
+      // Fallback for no-token switch (rare)
       // Update current account state
       const accountList = await derivWS.getAccountList(); // Refresh list to get updated balance
       setAccounts(accountList);
@@ -168,6 +201,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  function freezeBalance() {
+    // Freeze the current balance - it won't update in UI during the trade
+    setFrozenBalance(balance);
+  }
+
+  function unfreezeBalance() {
+    // Unfreeze - UI will now show real-time balance again
+    setFrozenBalance(null);
+  }
+
   const isDemo = currentAccount?.is_virtual === 1;
 
   return (
@@ -178,6 +221,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         accounts,
         currentAccount,
         balance,
+        displayBalance,
+        freezeBalance,
+        unfreezeBalance,
         isDemo,
         login,
         logout,

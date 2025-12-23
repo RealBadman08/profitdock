@@ -30,6 +30,7 @@ export interface Tick {
   symbol: string;
   quote: number;
   epoch: number;
+  pip_size?: number;
 }
 
 export interface Proposal {
@@ -43,11 +44,14 @@ export interface Proposal {
 export interface Contract {
   contract_id: number;
   longcode: string;
+  display_name?: string;
   buy_price: number;
   payout: number;
   profit: number;
   is_sold: number;
   sell_price?: number;
+  currency?: string;
+  transaction_ids?: { buy: string; sell?: string };
 }
 
 type MessageCallback = (data: any) => void;
@@ -130,24 +134,47 @@ export class DerivWebSocket {
 
   private send(request: any): Promise<any> {
     return new Promise((resolve, reject) => {
-      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-        reject(new Error('WebSocket is not connected'));
-        return;
-      }
-
-      const reqId = this.requestId++;
-      request.req_id = reqId;
-
-      this.messageCallbacks.set(`req_${reqId}`, (data) => {
-        if (data.error) {
-          reject(data.error);
-        } else {
-          resolve(data);
+      const sendMessage = () => {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+          reject(new Error('WebSocket is not connected'));
+          return;
         }
-      });
 
-      console.log('📤 Sending:', request);
-      this.ws.send(JSON.stringify(request));
+        const reqId = this.requestId++;
+        request.req_id = reqId;
+
+        this.messageCallbacks.set(`req_${reqId}`, (data) => {
+          if (data.error) {
+            reject(data.error);
+          } else {
+            resolve(data);
+          }
+        });
+
+        console.log('📤 Sending:', request);
+        this.ws.send(JSON.stringify(request));
+      };
+
+      if (!this.ws || this.ws.readyState === WebSocket.CONNECTING) {
+        // Wait for connection
+        const checkConnection = setInterval(() => {
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            clearInterval(checkConnection);
+            sendMessage();
+          } else if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+            clearInterval(checkConnection);
+            reject(new Error('WebSocket connection failed'));
+          }
+        }, 100);
+
+        // Timeout after 10s
+        setTimeout(() => {
+          clearInterval(checkConnection);
+          if (this.ws?.readyState !== WebSocket.OPEN) reject(new Error('Connection timeout'));
+        }, 10000);
+      } else {
+        sendMessage();
+      }
     });
   }
 
@@ -249,7 +276,9 @@ export class DerivWebSocket {
     currency: string;
     barrier?: string;
   }, callback: (proposal: Proposal) => void): void {
-    const reqId = Date.now(); // Unique ID for this subscription request tracking if needed, but we use msg_type
+
+    // We use a specific callback key based on contract type to allow multiple subscriptions
+    const callbackKey = `proposal_${params.contract_type}`;
 
     this.send({
       proposal: 1,
@@ -257,7 +286,7 @@ export class DerivWebSocket {
       ...params,
     });
 
-    this.messageCallbacks.set('proposal', (data) => {
+    this.messageCallbacks.set(callbackKey, (data) => {
       if (data.proposal) {
         callback({
           id: data.proposal.id,
@@ -268,11 +297,29 @@ export class DerivWebSocket {
         });
       }
     });
+
+    // Ensure the main 'proposal' listener routes to specific callbacks
+    if (!this.messageCallbacks.has('proposal')) {
+      this.messageCallbacks.set('proposal', (data) => {
+        if (data.proposal && data.echo_req?.contract_type) {
+          const specificKey = `proposal_${data.echo_req.contract_type}`;
+          const specificCallback = this.messageCallbacks.get(specificKey);
+          if (specificCallback) {
+            specificCallback(data);
+          }
+        }
+      });
+    }
   }
 
   unsubscribeProposal(): void {
     this.send({ forget_all: 'proposal' });
-    this.messageCallbacks.delete('proposal');
+    // Clear all proposal callbacks
+    this.messageCallbacks.forEach((_, key) => {
+      if (key.startsWith('proposal_')) {
+        this.messageCallbacks.delete(key);
+      }
+    });
   }
 
   async getProposal(params: {

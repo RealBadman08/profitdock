@@ -161,14 +161,23 @@ export default function Bot() {
   };
 
   if (!isAuthenticated) {
-    // Redirect to login page
-    window.location.href = '/login';
     return (
-      <div className="min-h-screen bg-[#1A1A1A] flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-white mb-4">Redirecting to Login...</h2>
-          <p className="text-gray-400">Please wait</p>
-        </div>
+      <div className="min-h-screen bg-[#0E0E0E] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full bg-[#151717] border-[#262626] p-8 text-center">
+          <div className="w-16 h-16 bg-[#FF444F]/10 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Play className="w-8 h-8 text-[#FF444F]" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Bot Access Restricted</h2>
+          <p className="text-gray-400 mb-8">
+            You must be logged in to configure and run automated trading bots.
+          </p>
+          <Button
+            onClick={() => { window.location.href = `https://oauth.deriv.com/oauth2/authorize?app_id=114155&l=EN&brand=profitdock`; }}
+            className="w-full h-12 text-lg font-bold bg-[#FF444F] hover:bg-[#d43e47] text-white"
+          >
+            Log in to Continue
+          </Button>
+        </Card>
       </div>
     );
   }

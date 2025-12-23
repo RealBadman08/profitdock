@@ -153,6 +153,9 @@ export class BotEngine {
   }
 
   private async runTradingLoop() {
+    console.log("🤖 Starting Bot Trading Loop...");
+    let currentStake = this.config?.stake || 1;
+
     while (this.isRunning && this.config) {
       try {
         if (this.isPaused) {
@@ -160,21 +163,56 @@ export class BotEngine {
           continue;
         }
 
-        // Logic handled by script or this default loop
-        // If no script, we use a simple default strategy (e.g. random or always buy)
-        // ... or simpler: we only support Script for now if config.xml is present?
+        console.log(`💰 Placing trade with stake: ${currentStake}`);
 
-        // Existing loop logic maintenance...
-        const profit = this.stats.totalPayout - this.stats.totalStake;
+        // Get proposal for CALL trade
+        const proposal = await this.ws.getProposal({
+          amount: currentStake,
+          basis: "stake",
+          contract_type: this.config.contractType || "CALL",
+          currency: "USD",
+          duration: this.config.duration,
+          duration_unit: "t",
+          symbol: this.config.market
+        });
+
+        if (proposal && proposal.id) {
+          console.log("✅ Got proposal:", proposal.id);
+
+          // Buy the contract
+          const buyData = await this.ws.buyContract(proposal.id, proposal.ask_price);
+
+          if (buyData.buy) {
+            console.log("🎯 Trade executed!");
+            this.handleBuy(buyData.buy, proposal);
+
+            // Wait for contract to complete
+            const result = await this.waitForContractResult(buyData.buy.contract_id);
+
+            // Martingale strategy: double stake on loss, reset on win
+            if (result === 'loss') {
+              currentStake = currentStake * 2;
+              console.log(`❌ Lost - Doubling stake to ${currentStake}`);
+            } else {
+              currentStake = this.config.stake || 1;
+              console.log(`✅ Won - Resetting stake to ${currentStake}`);
+            }
+          }
+        }
+
+        // Check stop conditions
+        const profit = this.stats.profit;
         if (this.isStopConditionMet(profit)) break;
 
-        await this.getProposalAndTrade();
-        await this.sleep(2000);
+        await this.sleep(2000); // Wait before next trade
+
       } catch (error) {
         console.error("Trading loop error:", error);
         await this.sleep(5000);
       }
     }
+
+    console.log("🛑 Bot stopped");
   }
 
   private isStopConditionMet(profit: number): boolean {
@@ -265,6 +303,19 @@ export class BotEngine {
           this.handleContractEnded(contract);
           this.ws.unsubscribeProposalOpenContract(contractId);
           resolve();
+        }
+      });
+    });
+  }
+
+  private async waitForContractResult(contractId: number): Promise<'win' | 'loss'> {
+    return new Promise((resolve) => {
+      this.ws.subscribeProposalOpenContract(contractId, (contract) => {
+        if (contract.is_sold) {
+          const isWin = (contract.profit || 0) > 0;
+          this.handleContractEnded(contract);
+          this.ws.unsubscribeProposalOpenContract(contractId);
+          resolve(isWin ? 'win' : 'loss');
         }
       });
     });
