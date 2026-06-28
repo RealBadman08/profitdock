@@ -438,10 +438,15 @@ const CorsaPage = observer(() => {
     }, []);
 
     // Keep refs in sync so callbacks always use the latest values
-    useEffect(() => { martingaleRef.current = martingale; }, [martingale]);
+
+    const durationTicksRef = useRef(durationTicks);
+
+
     useEffect(() => { contractTypeRef.current = contractType; }, [contractType]);
     useEffect(() => { signalStreakRef.current = signalStreak; }, [signalStreak]);
     useEffect(() => { predictionRef.current = prediction; }, [prediction]);
+    useEffect(() => { durationTicksRef.current = durationTicks; }, [durationTicks]);
+    useEffect(() => { martingaleRef.current = martingale; }, [martingale]);
     useEffect(() => { marketsRef.current = markets; }, [markets]);
 
     useEffect(() => {
@@ -468,327 +473,177 @@ const CorsaPage = observer(() => {
         };
     }, [connectionStatus]);
 
-    const pushContract = useCallback(
-        (contract: ProposalOpenContract) => {
-            transactions.pushTransaction({ ...contract, accountID: getActiveTransactionAccountId() } as ProposalOpenContract);
-            const contractStatus = (contract as any).status;
-            const isSettled = contractStatus === 'won' || contractStatus === 'lost';
-            const contractId = Number(contract.contract_id);
-            
-            setPositions(previous =>
-                previous.map(position =>
-                    position.contractId === contractId
-                        ? {
-                              ...position,
-                              entrySpot: contract.entry_tick_display_value || contract.entry_tick || position.entrySpot,
-                              exitSpot:
-                                  contract.exit_tick_display_value ||
-                                  contract.exit_tick ||
-                                  (isSettled
-                                      ? (contract as { current_spot_display_value?: string | number; current_spot?: string | number })
-                                            .current_spot_display_value ||
-                                        (contract as { current_spot_display_value?: string | number; current_spot?: string | number })
-                                            .current_spot
-                                      : position.exitSpot),
-                              profit: contract.profit != null ? Number(contract.profit) : position.profit,
-                              status: isSettled ? 'closed' : 'live',
-                          }
-                        : position
-                )
-            );
-            
-            if (!isSettled || !contractId || processedContractsRef.current.has(contractId)) return;
-            processedContractsRef.current.add(contractId);
+    const waitForSettlement = (api: ApiLike, contractId: number, onUpdate: (contract: any) => void): Promise<number> => {
+        return new Promise((resolve, reject) => {
+            let cleanup = null;
+            let resolved = false;
+            subscribeToContract(
+                api,
+                contractId,
+                (contract) => {
+                    onUpdate(contract);
+                    const status = contract.status;
+                    if (!resolved && (status === 'won' || status === 'lost')) {
+                        resolved = true;
+                        if (cleanup) cleanup();
+                        resolve(Number(contract.profit || 0));
+                    }
+                },
+                (errorMsg) => {
+                    if (!resolved) {
+                        resolved = true;
+                        if (cleanup) cleanup();
+                        reject(new Error(errorMsg));
+                    }
+                }
+            ).then(fn => {
+                cleanup = fn;
+                if (resolved) cleanup();
+            }).catch(reject);
+        });
+    };
 
-            cleanupContractsRef.current.get(contractId)?.();
-            cleanupContractsRef.current.delete(contractId);
-            const market = contractMarketRef.current[contractId] || String(contract.underlying_symbol || contract.underlying || '');
-            if (market) activeByMarketRef.current[market] = false;
-
-            const isWin = contractStatus === 'won';
-            const currentMarketStake = contractStakeRef.current[contractId] || stakeByMarketRef.current[market] || baseStakeRef.current;
-            const martingaleMultiplier = normalizeMartingaleMultiplier(martingaleRef.current, 1);
-            // Direct arithmetic — single source of truth via refs, no store
-            const nextStake = isWin
-                ? roundMartingaleStake(baseStakeRef.current)
-                : roundMartingaleStake(currentMarketStake * martingaleMultiplier);
-
-            console.info(
-                '[MARTINGALE]',
-                'corsa',
-                market,
-                'won=',
-                isWin,
-                'stakeBefore=',
-                currentMarketStake,
-                'multiplier=',
-                martingaleMultiplier,
-                'stakeAfter=',
-                nextStake
-            );
-
-            if (market) {
-                stakeByMarketRef.current[market] = nextStake;
-            }
-
-            if (marketMode === 'single' && market === selectedMarket) {
-                setStake(String(nextStake));
-            }
-
-            delete contractMarketRef.current[contractId];
-            delete contractStakeRef.current[contractId];
-            sessionPnlRef.current = roundStake(sessionPnlRef.current + realizedProfit);
-            setStats(previous => ({
-                lost: previous.lost + (realizedProfit < 0 ? 1 : 0),
-                runs: previous.runs + 1,
-                totalPnl: sessionPnlRef.current,
-                won: previous.won + (realizedProfit >= 0 ? 1 : 0),
-            }));
-
-            const tp = toPositiveNumber(takeProfit, 0);
-            const sl = toPositiveNumber(stopLoss, 0);
-            if ((tp > 0 && sessionPnlRef.current >= tp) || (sl > 0 && sessionPnlRef.current <= -sl)) {
-                isRunningRef.current = false;
-                setIsRunning(false);
-                setFeedback(tp > 0 && sessionPnlRef.current >= tp ? localize('Corsa take profit reached.') : localize('Corsa stop loss reached.'));
-            }
-        },
-        [marketMode, selectedMarket, stopLoss, takeProfit, transactions]
-    );
-
-    const placeTrade = useCallback(
-        async (market: MarketSymbol) => {
-            if (!market?.symbol || activeByMarketRef.current[market.symbol]) return;
+    const runCorsaLoopForMarket = (symbol: string) => {
+        let currentStake = toPositiveNumber(stake, 0);
+        baseStakeRef.current = currentStake;
+        let detector = { history: [], priceHistory: [], streak: 0 };
+        const handlerId = `corsa-tick-${symbol}`;
+        
+        const registerListener = async () => {
             const api = await ensureTradingApi();
             if (!api) {
-                setFeedback(localize('Log in to a Deriv account before running Corsa.'));
-                isRunningRef.current = false;
-                setIsRunning(false);
-                return;
-            }
-            // Read stake from ref — single source of truth, updated by pushContract
-            if (!stakeByMarketRef.current[market.symbol]) {
-                stakeByMarketRef.current[market.symbol] = roundMartingaleStake(baseStakeRef.current);
-            }
-            const amount = stakeByMarketRef.current[market.symbol] || baseStakeRef.current;
-
-            console.info(
-                '[CORSA_TRADE]',
-                'market=', market.symbol,
-                'amount=', amount,
-                'baseStake=', baseStakeRef.current,
-                'stakeByMarketRef=', stakeByMarketRef.current[market.symbol]
-            );
-
-            if (amount <= 0) {
-                setFeedback(localize('Enter a stake before running Corsa.'));
-                isRunningRef.current = false;
-                setIsRunning(false);
-                return;
-            }
-
-            activeByMarketRef.current[market.symbol] = true;
-            try {
-                const executeBuy = async (tradeApi: ApiLike) => {
-                    const quote = await requestQuote(
-                        tradeApi,
-                        createProposalPayload({
-                            amount,
-                            contractType,
-                            currency,
-                            duration: toPositiveInteger(durationTicks, 1),
-                            prediction: clampDigit(prediction, 0),
-                            symbol: market.symbol,
-                        })
-                    );
-                    
-                    try {
-                        const buyRes = await buyQuote(tradeApi, quote.proposalId, quote.askPrice);
-                        console.info('[CORSA BUY RESPONSE SUCCESS]', JSON.stringify(buyRes));
-                        return { buy: buyRes, quote };
-                    } catch (err: any) {
-                        console.error('[CORSA BUY REJECTED]', err?.error?.code, err?.error?.message, JSON.stringify(err));
-                        throw err;
-                    }
-                };
-                let tradeApi = api;
-                let trade;
-                try {
-                    trade = await executeBuy(tradeApi);
-                } catch (error) {
-                    if (!isRecoverableAuthError(error)) throw error;
-                    const refreshedApi = await ensureTradingApi(true);
-                    if (!refreshedApi) throw error;
-                    tradeApi = refreshedApi;
-                    trade = await executeBuy(tradeApi);
-                }
-
-                const contractId = trade.buy.contract_id as number;
-                contractMarketRef.current[contractId] = market.symbol;
-                contractStakeRef.current[contractId] = amount;
-                const position: CorsaPosition = {
-                    buyPrice: trade.buy.buy_price || amount,
-                    contractId,
-                    contractType,
-                    entrySpot: trade.quote.spot,
-                    market: market.symbol,
-                    profit: 0,
-                    stake: amount,
-                    status: 'live',
-                    symbol: market.symbol,
-                };
-                setPositions(previous => [position, ...previous].slice(0, 12));
-                transactions.pushTransaction({
-                    accountID: getActiveTransactionAccountId(),
-                    buy_price: position.buyPrice,
-                    contract_id: contractId,
-                    contract_type: contractType,
-                    currency,
-                    date_start: Math.floor(Date.now() / 1000),
-                    display_name: market.display_name,
-                    entry_tick: position.entrySpot,
-                    is_completed: false,
-                    longcode: trade.buy.longcode || trade.quote.longcode,
-                    profit: 0,
-                    transaction_ids: { buy: trade.buy.transaction_id || trade.buy.contract_id },
-                    underlying: market.symbol,
-                    underlying_symbol: market.symbol,
-                } as ProposalOpenContract);
-
-                const cleanup = await subscribeToContract(tradeApi, contractId, pushContract, message => {
-                    setFeedback(message);
-                    setPositions(previous =>
-                        previous.map(item => (item.contractId === contractId ? { ...item, status: 'error' } : item))
-                    );
-                    activeByMarketRef.current[market.symbol] = false;
-                });
-                cleanupContractsRef.current.set(contractId, cleanup);
-                setFeedback(localize('Corsa contract opened on {{ market }}.', { market: market.display_name || market.symbol }));
-            } catch (error) {
-                activeByMarketRef.current[market.symbol] = false;
-                setFeedback(error instanceof Error ? error.message : 'Corsa could not place the trade.');
-            }
-        },
-        [contractType, currency, durationTicks, ensureTradingApi, prediction, pushContract, transactions]
-    );
-
-    useEffect(() => { placeTradeRef.current = placeTrade; });
-
-    useEffect(() => {
-        if (!watchedMarketSymbols.length) return;
-
-        let cancelled = false;
-        let api: ApiLike | null = null;
-        const subscriptionIds: string[] = [];
-        let messageSubscription: { unsubscribe: () => void } | null = null;
-        let retryTimeoutId: ReturnType<typeof setTimeout> | null = null;
-        let retryCount = 0;
-        const MAX_RETRIES = 5;
-        const RETRY_DELAY_MS = 2000;
-
-        const startSubscriptions = async () => {
-            const recoveredApi = await ensureTradingApi();
-            if (cancelled) return;
-            if (!recoveredApi || !hasTradingSession()) {
                 if (isRunningRef.current) {
-                    if (retryCount < MAX_RETRIES) {
-                        retryCount++;
-                        console.info('[CORSA_TICKS] API not ready, retrying in', RETRY_DELAY_MS, 'ms (attempt', retryCount, ')');
-                        retryTimeoutId = setTimeout(() => { if (!cancelled) void startSubscriptions(); }, RETRY_DELAY_MS);
-                        return;
-                    }
-                    setFeedback(localize('Log in to a Deriv account before running Corsa.'));
-                    setIsRunning(false);
-                    isRunningRef.current = false;
+                    setTimeout(registerListener, 2000);
                 }
                 return;
             }
 
-            retryCount = 0; // Reset on success
-            api = recoveredApi;
-            messageSubscription = recoveredApi.onMessage().subscribe(message => {
-                const data = normalizeApiMessage<TickResponse>(message);
-                if (data.msg_type !== 'tick' || !data.tick || !watchedMarketSymbols.includes(data.tick.symbol)) return;
+            let messageSub;
+            messageSub = api.onMessage().subscribe(async (message) => {
+                const data = normalizeApiMessage(message);
+                if (data.msg_type !== 'tick' || data.tick?.symbol !== symbol) return;
+                
+                if (!isRunningRef.current) {
+                    messageSub.unsubscribe();
+                    return;
+                }
 
                 const tick = data.tick;
-                const market = marketsRef.current.find(item => item.symbol === tick.symbol);
                 const digit = getLastDigit(tick.quote);
+                
                 const liveContractType = contractTypeRef.current;
                 const targetStreak = toPositiveInteger(signalStreakRef.current, 1);
                 const targetDigit = clampDigit(predictionRef.current, 0);
-                let signalKey = '';
-                let shouldTrade = false;
-
-                setDetectors(previous => {
-                    const current = previous[tick.symbol] || { history: [], lastQuote: null, priceHistory: [], streak: 0 };
-                    const nextHistory = [digit, ...current.history].slice(0, 50);
-                    const nextPriceHistory = [tick.quote, ...current.priceHistory].slice(0, 50);
-                    const nextStreak = getCorsaSignalStreak({
-                        contractType: liveContractType,
-                        digitHistory: nextHistory,
-                        prediction: targetDigit,
-                        priceHistory: nextPriceHistory,
-                    });
-                    const signalWindow =
-                        liveContractType === 'CALL' || liveContractType === 'PUT'
-                            ? nextPriceHistory.slice(0, targetStreak + 1).join('|')
-                            : nextHistory.slice(0, targetStreak).join('|');
-                    signalKey = `${tick.symbol}:${liveContractType}:${targetDigit}:${targetStreak}:${signalWindow}`;
-                    shouldTrade =
-                        nextStreak >= targetStreak &&
-                        !signalActiveRef.current[tick.symbol] &&
-                        !activeByMarketRef.current[tick.symbol] &&
-                        processedSignalRef.current[tick.symbol] !== signalKey;
-                    if (nextStreak < targetStreak) {
-                        signalActiveRef.current[tick.symbol] = false;
-                        delete processedSignalRef.current[tick.symbol];
-                    }
-                    return {
-                        ...previous,
-                        [tick.symbol]: {
-                            history: nextHistory,
-                            lastQuote: tick.quote,
-                            priceHistory: nextPriceHistory,
-                            streak: nextStreak,
-                        },
-                    };
+                
+                detector.history = [digit, ...detector.history].slice(0, 50);
+                detector.priceHistory = [tick.quote, ...detector.priceHistory].slice(0, 50);
+                
+                const nextStreak = getCorsaSignalStreak({
+                    contractType: liveContractType,
+                    digitHistory: detector.history,
+                    prediction: targetDigit,
+                    priceHistory: detector.priceHistory,
                 });
+                detector.streak = nextStreak;
+                
+                setDetectors(prev => ({
+                    ...prev,
+                    [symbol]: { ...detector, lastQuote: tick.quote }
+                }));
 
-                if (shouldTrade && market && isRunningRef.current) {
-                    signalActiveRef.current[tick.symbol] = true;
-                    processedSignalRef.current[tick.symbol] = signalKey;
-                    void placeTradeRef.current?.(market);
+                if (nextStreak >= targetStreak) {
+                    messageSub.unsubscribe();
+                    
+                    const market = marketsRef.current.find(m => m.symbol === symbol);
+                    if (!market) {
+                        if (isRunningRef.current) registerListener();
+                        return;
+                    }
+
+                    try {
+                        const quote = await requestQuote(
+                            api,
+                            createProposalPayload({
+                                amount: currentStake,
+                                contractType: liveContractType,
+                                currency,
+                                duration: toPositiveInteger(durationTicksRef.current, 1),
+                                prediction: targetDigit,
+                                symbol: market.symbol,
+                            })
+                        );
+                        
+                        const buyRes = await buyQuote(api, quote.proposalId, quote.askPrice);
+                        console.info('[CORSA BUY RESPONSE SUCCESS]', symbol, JSON.stringify(buyRes));
+                        
+                        const contractId = buyRes.contract_id;
+                        
+                        const updateUi = (contract) => {
+                            const liveContract = contract;
+                            transactions.pushTransaction({
+                                ...contract,
+                                accountID: getActiveTransactionAccountId(),
+                            });
+                            const status = contract.status;
+                            const isSettled = status === 'won' || status === 'lost';
+                            setPositions(prev => {
+                                const existing = prev.find(p => p.contractId === contract.contract_id);
+                                if (existing) {
+                                    return prev.map(p => p.contractId === contract.contract_id ? {
+                                        ...p,
+                                        entrySpot: contract.entry_tick_display_value || contract.entry_tick || p.entrySpot,
+                                        exitSpot: contract.exit_tick_display_value || contract.exit_tick || (isSettled ? liveContract.current_spot_display_value || liveContract.current_spot : p.exitSpot),
+                                        profit: contract.profit != null ? Number(contract.profit) : p.profit,
+                                        status: isSettled ? 'closed' : 'live'
+                                    } : p);
+                                } else {
+                                    return [...prev, {
+                                        buyPrice: contract.buy_price,
+                                        contractId: contract.contract_id,
+                                        contractType: contract.contract_type,
+                                        entrySpot: contract.entry_tick_display_value || contract.entry_tick,
+                                        exitSpot: contract.exit_tick_display_value || contract.exit_tick || liveContract.current_spot_display_value || liveContract.current_spot,
+                                        label: market.display_name || market.symbol,
+                                        market: contract.underlying,
+                                        profit: Number(contract.profit || 0),
+                                        stake: contract.buy_price,
+                                        status: isSettled ? 'closed' : 'live',
+                                        symbol
+                                    }];
+                                }
+                            });
+                        };
+
+                        const profit = await waitForSettlement(api, contractId, updateUi);
+                        console.log('[CORSA]', symbol, 'stakeUsed=', currentStake, 'profit=', profit);
+                        
+                        if (profit > 0) {
+                            currentStake = baseStakeRef.current;
+                        } else {
+                            const multiplier = toPositiveNumber(martingaleRef.current, 1);
+                            const normMult = normalizeMartingaleMultiplier(multiplier, 1);
+                            currentStake = roundMartingaleStake(currentStake * normMult);
+                        }
+                    } catch (err) {
+                        console.error('[CORSA BUY REJECTED]', symbol, err?.error?.code, err?.error?.message, JSON.stringify(err));
+                    }
+
+                    if (isRunningRef.current) {
+                        detector = { history: [], priceHistory: [], streak: 0 };
+                        setDetectors(prev => ({
+                            ...prev,
+                            [symbol]: { ...detector, lastQuote: null }
+                        }));
+                        registerListener();
+                    }
                 }
             });
-
-            watchedMarketSymbols.forEach(symbol => {
-                void recoveredApi
-                    .send({ subscribe: 1, ticks: symbol })
-                    .then(response => {
-                        if (cancelled) return;
-                        const tickResponse = normalizeApiMessage<TickResponse>(response);
-                        if (tickResponse.subscription?.id) subscriptionIds.push(tickResponse.subscription.id);
-                        if (tickResponse.error) {
-                            console.warn('[CORSA_TICKS] Subscription error for', symbol, tickResponse.error.message);
-                        }
-                    })
-                    .catch(error => {
-                        if (!cancelled) {
-                            console.warn('[CORSA_TICKS] Subscription catch for', symbol, error);
-                        }
-                    });
-            });
+            api.send({ subscribe: 1, ticks: symbol }).catch(() => {});
         };
 
-        void startSubscriptions();
+        registerListener();
+    };
 
-        return () => {
-            cancelled = true;
-            if (retryTimeoutId) clearTimeout(retryTimeoutId);
-            messageSubscription?.unsubscribe();
-            if (api) subscriptionIds.forEach(id => void api?.send({ forget: id }).catch(() => undefined));
-        };
-    }, [ensureTradingApi, watchedMarketSymbols]);
 
     const handleRun = () => {
         if (isRunning) {
@@ -816,6 +671,8 @@ const CorsaPage = observer(() => {
         setStats({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
         setIsRunning(true);
         setFeedback('');
+
+        watchedMarketSymbols.forEach(symbol => runCorsaLoopForMarket(symbol));
     };
 
     useEffect(() => {
