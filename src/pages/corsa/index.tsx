@@ -471,7 +471,8 @@ const CorsaPage = observer(() => {
     const pushContract = useCallback(
         (contract: ProposalOpenContract) => {
             transactions.pushTransaction({ ...contract, accountID: getActiveTransactionAccountId() } as ProposalOpenContract);
-            const isSold = Boolean((contract as { is_sold?: number | boolean }).is_sold);
+            const contractStatus = (contract as any).status;
+            const isSettled = contractStatus === 'won' || contractStatus === 'lost';
             const contractId = Number(contract.contract_id);
             
             setPositions(previous =>
@@ -483,20 +484,20 @@ const CorsaPage = observer(() => {
                               exitSpot:
                                   contract.exit_tick_display_value ||
                                   contract.exit_tick ||
-                                  (isSold
+                                  (isSettled
                                       ? (contract as { current_spot_display_value?: string | number; current_spot?: string | number })
                                             .current_spot_display_value ||
                                         (contract as { current_spot_display_value?: string | number; current_spot?: string | number })
                                             .current_spot
                                       : position.exitSpot),
-                              profit: typeof contract.profit === 'number' ? contract.profit : position.profit,
-                              status: isSold ? 'closed' : 'live',
+                              profit: contract.profit != null ? Number(contract.profit) : position.profit,
+                              status: isSettled ? 'closed' : 'live',
                           }
                         : position
                 )
             );
             
-            if (!isSold || !contractId || processedContractsRef.current.has(contractId)) return;
+            if (!isSettled || !contractId || processedContractsRef.current.has(contractId)) return;
             processedContractsRef.current.add(contractId);
 
             cleanupContractsRef.current.get(contractId)?.();
@@ -504,11 +505,11 @@ const CorsaPage = observer(() => {
             const market = contractMarketRef.current[contractId] || String(contract.underlying_symbol || contract.underlying || '');
             if (market) activeByMarketRef.current[market] = false;
 
-            const realizedProfit = contract.profit != null ? Number(contract.profit) : 0;
+            const isWin = contractStatus === 'won';
             const currentMarketStake = contractStakeRef.current[contractId] || stakeByMarketRef.current[market] || baseStakeRef.current;
             const martingaleMultiplier = normalizeMartingaleMultiplier(martingaleRef.current, 1);
             // Direct arithmetic — single source of truth via refs, no store
-            const nextStake = realizedProfit >= 0
+            const nextStake = isWin
                 ? roundMartingaleStake(baseStakeRef.current)
                 : roundMartingaleStake(currentMarketStake * martingaleMultiplier);
 
@@ -517,7 +518,7 @@ const CorsaPage = observer(() => {
                 'corsa',
                 market,
                 'won=',
-                realizedProfit >= 0,
+                isWin,
                 'stakeBefore=',
                 currentMarketStake,
                 'multiplier=',

@@ -544,6 +544,8 @@ const FlipperSwitcherPage = observer(() => {
                 ...(contract as ProposalOpenContract),
                 accountID: getActiveTransactionAccountId(),
             } as ProposalOpenContract);
+            const contractStatus = (contract as any).status;
+            const isSettled = contractStatus === 'won' || contractStatus === 'lost';
             setPositions(previous =>
                 previous.map(position =>
                     position.contractId === contract.contract_id
@@ -556,17 +558,17 @@ const FlipperSwitcherPage = observer(() => {
                               exitSpot:
                                   contract.exit_tick_display_value ||
                                   contract.exit_tick ||
-                                  (contract.is_sold
+                                  (isSettled
                                       ? liveContract.current_spot_display_value || liveContract.current_spot
                                       : position.exitSpot),
                               profit: contract.profit != null ? Number(contract.profit) : position.profit,
-                              status: contract.is_sold ? 'closed' : 'live',
+                              status: isSettled ? 'closed' : 'live',
                           }
                         : position
                 )
             );
 
-            if (contract.is_sold) {
+            if (isSettled) {
                 cleanupRef.current.get(contract.contract_id)?.();
                 cleanupRef.current.delete(contract.contract_id);
             }
