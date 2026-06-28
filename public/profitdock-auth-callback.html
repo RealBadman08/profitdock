@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+        <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
+        <meta http-equiv="Pragma" content="no-cache" />
+        <meta http-equiv="Expires" content="0" />
+        <title>Finalizing your ProfitDock sign-in...</title>
+        <style>
+            :root {
+                color-scheme: light;
+                font-family: Inter, Arial, sans-serif;
+            }
+
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                min-height: 100vh;
+                display: grid;
+                place-items: center;
+                background: #ffffff;
+                color: #1f2937;
+                padding: 2.4rem;
+            }
+
+            .auth-callback {
+                width: min(42rem, 100%);
+                text-align: center;
+            }
+
+            .auth-callback__loader {
+                display: inline-flex;
+                gap: 0.8rem;
+                margin-bottom: 2rem;
+            }
+
+            .auth-callback__dot {
+                width: 1.3rem;
+                height: 4rem;
+                border-radius: 999px;
+                background: #93b7bf;
+                animation: callback-pulse 1.1s ease-in-out infinite;
+            }
+
+            .auth-callback__dot:nth-child(2) { animation-delay: 0.08s; }
+            .auth-callback__dot:nth-child(3) { animation-delay: 0.16s; }
+            .auth-callback__dot:nth-child(4) { animation-delay: 0.24s; }
+            .auth-callback__dot:nth-child(5) { animation-delay: 0.32s; }
+
+            .auth-callback__title {
+                font-size: clamp(2rem, 4vw, 2.8rem);
+                font-weight: 700;
+                margin: 0 0 1.2rem;
+            }
+
+            .auth-callback__message {
+                font-size: 1.6rem;
+                line-height: 1.55;
+                margin: 0;
+            }
+
+            .auth-callback__actions {
+                margin-top: 2.4rem;
+            }
+
+            .auth-callback__button {
+                appearance: none;
+                border: 0;
+                border-radius: 1.2rem;
+                background: #ff444f;
+                color: #ffffff;
+                cursor: pointer;
+                font-size: 1.6rem;
+                font-weight: 700;
+                padding: 1.2rem 2rem;
+            }
+
+            @keyframes callback-pulse {
+                0%, 100% { transform: scaleY(0.72); opacity: 0.7; }
+                50% { transform: scaleY(1); opacity: 1; }
+            }
+        </style>
+    </head>
+    <body>
+        <main class="auth-callback" aria-live="polite">
+            <div class="auth-callback__loader" aria-hidden="true">
+                <span class="auth-callback__dot"></span>
+                <span class="auth-callback__dot"></span>
+                <span class="auth-callback__dot"></span>
+                <span class="auth-callback__dot"></span>
+                <span class="auth-callback__dot"></span>
+            </div>
+            <h1 id="callback-title" class="auth-callback__title">Finalizing your ProfitDock sign-in...</h1>
+            <p id="callback-message" class="auth-callback__message">We are securely connecting your Deriv account.</p>
+            <div id="callback-actions" class="auth-callback__actions" hidden>
+                <button id="callback-home" class="auth-callback__button" type="button" onclick="window.location.href='/'">
+                    Return to ProfitDock
+                </button>
+            </div>
+        </main>
+        <script>
+            (async function () {
+                const RESET_VERSION = 'profitdock-new-oauth-339iXSWkH7NEGne7sMdQT-v10';
+                const RESET_KEY = 'profitdock.auth.reset.version';
+                const PROFITDOCK_CLIENT_ID = '339iXSWkH7NEGne7sMdQT';
+                const title_node = document.getElementById('callback-title');
+                const message_node = document.getElementById('callback-message');
+                const actions_node = document.getElementById('callback-actions');
+                const is_https = window.location.protocol === 'https:';
+                const secure_suffix = is_https ? '; Secure' : '';
+                const is_callback_path = window.location.pathname === '/auth/callback' || window.location.pathname === '/callback';
+
+                const set_message = message => {
+                    if (message_node) message_node.textContent = message;
+                };
+
+                const show_error = message => {
+                    if (title_node) title_node.textContent = 'Sign-in could not be completed';
+                    set_message(message || 'ProfitDock could not finish signing you in.');
+                    if (actions_node) actions_node.hidden = false;
+                };
+
+                const set_profitdock_cookie = (name, value) => {
+                    document.cookie = `${name}=${value}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${secure_suffix}`;
+                    document.cookie = `${name}=${value}; path=/; domain=.profitdock.site; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${secure_suffix}`;
+                    document.cookie = `${name}=${value}; path=/; domain=profitdock.site; max-age=${60 * 60 * 24 * 30}; SameSite=Lax${secure_suffix}`;
+                };
+
+                const clear_logged_state_cookie = () => {
+                    ['', '; domain=.profitdock.site', '; domain=profitdock.site'].forEach(domain_suffix => {
+                        document.cookie = `logged_state=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/${domain_suffix}`;
+                    });
+                };
+
+                const clear_auth_storage = () => {
+                    [
+                        'accountsList',
+                        'clientAccounts',
+                        'client.accounts',
+                        'client_account_details',
+                        'authToken',
+                        'active_loginid',
+                        'callback_token',
+                        'profitdock_auth_stage',
+                        'client.country',
+                        'config.legacy_app_id',
+                        'config.socket_app_id',
+                        'config.server_url',
+                    ].forEach(key => localStorage.removeItem(key));
+
+                    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
+                        const key = localStorage.key(index);
+                        if (key && /oidc|oauth2|session_state|userManager|auth-client|pkce|deriv_auth/i.test(key)) {
+                            localStorage.removeItem(key);
+                        }
+                    }
+                };
+
+                const cleanup_caches = async () => {
+                    const cleanup_tasks = [];
+
+                    if ('serviceWorker' in navigator) {
+                        cleanup_tasks.push(
+                            navigator.serviceWorker.getRegistrations().then(registrations =>
+                                Promise.all(registrations.map(registration => registration.unregister()))
+                            )
+                        );
+                    }
+
+                    if ('caches' in window) {
+                        cleanup_tasks.push(caches.keys().then(cache_names => Promise.all(cache_names.map(name => caches.delete(name)))));
+                    }
+
+                    await Promise.allSettled(cleanup_tasks);
+                };
+
+                const is_demo_account = account => account?.account_type === 'demo' || account?.is_virtual === true || /^(VR|VRTC|VRW|DOTD)/i.test(account?.loginid || '');
+
+                const normalize_account = (account, access_token) => {
+                    const loginid = String(account?.account_id || account?.id || account?.loginid || '');
+                    if (!loginid) return null;
+
+                    return {
+                        account_type: account.account_type || (is_demo_account({ ...account, loginid }) ? 'demo' : 'real'),
+                        balance: account.balance,
+                        created_at: account.created_at,
+                        currency: account.currency || '',
+                        group: account.group || '',
+                        is_virtual: account.account_type === 'demo' || account.is_virtual === true || /^(VR|VRTC|VRW|DOTD)/i.test(loginid),
+                        landing_company_name: account.landing_company_name || '',
+                        loginid,
+                        token: access_token,
+                    };
+                };
+
+                const get_selected_account = accounts => {
+                    const requested = sessionStorage.getItem('query_param_currency') || new URLSearchParams(window.location.search).get('account') || '';
+                    const demo = accounts.find(is_demo_account);
+                    const real_by_currency = accounts.find(account => !is_demo_account(account) && account.currency?.toUpperCase() === requested.toUpperCase());
+
+                    if (requested === 'demo') return demo || accounts[0];
+                    return real_by_currency || accounts.find(account => !is_demo_account(account)) || demo || accounts[0];
+                };
+
+                const get_post_login_redirect = selected_account => {
+                    const fallback_url = `${window.location.origin}/`;
+                    const stored_redirect_url = localStorage.getItem('config.post_login_redirect_uri') || sessionStorage.getItem('redirect_url') || fallback_url;
+                    let redirect_url;
+
+                    try {
+                        redirect_url = new URL(stored_redirect_url, fallback_url);
+                    } catch {
+                        redirect_url = new URL(fallback_url);
+                    }
+
+                    if (redirect_url.origin !== window.location.origin || ['/auth/callback', '/callback'].includes(redirect_url.pathname)) {
+                        redirect_url = new URL(fallback_url);
+                    }
+
+                    if (selected_account) {
+                        redirect_url.searchParams.set('account', is_demo_account(selected_account) ? 'demo' : selected_account.currency || 'USD');
+                    }
+
+                    [
+                        'acct1', 'acct2', 'acct3', 'token1', 'token2', 'token3', 'cur1', 'cur2', 'cur3',
+                        'code', 'state', 'session_state', 'scope', 'error', 'error_description', 'error_uri',
+                    ].forEach(param => redirect_url.searchParams.delete(param));
+
+                    sessionStorage.removeItem('redirect_url');
+                    localStorage.removeItem('config.post_login_redirect_uri');
+
+                    return redirect_url.toString();
+                };
+
+                const store_oauth_session = ({ access_token, accounts }) => {
+                    const normalized_accounts = accounts.map(account => normalize_account(account, access_token)).filter(Boolean);
+
+                    if (!access_token || !normalized_accounts.length) {
+                        throw new Error('ProfitDock could not load your Deriv trading accounts. Please try signing in again.');
+                    }
+
+                    const selected_account = get_selected_account(normalized_accounts);
+                    if (!selected_account) {
+                        throw new Error('ProfitDock could not select a Deriv trading account for this session.');
+                    }
+
+                    const accounts_list = normalized_accounts.reduce((acc, account) => {
+                        acc[account.loginid] = access_token;
+                        return acc;
+                    }, {});
+                    const client_accounts = normalized_accounts.reduce((acc, account) => {
+                        acc[account.loginid] = {
+                            account_type: account.account_type,
+                            currency: account.currency || '',
+                            is_virtual: account.is_virtual,
+                            loginid: account.loginid,
+                            token: access_token,
+                        };
+                        return acc;
+                    }, {});
+                    const account_list = normalized_accounts.map(account => ({
+                        account_type: account.account_type,
+                        balance: account.balance,
+                        created_at: account.created_at,
+                        currency: account.currency || '',
+                        group: account.group,
+                        is_virtual: account.is_virtual,
+                        landing_company_name: account.landing_company_name,
+                        loginid: account.loginid,
+                    }));
+                    const callback_token = {
+                        account_list,
+                        country: '',
+                        currency: selected_account.currency || '',
+                        loginid: selected_account.loginid,
+                        token_type: 'oauth',
+                    };
+
+                    localStorage.setItem('config.app_id', PROFITDOCK_CLIENT_ID);
+                    localStorage.removeItem('config.legacy_app_id');
+                    localStorage.setItem(RESET_KEY, RESET_VERSION);
+                    localStorage.setItem('accountsList', JSON.stringify(accounts_list));
+                    localStorage.setItem('clientAccounts', JSON.stringify(client_accounts));
+                    localStorage.setItem('client.accounts', JSON.stringify(account_list));
+                    localStorage.setItem('client_account_details', JSON.stringify(account_list));
+                    localStorage.setItem('authToken', access_token);
+                    localStorage.setItem('active_loginid', selected_account.loginid);
+                    localStorage.setItem('client.country', '');
+                    localStorage.setItem('callback_token', JSON.stringify(callback_token));
+                    localStorage.setItem('profitdock_auth_stage', 'new_oauth_callback_ready');
+                    set_profitdock_cookie('logged_state', 'true');
+
+                    return get_post_login_redirect(selected_account);
+                };
+
+                const get_legacy_callback_tokens = params => {
+                    const tokens = {};
+
+                    params.forEach((value, key) => {
+                        if (/^(acct|token|cur)\d+$/i.test(key)) {
+                            tokens[key] = value;
+                        }
+                    });
+
+                    return tokens.acct1 && tokens.token1 ? tokens : null;
+                };
+
+                const normalize_legacy_account = (loginid, token, currency = '') => {
+                    if (!loginid || !token) return null;
+
+                    return {
+                        account_type: /^(VR|VRTC|VRW)/i.test(loginid) ? 'demo' : 'real',
+                        currency,
+                        is_virtual: /^(VR|VRTC|VRW)/i.test(loginid),
+                        loginid,
+                        token,
+                    };
+                };
+
+                const store_legacy_session = tokens => {
+                    const legacy_accounts = [];
+
+                    for (let index = 1; index <= 30; index += 1) {
+                        const loginid = tokens[`acct${index}`] || '';
+                        const token = tokens[`token${index}`] || '';
+                        const currency = tokens[`cur${index}`] || '';
+                        const account = normalize_legacy_account(loginid, token, currency);
+
+                        if (account) legacy_accounts.push(account);
+                    }
+
+                    if (!legacy_accounts.length) {
+                        throw new Error('ProfitDock could not read the Deriv legacy account tokens returned from OAuth.');
+                    }
+
+                    const selected_account = get_selected_account(legacy_accounts);
+
+                    if (!selected_account) {
+                        throw new Error('ProfitDock could not select a Deriv account for this legacy session.');
+                    }
+
+                    const accounts_list = legacy_accounts.reduce((acc, account) => {
+                        acc[account.loginid] = account.token;
+                        return acc;
+                    }, {});
+                    const client_accounts = legacy_accounts.reduce((acc, account) => {
+                        acc[account.loginid] = account;
+                        return acc;
+                    }, {});
+                    const account_list = legacy_accounts.map(account => ({
+                        account_type: account.account_type,
+                        currency: account.currency || '',
+                        is_virtual: account.is_virtual,
+                        loginid: account.loginid,
+                    }));
+                    const callback_token = {
+                        account_list,
+                        country: '',
+                        currency: selected_account.currency || '',
+                        loginid: selected_account.loginid,
+                        token_type: 'legacy',
+                    };
+
+                    localStorage.setItem('config.app_id', PROFITDOCK_CLIENT_ID);
+                    localStorage.removeItem('config.legacy_app_id');
+                    localStorage.setItem(RESET_KEY, RESET_VERSION);
+                    localStorage.setItem('accountsList', JSON.stringify(accounts_list));
+                    localStorage.setItem('clientAccounts', JSON.stringify(client_accounts));
+                    localStorage.setItem('client.accounts', JSON.stringify(account_list));
+                    localStorage.setItem('client_account_details', JSON.stringify(account_list));
+                    localStorage.setItem('authToken', selected_account.token);
+                    localStorage.setItem('active_loginid', selected_account.loginid);
+                    localStorage.setItem('client.country', '');
+                    localStorage.setItem('callback_token', JSON.stringify(callback_token));
+                    localStorage.setItem('profitdock_auth_stage', 'legacy_callback_ready');
+                    set_profitdock_cookie('logged_state', 'true');
+
+                    return get_post_login_redirect(selected_account);
+                };
+
+                try {
+                    if (window.location.hostname === 'www.profitdock.site') {
+                        const canonical_url = new URL(window.location.href);
+                        canonical_url.hostname = 'profitdock.site';
+                        window.location.replace(canonical_url.toString());
+                        return;
+                    }
+
+                    if (!is_callback_path) {
+                        window.location.replace('/');
+                        return;
+                    }
+
+                    const params = new URLSearchParams(window.location.search);
+                    const hash_params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+                    const error = params.get('error');
+                    const error_description = params.get('error_description');
+                    const code = params.get('code') || '';
+                    const state = params.get('state') || '';
+                    const direct_access_token =
+                        params.get('access_token') ||
+                        hash_params.get('access_token') ||
+                        params.get('token') ||
+                        hash_params.get('token') ||
+                        params.get('token1') ||
+                        hash_params.get('token1') ||
+                        '';
+                    const legacy_tokens = get_legacy_callback_tokens(params);
+
+                    clear_auth_storage();
+
+                    if (error) {
+                        clear_logged_state_cookie();
+                        show_error(error_description || error);
+                        return;
+                    }
+
+                    if (legacy_tokens) {
+                        clear_logged_state_cookie();
+                        show_error('Deriv returned a legacy token callback. Please start login again from ProfitDock so the new Deriv OAuth session can be authorized.');
+                        return;
+                    }
+
+                    if (!direct_access_token && (!code || !state)) {
+                        clear_logged_state_cookie();
+                        show_error('Missing Deriv authorization code. Please start login again from ProfitDock.');
+                        return;
+                    }
+
+                    set_message(direct_access_token ? 'Validating your Deriv trading token...' : 'Requesting your Deriv trading token...');
+                    const controller = new AbortController();
+                    const timeout = window.setTimeout(() => controller.abort(), 45000);
+                    const response = await fetch('/api/deriv/oauth/exchange', {
+                        body: JSON.stringify(direct_access_token ? { access_token: direct_access_token } : { code, state }),
+                        headers: { 'Content-Type': 'application/json' },
+                        method: 'POST',
+                        signal: controller.signal,
+                    });
+                    window.clearTimeout(timeout);
+                    const payload = await response.json().catch(() => null);
+
+                    if (!response.ok || !payload?.access_token) {
+                        clear_logged_state_cookie();
+                        show_error(payload?.message || 'ProfitDock could not request Deriv trading tokens.');
+                        return;
+                    }
+
+                    if (!Array.isArray(payload.accounts) || !payload.accounts.length) {
+                        clear_logged_state_cookie();
+                        show_error(payload.accounts_error?.message || 'Deriv did not return a tradable Options account for this login.');
+                        return;
+                    }
+
+                    set_message('Storing your real Deriv session...');
+                    const redirect_target = store_oauth_session({
+                        access_token: payload.access_token,
+                        accounts: payload.accounts,
+                    });
+
+                    set_message('Redirecting you into ProfitDock...');
+                    cleanup_caches().catch(error => console.warn('[ProfitDock Callback] Cache cleanup failed:', error));
+                    window.location.replace(redirect_target);
+                } catch (error) {
+                    console.error('[ProfitDock Callback] New API callback bootstrap failed:', error);
+                    clear_logged_state_cookie();
+                    localStorage.setItem('profitdock_auth_stage', `new_oauth_callback_error:${error instanceof Error ? error.message : 'unknown'}`);
+                    show_error(
+                        error instanceof DOMException && error.name === 'AbortError'
+                            ? 'ProfitDock sign-in took too long. Please try again.'
+                            : error instanceof Error
+                              ? error.message
+                              : 'ProfitDock could not finish storing your Deriv session. Please try logging in again.'
+                    );
+                }
+            })();
+        </script>
+    </body>
+</html>

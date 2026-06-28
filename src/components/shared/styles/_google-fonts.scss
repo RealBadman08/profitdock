@@ -1,0 +1,3 @@
+// External font imports are intentionally disabled for ProfitDock builds.
+// If fonts.googleapis.com stalls or is blocked, lazy CSS chunks can reject and
+// leave the trading shell on a permanent loader. The app uses local fallbacks.

@@ -1,0 +1,40 @@
+.flipper-switcher-nav-icon {
+    color: var(--text-general);
+    display: block;
+    flex-shrink: 0;
+    overflow: visible;
+    vertical-align: middle;
+
+    &__cube {
+        animation: flipper-cube-tilt 2s ease-in-out infinite;
+        transform-box: fill-box;
+        transform-origin: center;
+    }
+
+    &__face {
+        stroke: currentColor;
+        stroke-linejoin: round;
+        stroke-width: 1.3;
+    }
+
+    &__face--top { fill: rgb(255 68 79 / 26%); }
+    &__face--left { fill: rgb(41 199 172 / 22%); }
+    &__face--right { fill: rgb(44 123 255 / 20%); }
+
+    &__orbit {
+        animation: flipper-orbit 1.55s ease-in-out infinite;
+        stroke: #ff444f;
+        stroke-linecap: round;
+        stroke-width: 1.7;
+    }
+}
+
+@keyframes flipper-cube-tilt {
+    0%, 100% { transform: rotate(0deg) translateY(0); }
+    50% { transform: rotate(6deg) translateY(-1px); }
+}
+
+@keyframes flipper-orbit {
+    0%, 100% { opacity: 0.35; stroke-dasharray: 2 8; }
+    50% { opacity: 1; stroke-dasharray: 10 2; }
+}

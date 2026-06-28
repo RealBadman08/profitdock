@@ -1,0 +1,49 @@
+.accumulators-nav-icon {
+    color: var(--text-general);
+    display: block;
+    flex-shrink: 0;
+    overflow: visible;
+    vertical-align: middle;
+
+    &__box {
+        animation: accumulators-box-float 2.2s ease-in-out infinite;
+        fill: rgb(255 68 79 / 12%);
+        stroke: #ff444f;
+        stroke-width: 1.7;
+        transform-origin: 12px 12px;
+    }
+
+    &__edge {
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.5;
+    }
+
+    &__edge--one { animation: accumulators-edge-sweep 1.8s ease-in-out infinite; }
+    &__edge--two { animation: accumulators-edge-sweep 1.8s ease-in-out 220ms infinite; }
+
+    &__spark {
+        fill: #29c7ac;
+        transform-box: fill-box;
+        transform-origin: center;
+    }
+
+    &__spark--one { animation: accumulators-spark 1.7s ease-in-out infinite; }
+    &__spark--two { animation: accumulators-spark 1.7s ease-in-out 360ms infinite; }
+}
+
+@keyframes accumulators-box-float {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-1px) scale(1.04); }
+}
+
+@keyframes accumulators-edge-sweep {
+    0%, 100% { opacity: 0.55; stroke-dasharray: 3 7; }
+    50% { opacity: 1; stroke-dasharray: 10 1; }
+}
+
+@keyframes accumulators-spark {
+    0%, 100% { opacity: 0.45; transform: scale(0.8) rotate(0deg); }
+    50% { opacity: 1; transform: scale(1.15) rotate(18deg); }
+}

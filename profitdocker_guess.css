@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="en" dir="auto">
+    <head>
+        <meta charset="UTF-8" />
+        <!-- Favicon will be set dynamically by JavaScript based on domain config -->
+        <link rel="icon" type="image/svg+xml" href="" id="dynamic-favicon" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <!-- Meta tags will be updated dynamically by React based on domain config -->
+        <meta name="title" content="Trading Bot Builder" />
+        <meta
+            name="description"
+            content="Build powerful automated trading bots without coding. Import your current bot or create from scratch with our detailed guides, FAQs, and tutorials."
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="" />
+        <meta property="og:title" content="Trading Bot Builder" />
+        <meta
+            property="og:description"
+            content="Build powerful automated trading bots without coding. Import your current bot or create from scratch with our detailed guides, FAQs, and tutorials."
+        />
+        <meta property="og:image" content="" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Trading Bot Builder" />
+        <meta name="twitter:description" content="Build powerful automated trading bots without coding." />
+        <meta name="twitter:image" content="" />
+        <meta name="robots" content="index, follow" />
+
+        <!-- PWA Configuration - Manifest will be generated dynamically by React -->
+        <link rel="manifest" href="" id="dynamic-manifest" />
+        <meta name="theme-color" content="#0e0e23" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="" />
+        <link rel="apple-touch-icon" href="" id="dynamic-apple-icon" />
+        <!-- Title will be set dynamically -->
+        <title>Loading...</title>
+        <style>
+            :root {
+                font-size: 62.5%;
+                --loader-primary: #dc3545;
+                --loader-secondary: #ff6b6b;
+            }
+
+            /* Base loader container */
+            #initial-loader {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: #0e0e23;
+                z-index: 99999;
+                transition: opacity 0.3s ease-out;
+            }
+            #initial-loader.fade-out {
+                opacity: 0;
+                pointer-events: none;
+            }
+
+            /* ========== BASIC LOADERS ========== */
+
+            /* Default/Spinner Loader */
+            .loader-spinner {
+                width: 50px;
+                height: 50px;
+                border: 4px solid rgba(220, 53, 69, 0.2);
+                border-top-color: var(--loader-primary);
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            }
+
+            /* Pulse Loader */
+            .loader-pulse {
+                width: 50px;
+                height: 50px;
+                background: var(--loader-primary);
+                border-radius: 50%;
+                animation: pulse 1.5s ease-in-out infinite;
+            }
+
+            /* Dots Loader */
+            .loader-dots {
+                display: flex;
+                gap: 8px;
+            }
+            .loader-dots span {
+                width: 12px;
+                height: 12px;
+                background: var(--loader-primary);
+                border-radius: 50%;
+                animation: bounce 0.6s ease-in-out infinite;
+            }
+            .loader-dots span:nth-child(2) {
+                animation-delay: 0.15s;
+            }
+            .loader-dots span:nth-child(3) {
+                animation-delay: 0.3s;
+            }
+
+            /* Bars Loader */
+            .loader-bars {
+                display: flex;
+                align-items: flex-end;
+                gap: 4px;
+                height: 40px;
+            }
+            .loader-bars span {
+                width: 8px;
+                background: var(--loader-primary);
+                border-radius: 2px;
+                animation: bars 1s ease-in-out infinite;
+            }
+            .loader-bars span:nth-child(1) {
+                animation-delay: 0s;
+            }
+            .loader-bars span:nth-child(2) {
+                animation-delay: 0.1s;
+            }
+            .loader-bars span:nth-child(3) {
+                animation-delay: 0.2s;
+            }
+            .loader-bars span:nth-child(4) {
+                animation-delay: 0.3s;
+            }
+            .loader-bars span:nth-child(5) {
+                animation-delay: 0.4s;
+            }
+
+            /* Wave Loader */
+            .loader-wave {
+                display: flex;
+                align-items: center;
+                gap: 3px;
+                height: 30px;
+            }
+            .loader-wave span {
+                width: 4px;
+                height: 100%;
+                background: var(--loader-primary);
+                border-radius: 2px;
+                animation: wave 1.2s ease-in-out infinite;
+            }
+            .loader-wave span:nth-child(1) {
+                animation-delay: 0s;
+            }
+            .loader-wave span:nth-child(2) {
+                animation-delay: 0.1s;
+            }
+            .loader-wave span:nth-child(3) {
+                animation-delay: 0.2s;
+            }
+            .loader-wave span:nth-child(4) {
+                animation-delay: 0.3s;
+            }
+            .loader-wave span:nth-child(5) {
+                animation-delay: 0.4s;
+            }
+            .loader-wave span:nth-child(6) {
+                animation-delay: 0.5s;
+            }
+
+            /* Orbit Loader */
+            .loader-orbit {
+                width: 50px;
+                height: 50px;
+                border: 2px solid rgba(220, 53, 69, 0.3);
+                border-radius: 50%;
+                position: relative;
+                animation: spin 2s linear infinite;
+            }
+            .loader-orbit::before {
+                content: '';
+                position: absolute;
+                top: -4px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 10px;
+                height: 10px;
+                background: var(--loader-primary);
+                border-radius: 50%;
+            }
+
+            /* Cube Loader */
+            .loader-cube {
+                width: 30px;
+                height: 30px;
+                background: var(--loader-primary);
+                animation: cube 2s linear infinite;
+            }
+
+            /* Ring Loader */
+            .loader-ring {
+                width: 50px;
+                height: 50px;
+                border-radius: 50%;
+                background: conic-gradient(from 0deg, transparent, var(--loader-primary));
+                animation: spin 1s linear infinite;
+                position: relative;
+            }
+            .loader-ring::before {
+                content: '';
+                position: absolute;
+                inset: 4px;
+                background: #0e0e23;
+                border-radius: 50%;
+            }
+
+            /* Logo Spin Loader */
+            .loader-logo-spin {
+                position: relative;
+                width: 60px;
+                height: 60px;
+            }
+            .loader-logo-spin::before {
+                content: '';
+                position: absolute;
+                inset: 0;
+                border: 3px solid rgba(220, 53, 69, 0.3);
+                border-top-color: var(--loader-primary);
+                border-radius: 50%;
+                animation: spin 1.2s linear infinite;
+            }
+            .loader-logo-spin img {
+                position: absolute;
+                inset: 8px;
+                width: calc(100% - 16px);
+                height: calc(100% - 16px);
+                border-radius: 50%;
+                object-fit: contain;
+            }
+
+            /* Typing Loader */
+            .loader-typing {
+                display: flex;
+                gap: 6px;
+                padding: 12px 20px;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 20px;
+            }
+            .loader-typing span {
+                width: 8px;
+                height: 8px;
+                background: var(--loader-primary);
+                border-radius: 50%;
+                animation: typing 1.4s ease-in-out infinite;
+            }
+            .loader-typing span:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+            .loader-typing span:nth-child(3) {
+                animation-delay: 0.4s;
+            }
+
+            /* Progress Loader */
+            .loader-progress {
+                width: 200px;
+                height: 6px;
+                background: rgba(220, 53, 69, 0.2);
+                border-radius: 3px;
+                overflow: hidden;
+            }
+            .loader-progress span {
+                display: block;
+                width: 30%;
+                height: 100%;
+                background: var(--loader-primary);
+                border-radius: 3px;
+                animation: progress 1.5s ease-in-out infinite;
+            }
+
+            /* Bounce Loader */
+            .loader-bounce {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+            }
+            .loader-bounce span {
+                width: 20px;
+                height: 20px;
+                background: var(--loader-primary);
+                border-radius: 50%;
+                animation: bounceUp 0.6s ease-in-out infinite alternate;
+            }
+            .loader-bounce::after {
+                content: '';
+                width: 20px;
+                height: 6px;
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 50%;
+                animation: shadow 0.6s ease-in-out infinite alternate;
+            }
+
+            /* ========== ADVANCED LOADERS ========== */
+
+            /* Cyber Tech Loader */
+            .adv-cyber-tech {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: linear-gradient(135deg, #0a0a1a 0%, #1a1a2e 50%, #0f0f1f 100%);
+                position: relative;
+                overflow: hidden;
+            }
+            .adv-cyber-tech::before {
+                content: '';
+                position: absolute;
+                inset: 0;
+                background: radial-gradient(circle at 20% 30%, rgba(0, 255, 136, 0.1) 0%, transparent 40%),
+                    radial-gradient(circle at 80% 70%, rgba(0, 200, 255, 0.1) 0%, transparent 40%);
+            }
+            .adv-cyber-tech .hex-grid {
+                position: absolute;
+                inset: 0;
+                opacity: 0.1;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cg fill-rule='evenodd'%3E%3Cg fill='%2300ff88' fill-opacity='0.4'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            }
+            .adv-cyber-tech .core {
+                width: 100px;
+                height: 100px;
+                position: relative;
+            }
+            .adv-cyber-tech .core-ring {
+                position: absolute;
+                inset: 0;
+                border: 2px solid var(--loader-primary, #00ff88);
+                border-radius: 50%;
+                animation: cyberPulse 2s ease-in-out infinite;
+            }
+            .adv-cyber-tech .core-ring:nth-child(2) {
+                inset: 10px;
+                animation-delay: 0.3s;
+            }
+            .adv-cyber-tech .core-ring:nth-child(3) {
+                inset: 20px;
+                animation-delay: 0.6s;
+            }
+            .adv-cyber-tech .core-center {
+                position: absolute;
+                inset: 30px;
+                background: var(--loader-primary, #00ff88);
+                border-radius: 50%;
+                animation: cyberGlow 1.5s ease-in-out infinite;
+            }
+            .adv-cyber-tech .scan-line {
+                position: absolute;
+                width: 150%;
+                height: 2px;
+                background: linear-gradient(90deg, transparent, var(--loader-primary, #00ff88), transparent);
+                top: 50%;
+                left: -25%;
+                animation: scanMove 2s linear infinite;
+            }
+            .adv-cyber-tech .data-stream {
+                position: absolute;
+                bottom: 100px;
+                font-family: 'Courier New', monospace;
+                font-size: 12px;
+                color: var(--loader-primary, #00ff88);
+                opacity: 0.7;
+                letter-spacing: 2px;
+            }
+            .adv-cyber-tech .title {
+                position: absolute;
+                top: 100px;
+                font-size: 24px;
+                font-weight: bold;
+                color: #fff;
+                text-transform: uppercase;
+                letter-spacing: 4px;
+            }
+
+            /* Trading Chart Loader */
+            .adv-trading-chart {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: linear-gradient(180deg, #0d1421 0%, #1a2332 100%);
+                position: relative;
+            }
+            .adv-trading-chart .chart-area {
+                width: 300px;
+                height: 150px;
+                position: relative;
+                border-left: 2px solid #2a3444;
+                border-bottom: 2px solid #2a3444;
+            }
+            .adv-trading-chart .candle {
+                position: absolute;
+                bottom: 0;
+                width: 20px;
+                animation: candleGrow 1.5s ease-in-out infinite;
+            }
+            .adv-trading-chart .candle::before {
+                content: '';
+                position: absolute;
+                width: 2px;
+                height: 100%;
+                left: 50%;
+                transform: translateX(-50%);
+                background: currentColor;
+            }
+            .adv-trading-chart .candle::after {
+                content: '';
+                position: absolute;
+                width: 100%;
+                height: 60%;
+                bottom: 20%;
+                background: currentColor;
+                border-radius: 2px;
+            }
+            .adv-trading-chart .candle.green {
+                color: #00c853;
+            }
+            .adv-trading-chart .candle.red {
+                color: #ff5252;
+            }
+            .adv-trading-chart .candle:nth-child(1) {
+                left: 20px;
+                height: 60px;
+                animation-delay: 0s;
+            }
+            .adv-trading-chart .candle:nth-child(2) {
+                left: 60px;
+                height: 80px;
+                animation-delay: 0.2s;
+            }
+            .adv-trading-chart .candle:nth-child(3) {
+                left: 100px;
+                height: 50px;
+                animation-delay: 0.4s;
+            }
+            .adv-trading-chart .candle:nth-child(4) {
+                left: 140px;
+                height: 90px;
+                animation-delay: 0.6s;
+            }
+            .adv-trading-chart .candle:nth-child(5) {
+                left: 180px;
+                height: 70px;
+                animation-delay: 0.8s;
+            }
+            .adv-trading-chart .candle:nth-child(6) {
+                left: 220px;
+                height: 100px;
+                animation-delay: 1s;
+            }
+            .adv-trading-chart .candle:nth-child(7) {
+                left: 260px;
+                height: 65px;
+                animation-delay: 1.2s;
+            }
+            .adv-trading-chart .price-line {
+                position: absolute;
+                width: 100%;
+                height: 1px;
+                background: var(--loader-primary, #ff9800);
+                top: 40%;
+                opacity: 0.5;
+            }
+            .adv-trading-chart .price-line::after {
+                content: '';
+                position: absolute;
+                right: -10px;
+                top: -4px;
+                width: 8px;
+                height: 8px;
+                background: var(--loader-primary, #ff9800);
+                border-radius: 50%;
+                animation: pricePulse 1s ease-in-out infinite;
+            }
+            .adv-trading-chart .title {
+                margin-top: 30px;
+                font-size: 18px;
+                color: #fff;
+                letter-spacing: 2px;
+            }
+
+            /* Pro Trading Loader */
+            .adv-pro-trading {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: #000;
+                position: relative;
+            }
+            .adv-pro-trading .globe {
+                width: 150px;
+                height: 150px;
+                border: 2px solid var(--loader-primary, #00bcd4);
+                border-radius: 50%;
+                position: relative;
+                animation: spin 20s linear infinite;
+            }
+            .adv-pro-trading .globe::before,
+            .adv-pro-trading .globe::after {
+                content: '';
+                position: absolute;
+                inset: 20%;
+                border: 1px solid var(--loader-primary, #00bcd4);
+                border-radius: 50%;
+                opacity: 0.5;
+            }
+            .adv-pro-trading .globe::after {
+                inset: 40%;
+            }
+            .adv-pro-trading .orbit-ring {
+                position: absolute;
+                width: 200px;
+                height: 200px;
+                border: 1px dashed rgba(0, 188, 212, 0.3);
+                border-radius: 50%;
+                animation: spin 10s linear infinite reverse;
+            }
+            .adv-pro-trading .data-point {
+                position: absolute;
+                width: 8px;
+                height: 8px;
+                background: var(--loader-primary, #00bcd4);
+                border-radius: 50%;
+                animation: dataPulse 2s ease-in-out infinite;
+            }
+            .adv-pro-trading .data-point:nth-child(1) {
+                top: 0;
+                left: 50%;
+            }
+            .adv-pro-trading .data-point:nth-child(2) {
+                bottom: 0;
+                left: 50%;
+                animation-delay: 0.5s;
+            }
+            .adv-pro-trading .data-point:nth-child(3) {
+                left: 0;
+                top: 50%;
+                animation-delay: 1s;
+            }
+            .adv-pro-trading .data-point:nth-child(4) {
+                right: 0;
+                top: 50%;
+                animation-delay: 1.5s;
+            }
+            .adv-pro-trading .title {
+                margin-top: 50px;
+                font-size: 28px;
+                font-weight: bold;
+                color: #fff;
+                text-transform: uppercase;
+                letter-spacing: 6px;
+            }
+            .adv-pro-trading .subtitle {
+                margin-top: 10px;
+                font-size: 14px;
+                color: rgba(255, 255, 255, 0.6);
+                letter-spacing: 3px;
+            }
+
+            /* Forex Connect Loader */
+            .adv-forex-connect {
+                width: 100%;
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                position: relative;
+            }
+            .adv-forex-connect .currency-pair {
+                display: flex;
+                align-items: center;
+                gap: 30px;
+            }
+            .adv-forex-connect .currency {
+                width: 60px;
+                height: 60px;
+                border: 2px solid var(--loader-primary, #e91e63);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 20px;
+                font-weight: bold;
+                color: #fff;
+                position: relative;
+            }
+            .adv-forex-connect .currency::before {
+                content: '';
+                position: absolute;
+                inset: -8px;
+                border: 1px solid var(--loader-primary, #e91e63);
+                border-radius: 50%;
+                opacity: 0.3;
+                animation: currencyPulse 2s ease-in-out infinite;
+            }
+            .adv-forex-connect .connection {
+                display: flex;
+                gap: 4px;
+            }
+            .adv-forex-connect .connection span {
+                width: 8px;
+                height: 8px;
+                background: var(--loader-primary, #e91e63);
+                border-radius: 50%;
+                animation: connectionFlow 1s ease-in-out infinite;
+            }
+            .adv-forex-connect .connection span:nth-child(2) {
+                animation-delay: 0.2s;
+            }
+            .adv-forex-connect .connection span:nth-child(3) {
+                animation-delay: 0.4s;
+            }
+            .adv-forex-connect .rate-display {
+                margin-top: 40px;
+                padding: 15px 30px;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+            }
+            .adv-forex-connect .rate-display .rate {
+                font-size: 32px;
+                font-weight: bold;
+                color: #4caf50;
+                font-family: 'Courier New', monospace;
+            }
+            .adv-forex-connect .rate-display .label {
+                font-size: 12px;
+                color: rgba(255, 255, 255, 0.5);
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                margin-top: 5px;
+            }
+            .adv-forex-connect .title {
+                margin-top: 30px;
+                font-size: 18px;
+                color: #fff;
+                letter-spacing: 3px;
+            }
+
+            /* Advanced Loader Animations */
+            @keyframes cyberPulse {
+                0%,
+                100% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+                50% {
+                    transform: scale(1.1);
+                    opacity: 0.5;
+                }
+            }
+            @keyframes cyberGlow {
+                0%,
+                100% {
+                    box-shadow: 0 0 20px var(--loader-primary, #00ff88);
+                }
+                50% {
+                    box-shadow:
+                        0 0 40px var(--loader-primary, #00ff88),
+                        0 0 60px var(--loader-primary, #00ff88);
+                }
+            }
+            @keyframes scanMove {
+                0% {
+                    top: 0;
+                    opacity: 0;
+                }
+                50% {
+                    opacity: 1;
+                }
+                100% {
+                    top: 100%;
+                    opacity: 0;
+                }
+            }
+            @keyframes candleGrow {
+                0%,
+                100% {
+                    transform: scaleY(1);
+                }
+                50% {
+                    transform: scaleY(0.7);
+                }
+            }
+            @keyframes pricePulse {
+                0%,
+                100% {
+                    transform: scale(1);
+                }
+                50% {
+                    transform: scale(1.5);
+                }
+            }
+            @keyframes dataPulse {
+                0%,
+                100% {
+                    transform: scale(1);
+                    box-shadow: 0 0 10px var(--loader-primary, #00bcd4);
+                }
+                50% {
+                    transform: scale(1.3);
+                    box-shadow: 0 0 20px var(--loader-primary, #00bcd4);
+                }
+            }
+            @keyframes currencyPulse {
+                0%,
+                100% {
+                    transform: scale(1);
+                    opacity: 0.3;
+                }
+                50% {
+                    transform: scale(1.2);
+                    opacity: 0.6;
+                }
+            }
+            @keyframes connectionFlow {
+                0%,
+                100% {
+                    transform: scale(0.5);
+                    opacity: 0.3;
+                }
+                50% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+            }
+
+            /* Basic Animations */
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+            @keyframes pulse {
+                0%,
+                100% {
+                    transform: scale(1);
+                    opacity: 0.7;
+                }
+                50% {
+                    transform: scale(1.1);
+                    opacity: 0.3;
+                }
+            }
+            @keyframes bounce {
+                0%,
+                100% {
+                    transform: translateY(0);
+                }
+                50% {
+                    transform: translateY(-12px);
+                }
+            }
+            @keyframes bars {
+                0%,
+                100% {
+                    height: 15px;
+                }
+                50% {
+                    height: 40px;
+                }
+            }
+            @keyframes wave {
+                0%,
+                100% {
+                    transform: scaleY(0.3);
+                }
+                50% {
+                    transform: scaleY(1);
+                }
+            }
+            @keyframes cube {
+                0% {
+                    transform: rotateX(0) rotateY(0);
+                }
+                100% {
+                    transform: rotateX(360deg) rotateY(360deg);
+                }
+            }
+            @keyframes typing {
+                0%,
+                60%,
+                100% {
+                    transform: translateY(0);
+                    opacity: 0.6;
+                }
+                30% {
+                    transform: translateY(-6px);
+                    opacity: 1;
+                }
+            }
+            @keyframes progress {
+                0% {
+                    transform: translateX(-100%);
+                }
+                100% {
+                    transform: translateX(400%);
+                }
+            }
+            @keyframes bounceUp {
+                0% {
+                    transform: translateY(0);
+                }
+                100% {
+                    transform: translateY(-20px);
+                }
+            }
+            @keyframes shadow {
+                0% {
+                    transform: scaleX(1);
+                    opacity: 0.3;
+                }
+                100% {
+                    transform: scaleX(0.5);
+                    opacity: 0.1;
+                }
+            }
+        </style>
+
+        <script>
+            // Immediately read cached loader config and apply it
+            (function () {
+                try {
+                    var cacheKey = 'deriv_sites_loader_cache';
+                    var cacheStr = localStorage.getItem(cacheKey);
+                    if (cacheStr) {
+                        var cache = JSON.parse(cacheStr);
+                        var domain = window.location.host;
+                        var entry = cache[domain];
+                        if (entry && entry.primaryColor) {
+                            document.documentElement.style.setProperty('--loader-primary', entry.primaryColor);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error reading loader cache:', e);
+                }
+            })();
+        </script>
+    <script defer src="/static/js/lib-react.1d75e542.js"></script><script defer src="/static/js/lib-router.3e6a2b08.js"></script><script defer src="/static/js/4432.9002c9ed.js"></script><script defer src="/static/js/index.955f733c.js"></script><link href="/static/css/4432.4e07e9ba.css" rel="stylesheet"><link href="/static/css/index.f53c4e6e.css" rel="stylesheet"></head>
+
+    <body class="body theme theme--light">
+        <!-- Initial loader shown before React mounts - will be replaced with cached loader type -->
+        <div id="initial-loader">
+            <div id="loader-content">
+                <!-- Default spinner, will be replaced by JS based on cache -->
+                <div class="loader-spinner"></div>
+            </div>
+        </div>
+
+        <script>
+            // Render the cached loader type immediately
+            (function () {
+                try {
+                    var cacheKey = 'deriv_sites_loader_cache';
+                    var cacheStr = localStorage.getItem(cacheKey);
+                    var loaderType = 'spinner'; // default
+                    var logoPath = ''; // No default logo - will be set from cache
+                    var siteName = ''; // No default site name
+                    var primaryColor = '#dc3545';
+
+                    if (cacheStr) {
+                        var cache = JSON.parse(cacheStr);
+                        var domain = window.location.host;
+                        var entry = cache[domain];
+                        if (entry) {
+                            loaderType = entry.loaderType || 'spinner';
+                            logoPath = entry.logoPath || '';
+                            siteName = entry.siteName || '';
+                            primaryColor = entry.primaryColor || '#dc3545';
+                        }
+                    }
+
+                    // Set dynamic elements from cache immediately
+                    if (logoPath) {
+                        var faviconEl = document.getElementById('dynamic-favicon');
+                        if (faviconEl) faviconEl.href = logoPath;
+                        var appleIconEl = document.getElementById('dynamic-apple-icon');
+                        if (appleIconEl) appleIconEl.href = logoPath;
+                    }
+                    if (siteName) {
+                        document.title = siteName + ' - Trading Bot Builder';
+                        var appleTitleMeta = document.querySelector("meta[name='apple-mobile-web-app-title']");
+                        if (appleTitleMeta) appleTitleMeta.content = siteName;
+                    }
+
+                    var loaderContent = document.getElementById('loader-content');
+                    if (!loaderContent) return;
+
+                    var html = '';
+                    switch (loaderType) {
+                        case 'default':
+                        case 'spinner':
+                            html = '<div class="loader-spinner"></div>';
+                            break;
+                        case 'pulse':
+                            html = '<div class="loader-pulse"></div>';
+                            break;
+                        case 'dots':
+                            html = '<div class="loader-dots"><span></span><span></span><span></span></div>';
+                            break;
+                        case 'bars':
+                            html =
+                                '<div class="loader-bars"><span></span><span></span><span></span><span></span><span></span></div>';
+                            break;
+                        case 'wave':
+                            html =
+                                '<div class="loader-wave"><span></span><span></span><span></span><span></span><span></span><span></span></div>';
+                            break;
+                        case 'orbit':
+                            html = '<div class="loader-orbit"></div>';
+                            break;
+                        case 'cube':
+                            html = '<div class="loader-cube"></div>';
+                            break;
+                        case 'ring':
+                            html = '<div class="loader-ring"></div>';
+                            break;
+                        case 'logo-spin':
+                            html = '<div class="loader-logo-spin"><img src="' + logoPath + '" alt="Loading" /></div>';
+                            break;
+                        case 'typing':
+                            html = '<div class="loader-typing"><span></span><span></span><span></span></div>';
+                            break;
+                        case 'progress':
+                            html = '<div class="loader-progress"><span></span></div>';
+                            break;
+                        case 'bounce':
+                            html = '<div class="loader-bounce"><span></span></div>';
+                            break;
+                        case 'cyber-tech':
+                            // For advanced loaders, make #initial-loader full container
+                            document.getElementById('initial-loader').innerHTML =
+                                '<div class="adv-cyber-tech"><div class="hex-grid"></div><div class="title">INITIALIZING SYSTEM</div><div class="core"><div class="core-ring"></div><div class="core-ring"></div><div class="core-ring"></div><div class="core-center"></div><div class="scan-line"></div></div><div class="data-stream">LOADING MODULES...</div></div>';
+                            return;
+                        case 'trading-chart':
+                            document.getElementById('initial-loader').innerHTML =
+                                '<div class="adv-trading-chart"><div class="chart-area"><div class="candle green"></div><div class="candle red"></div><div class="candle green"></div><div class="candle red"></div><div class="candle green"></div><div class="candle green"></div><div class="candle red"></div><div class="price-line"></div></div><div class="title">LOADING MARKETS...</div></div>';
+                            return;
+                        case 'pro-trading':
+                            document.getElementById('initial-loader').innerHTML =
+                                '<div class="adv-pro-trading"><div class="orbit-ring"><div class="data-point"></div><div class="data-point"></div><div class="data-point"></div><div class="data-point"></div></div><div class="globe"></div><div class="title">GLOBAL TRADING</div><div class="subtitle">Connecting to Markets</div></div>';
+                            return;
+                        case 'forex-connect':
+                            document.getElementById('initial-loader').innerHTML =
+                                '<div class="adv-forex-connect"><div class="currency-pair"><div class="currency">$</div><div class="connection"><span></span><span></span><span></span></div><div class="currency">€</div></div><div class="rate-display"><div class="rate">1.0847</div><div class="label">Live Rate</div></div><div class="title">CONNECTING TO FOREX</div></div>';
+                            return;
+                        default:
+                            html = '<div class="loader-spinner"></div>';
+                    }
+
+                    loaderContent.innerHTML = html;
+                } catch (e) {
+                    console.error('Error rendering loader:', e);
+                }
+            })();
+        </script>
+
+        <div id="modal_root" class="modal-root"></div>
+        <div id="popup_root" class="popup-root"></div>
+        <div id="root"></div>
+        <!-- LiveChat script -->
+        <script type="text/javascript" defer>
+            window.__lc = window.__lc || {};
+            window.__lc.license = 12049137;
+            window.__lc.asyncInit = true;
+            (function (n, t, c) {
+                function i(n) {
+                    return e._h ? e._h.apply(null, n) : e._q.push(n);
+                }
+                var e = {
+                    _q: [],
+                    _h: null,
+                    _v: '2.0',
+                    on: function () {
+                        i(['on', c.call(arguments)]);
+                    },
+                    once: function () {
+                        i(['once', c.call(arguments)]);
+                    },
+                    off: function () {
+                        i(['off', c.call(arguments)]);
+                    },
+                    get: function () {
+                        if (!e._h) throw new Error('[LiveChatWidget] You can’t use getters before load.');
+                        return i(['get', c.call(arguments)]);
+                    },
+                    call: function () {
+                        i(['call', c.call(arguments)]);
+                    },
+                    init: function () {
+                        setTimeout(() => {
+                            var n = t.createElement('script');
+                            (n.async = !0),
+                                (n.type = 'text/javascript'),
+                                (n.src = 'https://cdn.livechatinc.com/tracking.js'),
+                                t.head.appendChild(n);
+                        }, 3000);
+                    },
+                };
+                !n.__lc.asyncInit && e.init(), (n.LiveChatWidget = n.LiveChatWidget || e);
+            })(window, document, [].slice);
+        </script>
+        <!-- End LiveChat script -->
+    </body>
+</html>

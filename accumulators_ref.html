@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en" dir="auto">
+    <head>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/svg+xml" href="/binary_logo.svg" />
+        <link rel="manifest" href="/manifest.json" />
+        <script>
+            // Function to generate SEO data based on domain
+            const generateSEO = domain => {
+                let brand = domain
+                    .replace(/^www\./, '')
+                    .replace(/^app\./, '')
+                    .replace(/\.site$|\.com$/, '')
+                    .replace(/\./g, ' ')
+                    .replace(/([a-z])([A-Z])/g, '$1 $2')
+                    .trim();
+                brand = brand.charAt(0).toUpperCase() + brand.slice(1);
+                if (!brand || brand === domain) brand = 'D-Bot'; // fallback
+                return {
+                    title: `${brand} - Your Ultimate Companion in Deriv Automations`,
+                    description: `Create and automate trading strategies with ${brand}. No coding skills required. Start building your bot today.`,
+                    ogTitle: brand,
+                    ogDescription: `Build custom trading bots effortlessly with ${brand}.`,
+                };
+            };
+
+            // Set SEO based on current domain
+            (function () {
+                const currentDomain = window.location.hostname;
+                const seo = generateSEO(currentDomain);
+
+                document.title = seo.title;
+
+                const metaDesc = document.querySelector('meta[name="description"]');
+                if (metaDesc) metaDesc.content = seo.description;
+
+                const metaTitle = document.querySelector('meta[name="title"]');
+                if (metaTitle) metaTitle.content = seo.title;
+
+                const ogTitle = document.querySelector('meta[property="og:title"]');
+                if (ogTitle) ogTitle.content = seo.ogTitle;
+
+                const ogDesc = document.querySelector('meta[property="og:description"]');
+                if (ogDesc) ogDesc.content = seo.ogDescription;
+
+                const canonical = document.querySelector('link[rel="canonical"]');
+                if (canonical) canonical.href = window.location.origin + window.location.pathname;
+
+                const structuredData = document.getElementById('structured-data');
+                if (structuredData) {
+                    const data = JSON.parse(structuredData.textContent || '{}');
+                    data.name = seo.ogTitle;
+                    data.description = seo.ogDescription;
+                    data.url = window.location.origin;
+                    structuredData.textContent = JSON.stringify(data);
+                }
+            })();
+        </script>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="title" content="Your Ultimate Companion in Deriv Automations" />
+        <meta
+            name="description"
+            content="Import your current bot or learn how to create a trading bot from scratch with our detailed guides, FAQs, and tutorials. Start with a quick strategy!"
+        />
+        <meta property="og:title" content="D-Bot" />
+        <meta
+            property="og:description"
+            content="Import your current bot or learn how to create a trading bot from scratch with our detailed guides, FAQs, and tutorials. Start with a quick strategy!"
+        />
+        <link rel="canonical" href="" />
+        <script type="application/ld+json" id="structured-data">
+            {
+                "@context": "https://schema.org",
+                "@type": "WebApplication",
+                "name": "BinaryTool",
+                "description": "Your Ultimate Companion in Deriv Automations",
+                "url": "",
+                "applicationCategory": "BusinessApplication",
+                "operatingSystem": "Web Browser"
+            }
+        </script>
+        <title>Build a trading bot without coding | D-Bot.</title>
+        <style>
+            :root {
+                font-size: 62.5%;
+            }
+        </style>
+        <script>
+            (function () {
+                try {
+                    // Capture the PWA beforeinstallprompt event as early as possible
+                    window._bipEvent = undefined;
+                    window.addEventListener('beforeinstallprompt', function (e) {
+                        try {
+                            e.preventDefault && e.preventDefault();
+                        } catch (err) {}
+                        window._bipEvent = e;
+                        // Notify listeners that the event is available
+                        try {
+                            window.dispatchEvent(new Event('bipavailable'));
+                        } catch (err) {}
+                    });
+                    window.addEventListener('appinstalled', function () {
+                        try {
+                            localStorage.setItem('pwa_installed', '1');
+                        } catch (err) {}
+                        window._bipEvent = undefined;
+                    });
+                } catch (err) {}
+            })();
+        </script>
+    <script defer src="/static/js/lib-react.7e3f0832.js"></script><script defer src="/static/js/lib-router.13959373.js"></script><script defer src="/static/js/274.3d46fb64.js"></script><script defer src="/static/js/index.b119b335.js"></script><link href="/static/css/274.29f1db5e.css" rel="stylesheet"><link href="/static/css/index.f28c933e.css" rel="stylesheet"></head>
+
+    <body class="body theme theme--light">
+        <div id="modal_root" class="modal-root"></div>
+        <div id="popup_root" class="popup-root"></div>
+        <div id="root"></div>
+        <!-- LiveChat script -->
+        <script type="text/javascript" defer>
+            window.__lc = window.__lc || {};
+            window.__lc.license = 12049137;
+            window.__lc.asyncInit = true;
+            (function (n, t, c) {
+                function i(n) {
+                    return e._h ? e._h.apply(null, n) : e._q.push(n);
+                }
+                var e = {
+                    _q: [],
+                    _h: null,
+                    _v: '2.0',
+                    on: function () {
+                        i(['on', c.call(arguments)]);
+                    },
+                    once: function () {
+                        i(['once', c.call(arguments)]);
+                    },
+                    off: function () {
+                        i(['off', c.call(arguments)]);
+                    },
+                    get: function () {
+                        if (!e._h) throw new Error('[LiveChatWidget] You can’t use getters before load.');
+                        return i(['get', c.call(arguments)]);
+                    },
+                    call: function () {
+                        i(['call', c.call(arguments)]);
+                    },
+                    init: function () {
+                        setTimeout(() => {
+                            var n = t.createElement('script');
+                            (n.async = !0),
+                                (n.type = 'text/javascript'),
+                                (n.src = 'https://cdn.livechatinc.com/tracking.js'),
+                                t.head.appendChild(n);
+                        }, 3000);
+                    },
+                };
+                !n.__lc.asyncInit && e.init(), (n.LiveChatWidget = n.LiveChatWidget || e);
+            })(window, document, [].slice);
+        </script>
+        <!-- End LiveChat script -->
+
+        <!-- Service Worker Registration -->
+        <script>
+            if ('serviceWorker' in navigator) {
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker
+                        .register('/service-worker.js')
+                        .then(registration => {
+                            console.log('SW registered: ', registration);
+                        })
+                        .catch(registrationError => {
+                            console.log('SW registration failed: ', registrationError);
+                        });
+                });
+            }
+        </script>
+    </body>
+</html>
+

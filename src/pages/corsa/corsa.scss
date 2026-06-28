@@ -1,0 +1,331 @@
+.corsa-page {
+    background:
+        radial-gradient(circle at 14% 0%, rgb(69 185 181 / 12%) 0, transparent 30rem),
+        linear-gradient(180deg, #fbfcfe 0%, #ffffff 44%, #f6f8fb 100%);
+    color: #102033;
+    min-height: 100%;
+    overflow-x: hidden;
+    padding: 2.4rem;
+    padding-bottom: calc(30rem + env(safe-area-inset-bottom, 0px));
+
+    &__controls,
+    &__watch-card {
+        background: rgb(255 255 255 / 96%);
+        border: 1px solid #dde5ee;
+        border-radius: 2rem;
+        box-shadow: 0 1.6rem 4.4rem rgb(15 23 42 / 8%);
+        margin: 0 auto 1.8rem;
+        max-width: 94rem;
+    }
+
+    &__controls {
+        display: grid;
+        gap: 2.2rem;
+        grid-template-columns: 1fr 1fr;
+        padding: 2.8rem;
+    }
+
+    &__mode {
+        background: #fff;
+        border: 1px solid #dce4ed;
+        border-radius: 1.5rem;
+        box-shadow: 0 1rem 2.8rem rgb(15 23 42 / 8%);
+        display: grid;
+        gap: 0;
+        grid-column: 1 / -1;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        overflow: hidden;
+        padding: 0;
+
+        button {
+            background: transparent;
+            border: 0;
+            color: #344054;
+            cursor: pointer;
+            font-size: 2.1rem;
+            font-weight: 900;
+            min-height: 7.2rem;
+            padding: 0 2rem;
+            transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
+        }
+    }
+
+    &__mode-button--active {
+        background: #ff444f !important;
+        box-shadow: 0 1rem 2rem rgb(255 68 79 / 20%);
+        color: #fff !important;
+    }
+
+    &__field {
+        color: #5f6f82;
+        display: flex;
+        flex-direction: column;
+        font-size: 1.25rem;
+        font-weight: 900;
+        gap: 1rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+
+        &--wide {
+            grid-column: 1 / -1;
+        }
+
+        input,
+        select {
+            background: #fff;
+            border: 1px solid #cfd9e5;
+            border-radius: 1.25rem;
+            color: #102033;
+            font-size: 2rem;
+            font-weight: 800;
+            letter-spacing: 0;
+            min-height: 7rem;
+            outline: none;
+            padding: 0 2rem;
+            text-transform: none;
+            transition: border-color 160ms ease, box-shadow 160ms ease;
+
+            &:focus {
+                border-color: #45b9b5;
+                box-shadow: 0 0 0 3px rgb(69 185 181 / 16%);
+            }
+        }
+    }
+
+    &__select-wrap {
+        align-items: center;
+        background: #fff;
+        border: 1px solid #cfd9e5;
+        border-radius: 1.25rem;
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: auto 1fr;
+        min-height: 7rem;
+        padding: 0 1.6rem;
+
+        select {
+            align-self: center;
+            border: 0;
+            box-shadow: none;
+            height: 100%;
+            line-height: 1.2;
+            min-height: 6.6rem;
+            padding: 0;
+            text-align: left;
+            width: 100%;
+        }
+    }
+
+    &__run {
+        align-items: center;
+        align-self: end;
+        background: linear-gradient(135deg, #43c5c0 0%, #2f9f9a 100%);
+        border: 0;
+        border-radius: 1.25rem;
+        color: #fff;
+        cursor: pointer;
+        display: inline-flex;
+        font-size: 2rem;
+        font-weight: 900;
+        gap: 1rem;
+        grid-column: 1 / -1;
+        justify-content: center;
+        min-height: 6.4rem;
+        transition: filter 160ms ease, transform 160ms ease;
+
+        &:hover {
+            filter: brightness(1.03);
+            transform: translateY(-1px);
+        }
+
+        &--stop {
+            background: linear-gradient(135deg, #ff444f 0%, #d71928 100%);
+            box-shadow: 0 1rem 2rem rgb(255 68 79 / 18%);
+        }
+    }
+
+    &__play {
+        border-bottom: 0.8rem solid transparent;
+        border-left: 1.25rem solid currentColor;
+        border-top: 0.8rem solid transparent;
+        display: inline-block;
+        height: 0;
+        width: 0;
+    }
+
+    &__stop {
+        background: currentColor;
+        border-radius: 0.2rem;
+        display: inline-block;
+        height: 1.55rem;
+        width: 1.55rem;
+    }
+
+    &__watch-card {
+        padding: 2.8rem;
+    }
+
+    &__money--win {
+        color: #16a34a !important;
+    }
+
+    &__money--loss {
+        color: #dc3444 !important;
+    }
+
+    &__feedback {
+        color: #64748b;
+        font-size: 1.35rem;
+        font-weight: 800;
+        margin: 0 0 1.6rem;
+    }
+
+    &__market-list {
+        display: grid;
+        gap: 2.2rem;
+    }
+
+    &__market-row {
+        display: grid;
+        gap: 1.6rem;
+    }
+
+    &__market-name {
+        color: #102033;
+        font-size: 2.2rem;
+        font-weight: 900;
+    }
+
+    &__digit-row {
+        display: grid;
+        gap: 1.4rem;
+        grid-template-columns: repeat(9, minmax(0, 5.4rem));
+        max-width: 100%;
+    }
+
+    &__digit {
+        align-items: center;
+        border-radius: 1rem;
+        box-shadow: 0 0.8rem 1.8rem rgb(15 23 42 / 10%);
+        color: #fff;
+        display: inline-flex;
+        font-size: 2rem;
+        font-style: normal;
+        font-weight: 900;
+        height: 5.4rem;
+        justify-content: center;
+        min-width: 0;
+        padding: 0 1.3rem;
+
+        &--odd,
+        &--positive {
+            background: #16a34a;
+        }
+
+        &--even,
+        &--negative {
+            background: #dc3444;
+        }
+
+        &--empty {
+            background: #e5eaf0;
+            box-shadow: none;
+            color: #8b98aa;
+        }
+
+        &--current {
+            outline: 3px solid rgb(15 23 42 / 12%);
+            outline-offset: 3px;
+        }
+    }
+}
+
+html.dark .corsa-page,
+body.theme--dark .corsa-page {
+    background:
+        radial-gradient(circle at 16% 0%, rgb(69 185 181 / 16%) 0, transparent 34rem),
+        radial-gradient(circle at 86% 12%, rgb(255 68 79 / 10%) 0, transparent 28rem),
+        #050608;
+    color: #f8fafc;
+
+    .corsa-page__controls,
+    .corsa-page__watch-card {
+        background: rgb(17 19 25 / 94%);
+        border-color: rgb(255 255 255 / 13%);
+        box-shadow: 0 2rem 6rem rgb(0 0 0 / 55%), inset 0 1px 0 rgb(255 255 255 / 6%);
+    }
+
+    .corsa-page__mode {
+        background: #11161d;
+        border-color: rgb(255 255 255 / 12%);
+    }
+
+    .corsa-page__mode button {
+        color: #d8e2ee;
+    }
+
+    .corsa-page__field input,
+    .corsa-page__field select,
+    .corsa-page__select-wrap {
+        background: #0c1118;
+        border-color: rgb(255 255 255 / 14%);
+        color: #f8fafc;
+    }
+
+    .corsa-page__market-name {
+        color: #f8fafc;
+    }
+
+    .corsa-page__feedback,
+    .corsa-page__field {
+        color: #d8e2ee;
+    }
+}
+
+@media (max-width: 900px) {
+    .corsa-page {
+        padding: 1.2rem;
+        padding-bottom: calc(34rem + env(safe-area-inset-bottom, 0px));
+
+        &__controls {
+            grid-template-columns: 1fr;
+            padding: 1.8rem;
+        }
+
+        &__field--wide,
+        &__mode,
+        &__run {
+            grid-column: 1 / -1;
+        }
+    }
+}
+
+@media (max-width: 560px) {
+    .corsa-page {
+        &__mode {
+            button {
+                font-size: 1.55rem;
+                min-height: 5.6rem;
+            }
+        }
+
+        &__field input,
+        &__field select,
+        &__select-wrap {
+            min-height: 5.8rem;
+        }
+
+        &__digit-row {
+            gap: 0.6rem;
+            grid-template-columns: repeat(9, minmax(0, 1fr));
+        }
+
+        &__digit {
+            border-radius: 0.85rem;
+            font-size: 1.45rem;
+            height: 4rem;
+            min-width: 0;
+            padding: 0;
+        }
+    }
+}

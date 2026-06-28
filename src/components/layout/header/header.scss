@@ -1,0 +1,354 @@
+@use 'components/shared/styles/constants' as *;
+@use 'components/shared/styles/mixins' as *;
+
+.app-header {
+    &__account-settings {
+        padding-inline-end: 1.2rem;
+        border-inline-end: 0.1rem solid var(--general-section-1);
+    }
+
+    &__account-settings,
+    .notifications__wrapper,
+    &__menu {
+        svg > path,
+        svg > g > path {
+            fill: var(--text-prominent);
+        }
+    }
+}
+
+.account-switcher {
+    &__item {
+        .deriv-account-switcher-item {
+            padding: 0.6rem 1.6rem;
+
+            &__detail {
+                .deriv-account-switcher-item__currency {
+                    margin-bottom: 2px;
+                    font-size: 1.4rem;
+                }
+            }
+
+            &__icon {
+                margin-right: unset;
+                margin-inline-end: 10px;
+            }
+        }
+
+        &--disabled {
+            opacity: 0.32;
+        }
+    }
+
+    &__separator:after {
+        background-color: var(--general-section-2);
+        content: '';
+        height: 4px;
+        position: absolute;
+        width: 100%;
+        z-index: 1;
+    }
+
+    &-footer {
+        background: var(--general-main-1);
+
+        &__actions {
+            display: flex;
+            justify-content: right;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.8rem;
+            background-color: var(--du-general-main-2);
+            padding: 1.6rem 0.8rem;
+            position: sticky;
+            bottom: 0;
+            z-index: 2;
+
+            &--hide-manage-button {
+                justify-content: flex-end;
+            }
+
+            .manage-button {
+                background: none;
+                border: 1px solid var(--button-secondary-default);
+                height: auto;
+                padding: 0.4rem 1.2rem;
+                white-space: break-spaces;
+
+                &:hover {
+                    background-color: unset !important;
+                }
+
+                span {
+                    color: var(--text-prominent);
+                    font-size: var(--text-size-xs);
+                    cursor: pointer;
+                    font-weight: 700;
+                }
+            }
+
+            .logout-button {
+                background: var(--brand-red-coral);
+                border: 1px solid var(--brand-red-coral);
+                height: auto;
+                padding: 0.4rem 1.2rem;
+
+                span {
+                    color: var(--text-colored-background);
+                    font-size: var(--text-size-xs);
+                    font-weight: 700;
+                }
+            }
+        }
+    }
+}
+
+.derivs-secondary-tabs {
+    display: flex;
+    justify-content: center;
+    gap: 0.8rem;
+    width: 100%;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--general-main-1);
+    padding: 0.8rem 0.8rem 0;
+
+    .derivs-text__size--md {
+        font-size: 14px;
+        line-height: 18px;
+    }
+
+    &__btn,
+    &__btn--active {
+        align-items: center;
+        display: inline-flex;
+        flex: 1 1 0;
+        justify-content: center;
+        min-height: 4.4rem;
+        border-top-left-radius: 1.2rem;
+        border-top-right-radius: 1.2rem;
+        font-weight: 700;
+        max-width: calc(50% - 0.4rem);
+        padding-inline: 1.2rem;
+    }
+}
+
+.deriv-account-switcher {
+    &-item {
+        &__balance {
+            button {
+                border-width: 1px;
+                height: 2.4rem;
+                min-width: 4.8rem;
+
+                span {
+                    color: var(--text-prominent) !important;
+                }
+            }
+        }
+    }
+
+    &__button {
+        margin-inline-end: 0.8rem;
+
+        @include mobile-or-tablet-screen {
+            margin-inline-end: 0;
+        }
+
+        .deriv-context-menu {
+            box-shadow: 0 0 2px 0 var(--du-shadow-box, #00000014);
+        }
+
+        .deriv-account-switcher__balance + svg > path {
+            fill: var(--text-general);
+        }
+
+        &:hover {
+            background-color: unset;
+        }
+    }
+
+    &__currency {
+        margin-bottom: 2px;
+    }
+
+    &__icon {
+        margin-right: 7px;
+    }
+
+    &__balance {
+        padding: 0 1rem 0.1rem 0;
+    }
+
+    &__list {
+        &.account-switcher-panel {
+            display: flex;
+            flex-direction: column;
+            max-height: calc(100dvh - 12rem);
+            min-height: 0;
+            padding: 0.8rem 0.8rem 0.4rem;
+            min-width: 0;
+            overflow-y: auto;
+
+            .account-switcher-panel__no-eu-accounts {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+
+                .add-button {
+                    background: none;
+
+                    span {
+                        color: #000;
+                        font-size: 12px;
+                        border: solid 2px var(--text-disabled-1);
+                        padding: 0.1rem 1.6rem;
+                        border-radius: 0.5em;
+                        cursor: pointer;
+                    }
+                }
+
+                .deriv-account-switcher-item {
+                    background: none;
+                }
+            }
+        }
+
+        .deriv-accordion {
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+
+            &__content {
+                background: unset;
+                max-height: min(58dvh, 42rem);
+                overflow: auto;
+                padding-bottom: 2rem;
+            }
+
+            &__text {
+                margin-top: 0;
+            }
+
+            &__icon {
+                margin-left: unset;
+                margin-inline-start: auto;
+            }
+        }
+    }
+
+    &__title {
+        height: 4rem;
+        margin: 0 auto;
+        padding: 1.2rem 0.6rem;
+    }
+
+    &__container--mobile {
+        min-height: auto;
+        max-width: min(60rem, calc(100vw - 1.2rem));
+    }
+
+    &__container {
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100vh - 2rem);
+        max-width: 100%;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
+        background: var(--general-main-1);
+        background-color: var(--general-main-2);
+        border-radius: 1.6rem;
+        box-shadow: 0 8px 16px 0 var(--shadow-menu) !important;
+        position: relative;
+        transition:
+            transform 0.3s ease,
+            opacity 0.25s linear;
+        width: 100%;
+        top: auto;
+        right: auto;
+        inset-inline-end: auto;
+        margin: 0 auto;
+
+        > * {
+            min-width: 0;
+        }
+    }
+
+    &__logout {
+        align-items: center;
+        display: flex;
+        grid-column: 2 / 3;
+        justify-content: flex-end;
+        justify-self: end;
+        padding: 1.6em 1.3em;
+
+        &-text {
+            margin-inline-end: 1rem;
+            font-size: var(--text-size-xs);
+        }
+
+        &--loader {
+            display: flex;
+            justify-content: flex-end;
+            padding: 16px;
+        }
+    }
+
+    &__tradershub-link {
+        background: var(--du-general-main-2);
+        color: var(--text-prominent);
+        padding: 1rem;
+        display: flex;
+        justify-content: center;
+    }
+
+    &__footer {
+        padding: 0;
+        display: block;
+        margin-top: auto;
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        background: var(--general-main-1);
+        border-top: 1px solid var(--general-section-1);
+    }
+}
+
+.languages-modal {
+    background: var(--general-section-1);
+
+    .deriv-modal__header {
+        border-bottom: 2px solid var(--general-section-5);
+    }
+
+    .deriv-modal__close-icon {
+        path {
+            fill: var(--text-prominent);
+        }
+    }
+
+    .deriv-text {
+        color: var(--text-prominent) !important;
+    }
+}
+
+.auth-actions {
+    display: flex;
+    padding-block: 8px;
+
+    button {
+        font-weight: 400;
+        margin-inline-end: 1.6rem;
+    }
+}
+
+.deposit-button,
+.manage-funds-button {
+    margin-inline-end: 1.6rem;
+}
+
+.deriv-accordion--underline {
+    border-bottom: none;
+}

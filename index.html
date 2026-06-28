@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en" dir="auto">
+    <head>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/svg+xml" href="/deriv-logo.svg" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+        <!-- PWA Manifest -->
+        <link rel="manifest" href="/manifest.json" />
+
+        <!-- PWA Meta Tags -->
+        <meta name="theme-color" content="#ff444f" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Deriv Bot" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="msapplication-TileColor" content="#ff444f" />
+        <meta name="msapplication-tap-highlight" content="no" />
+
+        <!-- Apple Touch Icons -->
+        <link rel="apple-touch-icon" href="/assets/icons/pwa/icon-152x152.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/assets/icons/pwa/icon-152x152.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/pwa/icon-192x192.png" />
+        <meta name="title" content="Build a trading bot without coding | Deriv Bot." />
+        <meta
+            name="description"
+            content="Import your current bot or learn how to create a trading bot from scratch with our detailed guides, FAQs, and tutorials. Start with a quick strategy!"
+        />
+        <meta property="og:title" content="Deriv Bot" />
+        <meta
+            property="og:description"
+            content="Import your current bot or learn how to create a trading bot from scratch with our detailed guides, FAQs, and tutorials. Start with a quick strategy!"
+        />
+        <title>Build a trading bot without coding | Deriv Bot.</title>
+        <style>
+            :root {
+                font-size: 62.5%;
+            }
+        </style>
+        <script>
+            (function () {
+                const hostname = window.location.hostname;
+                const is_profitdock_domain = hostname === 'profitdock.site' || hostname === 'www.profitdock.site';
+                const PROFITDOCK_AUTH_RESET_VERSION = 'profitdock-new-oauth-339iXSWkH7NEGne7sMdQT-v10';
+                const PROFITDOCK_AUTH_RESET_KEY = 'profitdock.auth.reset.version';
+                const PROFITDOCK_APP_ID = '339iXSWkH7NEGne7sMdQT';
+                let is_profitdock_oauth_redirecting = false;
+
+                if (!is_profitdock_domain) {
+                    return;
+                }
+
+                const startProfitdockOAuth = prompt => {
+                    if (is_profitdock_oauth_redirecting) {
+                        return;
+                    }
+                    is_profitdock_oauth_redirecting = true;
+
+                    try {
+                        sessionStorage.setItem('redirect_url', window.location.href);
+                        localStorage.setItem('config.post_login_redirect_uri', window.location.href);
+                        sessionStorage.removeItem('profitdock.oauth_scope_fallback_done');
+                        localStorage.setItem('config.app_id', PROFITDOCK_APP_ID);
+                        localStorage.removeItem('config.socket_app_id');
+                        localStorage.removeItem('config.server_url');
+                    } catch (error) {
+                        console.error('[HTML] Unable to prepare ProfitDock OAuth redirect:', error);
+                    }
+
+                    const authorize_url = new URL('/api/deriv/oauth/start', window.location.origin);
+                    if (prompt === 'registration') {
+                        authorize_url.searchParams.set('prompt', 'registration');
+                    }
+                    window.location.assign(authorize_url.toString());
+                };
+
+                window.__profitdockStartOAuth = startProfitdockOAuth;
+
+                const getAuthIntentFromEvent = event => {
+                    const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+                    const candidates = [
+                        event.target?.closest?.('button,a,[role="button"],.auth-actions *'),
+                        ...path.filter(node => node && node.nodeType === 1),
+                    ].filter(Boolean);
+
+                    for (const node of candidates) {
+                        const text = (node.innerText || node.textContent || '').trim().replace(/\s+/g, ' ');
+                        if (/^log in$/i.test(text)) return 'login';
+                        if (/^sign up$/i.test(text)) return 'registration';
+                    }
+
+                    return undefined;
+                };
+
+                const interceptProfitdockAuthEvent = event => {
+                    const intent = getAuthIntentFromEvent(event);
+                    if (!intent) return;
+
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
+                    startProfitdockOAuth(intent === 'registration' ? 'registration' : undefined);
+                };
+
+                ['pointerdown', 'mousedown', 'touchstart', 'click', 'submit'].forEach(event_name => {
+                    window.addEventListener(event_name, interceptProfitdockAuthEvent, true);
+                    document.addEventListener(event_name, interceptProfitdockAuthEvent, true);
+                });
+
+                try {
+                    if (hostname === 'www.profitdock.site') {
+                        const canonical_url = new URL(window.location.href);
+                        canonical_url.hostname = 'profitdock.site';
+                        window.location.replace(canonical_url.toString());
+                        return;
+                    }
+
+                    const clearMatchingStorage = storage => {
+                        const auth_key_pattern = /oidc|oauth2|session_state|userManager|auth-client|pkce|deriv_auth/i;
+                        const keys_to_remove = [];
+
+                        for (let index = 0; index < storage.length; index += 1) {
+                            const key = storage.key(index);
+                            if (key && auth_key_pattern.test(key)) {
+                                keys_to_remove.push(key);
+                            }
+                        }
+
+                        keys_to_remove.forEach(key => storage.removeItem(key));
+                    };
+
+                    const clearLoggedStateCookie = () => {
+                        ['', '; domain=.profitdock.site', '; domain=profitdock.site'].forEach(domain_suffix => {
+                            document.cookie = `logged_state=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/${domain_suffix}`;
+                        });
+                    };
+
+                    const clearLegacyAuthStorage = () => {
+                        [
+                            'accountsList',
+                            'clientAccounts',
+                            'callback_token',
+                            'authToken',
+                            'active_loginid',
+                            'client.accounts',
+                            'client_account_details',
+                            'client.country',
+                            'config.legacy_app_id',
+                            'profitdock_auth_stage',
+                        ].forEach(key => localStorage.removeItem(key));
+                        clearLoggedStateCookie();
+                    };
+
+                    clearMatchingStorage(localStorage);
+                    clearMatchingStorage(sessionStorage);
+
+                    const stored_callback_token = localStorage.getItem('callback_token') || '';
+                    const stored_app_id = localStorage.getItem('config.app_id') || '';
+                    const stored_reset_version = localStorage.getItem(PROFITDOCK_AUTH_RESET_KEY) || '';
+                    const stored_profitdock_accounts = localStorage.getItem('client.accounts') || '[]';
+                    const has_profitdock_accounts =
+                        stored_profitdock_accounts.includes('"loginid"') || stored_profitdock_accounts.includes('"account_id"');
+                    const has_new_oauth_session =
+                        stored_callback_token.includes('"token_type":"oauth"') &&
+                        !!localStorage.getItem('authToken') &&
+                        !!localStorage.getItem('active_loginid') &&
+                        has_profitdock_accounts;
+                    const has_legacy_session =
+                        stored_callback_token.includes('"token_type":"legacy"') &&
+                        !!localStorage.getItem('authToken') &&
+                        !!localStorage.getItem('active_loginid') &&
+                        has_profitdock_accounts;
+                    const has_foreign_app_id =
+                        stored_app_id &&
+                        stored_app_id !== PROFITDOCK_APP_ID;
+                    const is_callback_path = ['/auth/callback', '/callback'].includes(window.location.pathname);
+                    const has_stale_auth_version = stored_reset_version !== PROFITDOCK_AUTH_RESET_VERSION;
+
+                    if (!is_callback_path && (has_foreign_app_id || has_stale_auth_version)) {
+                        clearLegacyAuthStorage();
+                    }
+
+                    localStorage.setItem('config.app_id', PROFITDOCK_APP_ID);
+                    localStorage.setItem(PROFITDOCK_AUTH_RESET_KEY, PROFITDOCK_AUTH_RESET_VERSION);
+                    localStorage.removeItem('config.socket_app_id');
+                    localStorage.removeItem('config.server_url');
+
+                    if (!has_new_oauth_session && !localStorage.getItem('authToken')) {
+                        clearLoggedStateCookie();
+                    }
+                } catch (error) {
+                    console.error('[HTML] Unable to prime ProfitDock app configuration:', error);
+                }
+
+                const should_force_sw_reload = sessionStorage.getItem('profitdock_sw_reset_done') !== '1';
+                const cleanup_tasks = [];
+
+                if ('serviceWorker' in navigator) {
+                    cleanup_tasks.push(
+                        navigator.serviceWorker.getRegistrations().then(registrations =>
+                            Promise.all(registrations.map(registration => registration.unregister()))
+                        )
+                    );
+                }
+
+                if ('caches' in window) {
+                    cleanup_tasks.push(caches.keys().then(cache_names => Promise.all(cache_names.map(name => caches.delete(name)))));
+                }
+
+                Promise.allSettled(cleanup_tasks)
+                    .then(() => {
+                        if (should_force_sw_reload && navigator.serviceWorker?.controller) {
+                            sessionStorage.setItem('profitdock_sw_reset_done', '1');
+                            window.location.replace(window.location.href);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('[HTML] ProfitDock startup cache reset failed:', error);
+                    });
+            })();
+        </script>
+    </head>
+
+    <body class="body theme theme--light">
+        <div id="modal_root" class="modal-root"></div>
+        <div id="popup_root" class="popup-root"></div>
+        <div id="root"></div>
+        <!-- LiveChat script -->
+        <script type="text/javascript" defer>
+            window.__lc = window.__lc || {};
+            window.__lc.license = 12049137;
+            window.__lc.asyncInit = true;
+            (function (n, t, c) {
+                function i(n) {
+                    return e._h ? e._h.apply(null, n) : e._q.push(n);
+                }
+                var e = {
+                    _q: [],
+                    _h: null,
+                    _v: '2.0',
+                    on: function () {
+                        i(['on', c.call(arguments)]);
+                    },
+                    once: function () {
+                        i(['once', c.call(arguments)]);
+                    },
+                    off: function () {
+                        i(['off', c.call(arguments)]);
+                    },
+                    get: function () {
+                        if (!e._h) throw new Error('[LiveChatWidget] You can’t use getters before load.');
+                        return i(['get', c.call(arguments)]);
+                    },
+                    call: function () {
+                        i(['call', c.call(arguments)]);
+                    },
+                    init: function () {
+                        setTimeout(() => {
+                            var n = t.createElement('script');
+                            ((n.async = !0),
+                                (n.type = 'text/javascript'),
+                                (n.src = 'https://cdn.livechatinc.com/tracking.js'),
+                                t.head.appendChild(n));
+                        }, 3000);
+                    },
+                };
+                (!n.__lc.asyncInit && e.init(), (n.LiveChatWidget = n.LiveChatWidget || e));
+            })(window, document, [].slice);
+        </script>
+        <!-- End LiveChat script -->
+
+        <!-- Browser Service Worker Prevention -->
+        <script>
+            // Check browser compatibility and prevent service worker issues
+            const userAgent = navigator.userAgent.toLowerCase();
+            const isFirefox = userAgent.includes('firefox');
+            const isSafari = userAgent.includes('safari') && !userAgent.includes('chrome');
+            const isProfitDockDomain =
+                window.location.hostname === 'profitdock.site' || window.location.hostname === 'www.profitdock.site';
+            const shouldSkipSW = isFirefox || isSafari || isProfitDockDomain;
+
+            if (shouldSkipSW) {
+                const browserName = isProfitDockDomain ? 'ProfitDock domain' : isFirefox ? 'Firefox' : 'Safari';
+                console.log(
+                    `[HTML] ${browserName} detected - preventing service worker registration to avoid chunk loading issues`
+                );
+
+                // Cleanup any existing service workers
+                const cleanup_tasks = [];
+                if ('serviceWorker' in navigator) {
+                    cleanup_tasks.push(
+                        navigator.serviceWorker
+                            .getRegistrations()
+                            .then(registrations => {
+                                registrations.forEach(registration => {
+                                    console.log(
+                                        `[HTML] Unregistering existing SW for ${browserName}:`,
+                                        registration.scope
+                                    );
+                                });
+                                return Promise.all(registrations.map(registration => registration.unregister()));
+                            })
+                            .catch(error => {
+                                console.error('[HTML] Failed to cleanup service workers:', error);
+                            })
+                    );
+                }
+
+                if ('caches' in window) {
+                    cleanup_tasks.push(
+                        caches
+                            .keys()
+                            .then(cacheNames => Promise.all(cacheNames.map(cacheName => caches.delete(cacheName))))
+                            .then(() => {
+                                console.log(`[HTML] Cleared CacheStorage entries for ${browserName}`);
+                            })
+                            .catch(error => {
+                                console.error('[HTML] Failed to clear caches:', error);
+                            })
+                    );
+                }
+
+                if (isProfitDockDomain && sessionStorage.getItem('profitdock_sw_reset_done') !== '1') {
+                    Promise.allSettled(cleanup_tasks).then(() => {
+                        if (navigator.serviceWorker?.controller) {
+                            sessionStorage.setItem('profitdock_sw_reset_done', '1');
+                            window.location.replace(window.location.href);
+                        }
+                    });
+                }
+            }
+
+            // Check online/offline status
+            console.log('[HTML] Online status:', navigator.onLine);
+            window.addEventListener('online', () => {
+                console.log('[HTML] Back online');
+            });
+            window.addEventListener('offline', () => {
+                console.log('[HTML] Gone offline');
+            });
+
+            // Listen for service worker messages if registered by PWA utils (non-problematic browsers only)
+            if ('serviceWorker' in navigator && !shouldSkipSW) {
+                navigator.serviceWorker.addEventListener('message', event => {
+                    console.log('[HTML] Message from service worker:', event.data);
+                });
+            }
+        </script>
+    </body>
+</html>
+

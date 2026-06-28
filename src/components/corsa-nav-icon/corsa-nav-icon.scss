@@ -1,0 +1,53 @@
+.corsa-nav-icon {
+    color: var(--text-general);
+    display: block;
+    flex-shrink: 0;
+    overflow: visible;
+    vertical-align: middle;
+
+    &__track {
+        animation: corsa-track-pulse 1.7s ease-in-out infinite;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-width: 1.45;
+    }
+
+    &__track--second {
+        animation-delay: 220ms;
+        opacity: 0.55;
+    }
+
+    &__bolt {
+        animation: corsa-bolt-flash 1.2s ease-in-out infinite;
+        fill: #ff444f;
+        transform-box: fill-box;
+        transform-origin: center;
+    }
+
+    &__dot {
+        fill: #29c7ac;
+    }
+
+    &__dot--one {
+        animation: corsa-dot-hop 1.4s ease-in-out infinite;
+    }
+
+    &__dot--two {
+        animation: corsa-dot-hop 1.4s ease-in-out 300ms infinite;
+    }
+}
+
+@keyframes corsa-track-pulse {
+    0%, 100% { stroke-dasharray: 3 9; opacity: 0.55; }
+    50% { stroke-dasharray: 12 2; opacity: 1; }
+}
+
+@keyframes corsa-bolt-flash {
+    0%, 100% { transform: scale(0.94); opacity: 0.78; }
+    50% { transform: scale(1.06); opacity: 1; }
+}
+
+@keyframes corsa-dot-hop {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-1.6px); }
+}

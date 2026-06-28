@@ -1,0 +1,191 @@
+.copy-trading-nav-icon {
+    color: var(--text-general);
+    display: inline-block;
+    flex-shrink: 0;
+    overflow: visible;
+    vertical-align: middle;
+
+    &__loop,
+    &__spark {
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.55;
+    }
+
+    &__loop {
+        opacity: 0.86;
+        transform-box: fill-box;
+        transform-origin: center;
+        stroke-dasharray: 24 12;
+    }
+
+    &__loop--left {
+        animation: copy-trading-nav-left 2.35s ease-in-out infinite;
+    }
+
+    &__loop--right {
+        animation: copy-trading-nav-right 2.35s ease-in-out infinite;
+    }
+
+    &__blend {
+        fill: rgb(255 68 79 / 0.18);
+        stroke: var(--brand-red-coral);
+        stroke-width: 1.2;
+        opacity: 0.92;
+        transform-box: fill-box;
+        transform-origin: center;
+        filter: drop-shadow(0 0 4px rgb(255 68 79 / 0.32));
+        animation: copy-trading-nav-blend 2.35s ease-in-out infinite;
+    }
+
+    &__spark {
+        opacity: 0.42;
+        animation: copy-trading-nav-spark 1.6s ease-in-out infinite;
+    }
+
+    &__spark--top {
+        animation-delay: 0s;
+    }
+
+    &__spark--right {
+        animation-delay: 0.18s;
+    }
+
+    &__spark--bottom {
+        animation-delay: 0.36s;
+    }
+
+    &__spark--left {
+        animation-delay: 0.54s;
+    }
+
+    &__orb {
+        fill: var(--brand-red-coral);
+        opacity: 0;
+        transform-origin: center;
+        filter: drop-shadow(0 0 3px rgb(255 68 79 / 0.45));
+    }
+
+    &__orb--one {
+        animation: copy-trading-nav-orb-left 2.35s linear infinite;
+    }
+
+    &__orb--two {
+        animation: copy-trading-nav-orb-right 2.35s linear infinite;
+    }
+}
+
+@keyframes copy-trading-nav-left {
+    0%,
+    100% {
+        opacity: 0.78;
+        stroke-dashoffset: 0;
+        transform: translateX(0) scale(0.98);
+    }
+
+    35% {
+        opacity: 1;
+        stroke-dashoffset: -8;
+        transform: translateX(0.7px) scale(1.02);
+    }
+
+    60% {
+        opacity: 0.92;
+        stroke-dashoffset: -14;
+        transform: translateX(1px) scale(1.02);
+    }
+}
+
+@keyframes copy-trading-nav-right {
+    0%,
+    100% {
+        opacity: 0.78;
+        stroke-dashoffset: 0;
+        transform: translateX(0) scale(0.98);
+    }
+
+    35% {
+        opacity: 1;
+        stroke-dashoffset: 8;
+        transform: translateX(-0.7px) scale(1.02);
+    }
+
+    60% {
+        opacity: 0.92;
+        stroke-dashoffset: 14;
+        transform: translateX(-1px) scale(1.02);
+    }
+}
+
+@keyframes copy-trading-nav-blend {
+    0%,
+    100% {
+        opacity: 0.85;
+        transform: scaleX(0.92);
+    }
+
+    30%,
+    56% {
+        opacity: 1;
+        transform: scaleX(1);
+    }
+
+    72% {
+        opacity: 0.92;
+        transform: scaleX(0.96);
+    }
+}
+
+@keyframes copy-trading-nav-spark {
+    0%,
+    100% {
+        opacity: 0.16;
+        transform: scale(0.92);
+    }
+
+    50% {
+        opacity: 0.82;
+        transform: scale(1.12);
+    }
+}
+
+@keyframes copy-trading-nav-orb-left {
+    0% {
+        opacity: 0;
+        transform: translate(-2.8px, 0);
+    }
+
+    20%,
+    44% {
+        opacity: 1;
+        transform: translate(2px, 0);
+    }
+
+    60%,
+    100% {
+        opacity: 0;
+        transform: translate(4px, 0);
+    }
+}
+
+@keyframes copy-trading-nav-orb-right {
+    0%,
+    12% {
+        opacity: 0;
+        transform: translate(2.8px, 0);
+    }
+
+    34%,
+    58% {
+        opacity: 1;
+        transform: translate(-2px, 0);
+    }
+
+    76%,
+    100% {
+        opacity: 0;
+        transform: translate(-4px, 0);
+    }
+}

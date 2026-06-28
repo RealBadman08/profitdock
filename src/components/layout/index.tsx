@@ -1,0 +1,351 @@
+import { useEffect, useMemo, useState } from 'react';
+import clsx from 'clsx';
+import Cookies from 'js-cookie';
+import { observer } from 'mobx-react-lite';
+import { Outlet } from 'react-router-dom';
+import PWAUpdateNotification from '@/components/pwa-update-notification';
+import {
+    ensureCustomDomainAppId,
+    getCustomLegacyOAuthAuthorizeUrl,
+    isProfitdockDomainHost,
+    redirectCustomDomainToPreferredHost,
+} from '@/components/shared/utils/config/config';
+import { api_base } from '@/external/bot-skeleton/services/api/api-base';
+import {
+    getStoredProfitdockAccountMap,
+    hasUsableProfitdockStoredSession,
+} from '@/external/bot-skeleton/services/api/profitdock-oauth-session';
+import { useOfflineDetection } from '@/hooks/useOfflineDetection';
+import { useStore } from '@/hooks/useStore';
+import useTMB from '@/hooks/useTMB';
+import { handleOidcAuthFailure, isOidcCallbackPath, isRootOidcCallback } from '@/utils/auth-utils';
+import { getRedirectCallbackUri } from '@/components/shared/utils/login/login';
+import { requestOidcAuthentication } from '@deriv-com/auth-client';
+import { useDevice } from '@deriv-com/ui';
+import { crypto_currencies_display_order, fiat_currencies_display_order } from '../shared';
+import Footer from './footer';
+import AppHeader from './header';
+import Body from './main-body';
+import SocialOverlay from '@/extensions/modules/SocialOverlay';
+import './layout.scss';
+
+const getStoredClientAccounts = () => {
+    try {
+        const stored_client_accounts = JSON.parse(localStorage.getItem('clientAccounts') ?? '{}');
+        if (stored_client_accounts && typeof stored_client_accounts === 'object' && Object.keys(stored_client_accounts).length) {
+            return stored_client_accounts;
+        }
+    } catch (error) {
+        console.error('[ProfitDock Auth] Failed to parse clientAccounts:', error);
+    }
+
+    return getStoredProfitdockAccountMap();
+};
+
+const Layout = observer(() => {
+    const { isDesktop } = useDevice();
+    const { isOnline } = useOfflineDetection();
+    const store = useStore();
+    const is_quick_strategy_active = store?.quick_strategy?.is_open;
+
+    const isCallbackPage = isOidcCallbackPath() || isRootOidcCallback();
+    const should_hide_shell_for_callback = isCallbackPage;
+    const { onRenderTMBCheck, is_tmb_enabled: tmb_enabled_from_hook, isTmbEnabled, isOAuth2Enabled } = useTMB();
+    const is_tmb_enabled = useMemo(
+        () => window.is_tmb_enabled === true || tmb_enabled_from_hook,
+        [tmb_enabled_from_hook]
+    );
+
+    const isProfitdockDomain = isProfitdockDomainHost();
+    const isLoggedInCookie = Cookies.get('logged_state') === 'true';
+    const isEndpointPage = window.location.pathname.includes('endpoint');
+    const checkClientAccount = getStoredClientAccounts();
+    const getQueryParams = new URLSearchParams(window.location.search);
+    const currency = getQueryParams.get('account') ?? '';
+    const accountsList = JSON.parse(localStorage.getItem('accountsList') ?? '{}');
+    const isClientAccountsPopulated = Object.keys(accountsList).length > 0;
+    const hasStoredAuthSession = isProfitdockDomain
+        ? hasUsableProfitdockStoredSession()
+        : !!localStorage.getItem('authToken') || !!localStorage.getItem('callback_token');
+    const hasProfitdockStoredSession = isProfitdockDomain && hasStoredAuthSession;
+    const ifClientAccountHasCurrency =
+        Object.values(checkClientAccount).some((account: any) => account.currency === currency) ||
+        currency === 'demo' ||
+        currency === '';
+    const [clientHasCurrency, setClientHasCurrency] = useState(ifClientAccountHasCurrency);
+    const [isAuthenticating, setIsAuthenticating] = useState(isProfitdockDomain ? false : !hasProfitdockStoredSession);
+
+    // Expose setClientHasCurrency to window for global access
+    useEffect(() => {
+        (window as any).setClientHasCurrency = setClientHasCurrency;
+
+        return () => {
+            delete (window as any).setClientHasCurrency;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!hasProfitdockStoredSession) {
+            return;
+        }
+
+        setClientHasCurrency(true);
+        setIsAuthenticating(false);
+        setIsInitialAuthCheckComplete(true);
+    }, [hasProfitdockStoredSession]);
+
+    const validCurrencies = [...fiat_currencies_display_order, ...crypto_currencies_display_order];
+    const query_currency = (getQueryParams.get('account') ?? '')?.toUpperCase();
+    const isCurrencyValid = validCurrencies.includes(query_currency);
+    const api_accounts: any[][] = [];
+    let subscription: { unsubscribe: () => void };
+
+    const validateApiAccounts = ({ data }: any) => {
+        if (data.msg_type === 'authorize') {
+            const account_list = data?.authorize?.account_list || [];
+            const account_list_filter = account_list.filter((acc: any) => acc.is_disabled === 0);
+            api_accounts.push(account_list_filter || []);
+            const allCurrencies = new Set(Object.values(checkClientAccount).map((acc: any) => acc.currency));
+
+            // Skip disabled accounts when checking for missing currency
+            const accounts = api_accounts.flat();
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            let detected_currency = '';
+            const hasMissingCurrency = accounts.some(data => {
+                if (!allCurrencies.has(data.currency)) {
+                    console.log('Missing currency:', data.currency);
+                    sessionStorage.setItem('query_param_currency', data.currency);
+                    return true;
+                }
+                detected_currency = data.currency;
+                return false;
+            });
+
+            let hasMissingToken = false;
+            let missingTokenCurrency = '';
+
+            for (const acc of account_list_filter) {
+                if (acc.loginid && !accountsList[acc.loginid]) {
+                    hasMissingToken = true;
+                    missingTokenCurrency = acc.currency || '';
+                    // Store the missing token's currency in session storage
+                    if (missingTokenCurrency) {
+                        sessionStorage.setItem('query_param_currency', missingTokenCurrency);
+                    }
+                    break;
+                }
+            }
+
+            if (hasMissingCurrency || hasMissingToken) {
+                setClientHasCurrency(false);
+            } else {
+                const account_list_ =
+                    account_list_filter?.find((acc: { currency: string }) => acc.currency === currency) ||
+                    account_list_filter?.[0];
+
+                let session_storage_currency =
+                    sessionStorage.getItem('query_param_currency') || account_list_?.currency || 'USD';
+
+                session_storage_currency = `account=${session_storage_currency}`;
+                setClientHasCurrency(true);
+                if (!new URLSearchParams(window.location.search).has('account')) {
+                    window.history.pushState({}, '', `${window.location.pathname}?${session_storage_currency}`);
+                }
+
+                setClientHasCurrency(true);
+            }
+
+            if (subscription) {
+                subscription?.unsubscribe();
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (isCurrencyValid && api_base.api) {
+            // Subscribe to the onMessage event
+            const is_valid_currency = currency && validCurrencies.includes(currency.toUpperCase());
+            if (!is_valid_currency) return;
+            subscription = api_base.api.onMessage().subscribe(validateApiAccounts);
+        }
+    }, []);
+
+    useEffect(() => {
+        ensureCustomDomainAppId();
+
+        if (redirectCustomDomainToPreferredHost()) {
+            return;
+        }
+
+        // Always set the currency in session storage, even if the user is not logged in
+        // This ensures the currency is available on the callback page
+        if (currency) {
+            sessionStorage.setItem('query_param_currency', currency);
+        }
+
+        if (hasProfitdockStoredSession) {
+            setClientHasCurrency(true);
+            setIsAuthenticating(false);
+            setIsInitialAuthCheckComplete(true);
+            return;
+        }
+
+        if (isProfitdockDomain && !should_hide_shell_for_callback && !hasStoredAuthSession) {
+            // ProfitDock's public tools must render without being hijacked by stale Deriv cookies.
+            setClientHasCurrency(true);
+            setIsAuthenticating(false);
+            setIsInitialAuthCheckComplete(true);
+            return;
+        }
+
+        setIsAuthenticating(true);
+
+        const checkOIDCEnabledWithMissingAccount =
+            !isEndpointPage && !should_hide_shell_for_callback && !clientHasCurrency && !hasStoredAuthSession;
+        const shouldAuthenticate =
+            (isLoggedInCookie &&
+                !isClientAccountsPopulated &&
+                !hasStoredAuthSession &&
+                !isEndpointPage &&
+                !should_hide_shell_for_callback) ||
+            checkOIDCEnabledWithMissingAccount;
+
+        // Skip authentication when offline
+        if (!isOnline) {
+            console.log('[Layout] Offline detected, skipping authentication');
+            setIsAuthenticating(false);
+            setClientHasCurrency(true); // Allow access in offline mode
+            return;
+        }
+
+        // Create an async IIFE to handle authentication
+        (async () => {
+            try {
+                // First, explicitly wait for TMB status to be determined
+                // This ensures we have the correct TMB status before proceeding
+                const tmbStatusTimeout = new Promise<boolean>(resolve => {
+                    window.setTimeout(() => {
+                        console.warn('[Layout] TMB status check timed out. Continuing without blocking the shell.');
+                        resolve(false);
+                    }, isProfitdockDomain ? 1200 : 2500);
+                });
+                const tmbEnabled = await Promise.race([isTmbEnabled(), tmbStatusTimeout]);
+
+                // Now use the result of the explicit check
+                if (tmbEnabled) {
+                    await onRenderTMBCheck();
+                } else if (isProfitdockDomain && hasStoredAuthSession) {
+                    setIsAuthenticating(false);
+                    return;
+                } else if (shouldAuthenticate && isOAuth2Enabled) {
+                    const query_param_currency = currency || sessionStorage.getItem('query_param_currency') || 'USD';
+
+                    // Make sure we have the currency in session storage before redirecting
+                    if (query_param_currency) {
+                        sessionStorage.setItem('query_param_currency', query_param_currency);
+                    }
+                    try {
+                        const auth_state = query_param_currency
+                            ? {
+                                  account: query_param_currency,
+                              }
+                            : undefined;
+
+                        if (isProfitdockDomain) {
+                            if (auth_state?.account) {
+                                sessionStorage.setItem('query_param_currency', auth_state.account);
+                            }
+                            sessionStorage.setItem('redirect_url', window.location.href);
+                            localStorage.setItem('config.post_login_redirect_uri', window.location.href);
+                            sessionStorage.removeItem('profitdock.oauth_scope_fallback_done');
+                            window.location.assign(getCustomLegacyOAuthAuthorizeUrl());
+                        } else {
+                            await requestOidcAuthentication({
+                                redirectCallbackUri: getRedirectCallbackUri(),
+                                ...(auth_state
+                                    ? {
+                                          state: auth_state,
+                                      }
+                                    : {}),
+                            });
+                        }
+                    } catch (err) {
+                        setIsAuthenticating(false);
+                        handleOidcAuthFailure(err);
+                    }
+                }
+            } catch (err) {
+                // eslint-disable-next-line no-console
+                setIsAuthenticating(false);
+                console.error('Authentication error:', err);
+            } finally {
+                setIsAuthenticating(false);
+            }
+        })();
+    }, [
+        isLoggedInCookie,
+        isClientAccountsPopulated,
+        isEndpointPage,
+        should_hide_shell_for_callback,
+        clientHasCurrency,
+        hasStoredAuthSession,
+        tmb_enabled_from_hook,
+        onRenderTMBCheck,
+        currency,
+        is_tmb_enabled,
+        isOnline, // Add isOnline to dependencies
+    ]);
+
+    // Add offline timeout to prevent infinite authentication
+    useEffect(() => {
+        if (!isOnline && isAuthenticating) {
+            console.log('[Layout] Setting offline timeout for authentication');
+            const timeout = setTimeout(() => {
+                console.log('[Layout] Offline timeout reached, stopping authentication');
+                setIsAuthenticating(false);
+                setClientHasCurrency(true);
+            }, 2000);
+
+            return () => clearTimeout(timeout);
+        }
+    }, [isOnline, isAuthenticating]);
+
+    // Add a state to track if initial authentication check is complete
+    const [isInitialAuthCheckComplete, setIsInitialAuthCheckComplete] = useState(
+        isProfitdockDomain || hasProfitdockStoredSession
+    );
+
+    // Effect to mark initial auth check as complete after a short delay
+    useEffect(() => {
+        if (!isAuthenticating && !isInitialAuthCheckComplete) {
+            // Wait a bit to ensure all state updates have propagated
+            const timer = setTimeout(() => {
+                setIsInitialAuthCheckComplete(true);
+            }, 500); // Give it enough time to stabilize
+
+            return () => clearTimeout(timer);
+        }
+    }, [isAuthenticating, isInitialAuthCheckComplete]);
+
+    return (
+        <div
+            className={clsx('layout', {
+                responsive: isDesktop,
+                'quick-strategy-active': is_quick_strategy_active && !isDesktop,
+            })}
+        >
+            {!should_hide_shell_for_callback && <SocialOverlay />}
+            {!should_hide_shell_for_callback && (
+                <AppHeader isAuthenticating={isAuthenticating || !isInitialAuthCheckComplete} />
+            )}
+            <Body>
+                <Outlet />
+            </Body>
+            {!should_hide_shell_for_callback && isDesktop && <Footer />}
+            <PWAUpdateNotification />
+        </div>
+    );
+});
+
+export default Layout;
+

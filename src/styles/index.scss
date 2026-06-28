@@ -1,0 +1,24 @@
+@use 'components/shared/styles/themes' as *;
+
+body {
+    font-family:
+        'IBM Plex Sans',
+        'Segoe UI',
+        Arial,
+        sans-serif;
+    background: var(--general-main-1);
+}
+
+.icon-general-fill-path {
+    path {
+        fill: var(--text-general);
+    }
+}
+
+.icon-general-fill-g-path {
+    g {
+        path {
+            fill: var(--text-general);
+        }
+    }
+}

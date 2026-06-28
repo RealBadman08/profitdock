@@ -1,0 +1,100 @@
+.dashboard-nav-icon {
+    color: var(--text-general);
+    display: inline-block;
+    flex-shrink: 0;
+    overflow: visible;
+    vertical-align: middle;
+
+    &__tile {
+        fill: currentColor;
+        opacity: 0.34;
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: dashboard-nav-tile-breathe 2.2s ease-in-out infinite;
+    }
+
+    &__tile--1 {
+        opacity: 0.95;
+        animation-delay: 0s;
+    }
+
+    &__tile--2 {
+        opacity: 0.78;
+        animation-delay: 0.18s;
+    }
+
+    &__tile--3 {
+        opacity: 0.56;
+        animation-delay: 0.36s;
+    }
+
+    &__tile--4 {
+        opacity: 0.48;
+        animation-delay: 0.54s;
+    }
+
+    &__glow {
+        fill: var(--brand-red-coral);
+        opacity: 0;
+        transform-box: fill-box;
+        transform-origin: center;
+        filter: drop-shadow(0 0 4px rgb(255 68 79 / 0.35));
+    }
+
+    &__glow--1 {
+        animation: dashboard-nav-highlight-top 2.2s ease-in-out infinite;
+    }
+
+    &__glow--2 {
+        animation: dashboard-nav-highlight-bottom 2.2s ease-in-out 0.45s infinite;
+    }
+}
+
+@keyframes dashboard-nav-tile-breathe {
+    0%,
+    100% {
+        transform: scale(0.94);
+    }
+
+    50% {
+        transform: scale(1);
+    }
+}
+
+@keyframes dashboard-nav-highlight-top {
+    0%,
+    100% {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+
+    18%,
+    34% {
+        opacity: 0.95;
+        transform: scale(1);
+    }
+
+    52% {
+        opacity: 0;
+        transform: scale(1.08);
+    }
+}
+
+@keyframes dashboard-nav-highlight-bottom {
+    0%,
+    100% {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+
+    18%,
+    34% {
+        opacity: 0.88;
+        transform: scale(1);
+    }
+
+    52% {
+        opacity: 0;
+        transform: scale(1.06);
+    }
+}

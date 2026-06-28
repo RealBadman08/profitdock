@@ -1,0 +1,168 @@
+.analysis-tool-nav-icon {
+    color: var(--text-general);
+    display: inline-block;
+    flex-shrink: 0;
+    overflow: visible;
+    vertical-align: middle;
+
+    &__frame,
+    &__core,
+    &__pin,
+    &__bolt {
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.5;
+    }
+
+    &__frame,
+    &__core,
+    &__pin {
+        stroke: currentColor;
+    }
+
+    &__frame {
+        opacity: 0.92;
+        transform-origin: center;
+        animation: analysis-tool-nav-frame 2.6s ease-in-out infinite;
+    }
+
+    &__core {
+        opacity: 0.86;
+        transform-origin: center;
+        animation: analysis-tool-nav-core 2.6s ease-in-out infinite;
+    }
+
+    &__pin {
+        opacity: 0.72;
+        transform-origin: center;
+        animation: analysis-tool-nav-pin 1.8s ease-in-out infinite;
+    }
+
+    &__bolt {
+        stroke: var(--brand-red-coral);
+        filter: drop-shadow(0 0 2px rgb(255 68 79 / 0.4));
+        stroke-dasharray: 8;
+        stroke-dashoffset: 8;
+        animation: analysis-tool-nav-bolt 1.8s ease-in-out infinite;
+    }
+
+    &__pulse {
+        fill: none;
+        opacity: 0;
+        stroke: rgb(255 68 79 / 0.6);
+        stroke-width: 1.2;
+        transform-origin: center;
+    }
+
+    &__pulse--1 {
+        animation: analysis-tool-nav-pulse 1.8s ease-out infinite;
+    }
+
+    &__pulse--2 {
+        animation: analysis-tool-nav-pulse 1.8s ease-out 0.45s infinite;
+    }
+
+    &__pin--1,
+    &__pin--7 {
+        animation-delay: 0s;
+    }
+
+    &__pin--2,
+    &__pin--8 {
+        animation-delay: 0.12s;
+    }
+
+    &__pin--3,
+    &__pin--9 {
+        animation-delay: 0.24s;
+    }
+
+    &__pin--4,
+    &__pin--10 {
+        animation-delay: 0.36s;
+    }
+
+    &__pin--5,
+    &__pin--11 {
+        animation-delay: 0.48s;
+    }
+
+    &__pin--6,
+    &__pin--12 {
+        animation-delay: 0.6s;
+    }
+}
+
+@keyframes analysis-tool-nav-frame {
+    0%,
+    100% {
+        opacity: 0.9;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.02);
+    }
+}
+
+@keyframes analysis-tool-nav-core {
+    0%,
+    100% {
+        opacity: 0.8;
+        transform: scale(0.98);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes analysis-tool-nav-pin {
+    0%,
+    100% {
+        opacity: 0.45;
+        transform: scale(0.92);
+    }
+
+    50% {
+        opacity: 1;
+        transform: scale(1.08);
+    }
+}
+
+@keyframes analysis-tool-nav-bolt {
+    0% {
+        opacity: 0.25;
+        stroke-dashoffset: 8;
+    }
+
+    30%,
+    65% {
+        opacity: 1;
+        stroke-dashoffset: 0;
+    }
+
+    100% {
+        opacity: 0.45;
+        stroke-dashoffset: -8;
+    }
+}
+
+@keyframes analysis-tool-nav-pulse {
+    0% {
+        opacity: 0;
+        transform: scale(0.55);
+    }
+
+    35% {
+        opacity: 0.38;
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(2.75);
+    }
+}

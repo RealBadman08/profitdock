@@ -1,0 +1,242 @@
+@use 'components/shared/styles/mixins' as *;
+
+.deriv-live--analysis {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+    padding-bottom: calc(18rem + env(safe-area-inset-bottom, 0px));
+
+    .deriv-live__stack {
+        gap: 1.25rem;
+    }
+
+    .deriv-live__hero--analysis,
+    .deriv-live__panel--digit-board,
+    .deriv-live__panel--module {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .deriv-live__hero--analysis {
+        padding: 1.4rem;
+        background: var(--dl-panel);
+    }
+
+    .deriv-live__hero--analysis::after,
+    .deriv-live__panel--digit-board::before,
+    .deriv-live__panel--module::before {
+        content: '';
+        position: absolute;
+        inset: 0 0 auto;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.28), transparent);
+        pointer-events: none;
+    }
+
+    .deriv-live__control-grid--analysis {
+        gap: 0.95rem;
+        align-items: end;
+    }
+
+    .deriv-live__field label {
+        font-size: 1rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .deriv-live__field input,
+    .deriv-live__field select {
+        min-height: 4rem;
+        font-size: 1.05rem;
+        font-weight: 600;
+    }
+
+    .deriv-live__panel {
+        padding: 1.35rem;
+    }
+
+    .deriv-live__panel-header,
+    .deriv-live__module-head {
+        align-items: flex-start;
+        margin-bottom: 1.1rem;
+    }
+
+    .deriv-live__panel-header h3,
+    .deriv-live__module-head h3 {
+        letter-spacing: -0.02em;
+    }
+
+    .deriv-live__module-head p {
+        font-size: 1.05rem;
+        font-weight: 600;
+    }
+
+    .deriv-live__digit-board {
+        gap: 0.85rem;
+    }
+
+    .deriv-live__digit-card {
+        padding: 0.95rem 0.55rem;
+        border-radius: 1.35rem;
+    }
+
+    .deriv-live__digit-ring {
+        width: clamp(4.85rem, 7vw, 6.8rem);
+    }
+
+    .deriv-live__digit-value {
+        font-size: 1.75rem;
+    }
+
+    .deriv-live__digit-percent {
+        font-size: 1rem;
+        font-weight: 700;
+    }
+
+    .deriv-live__metric {
+        gap: 0.7rem;
+        padding: 1rem;
+        border-radius: 1.3rem;
+    }
+
+    .deriv-live__metric-label {
+        font-size: 1.1rem;
+    }
+
+    .deriv-live__metric-helper,
+    .deriv-live__stat-helper {
+        font-size: 0.98rem;
+    }
+
+    .deriv-live__meter {
+        height: 0.72rem;
+    }
+
+    .deriv-live__selector-row {
+        margin-top: 0;
+        margin-bottom: 0.15rem;
+    }
+
+    .deriv-live__digit-picker {
+        display: grid;
+        grid-template-columns: repeat(10, minmax(0, 1fr));
+        gap: 0.55rem;
+
+        @media (max-width: 960px) {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+    }
+
+    .deriv-live__digit-button {
+        min-width: 0;
+        padding: 0.8rem 0.45rem;
+        font-size: 1.05rem;
+        transition:
+            transform 0.18s ease,
+            border-color 0.18s ease,
+            box-shadow 0.18s ease,
+            background 0.18s ease,
+            color 0.18s ease;
+    }
+
+    .deriv-live__digit-button:hover {
+        transform: translateY(-1px);
+        border-color: rgba(59, 130, 246, 0.42);
+        box-shadow: 0 10px 18px rgba(37, 99, 235, 0.1);
+    }
+
+    .deriv-live__digit-button--active {
+        background: #ff444f;
+        border-color: #ff444f;
+        color: #ffffff;
+        box-shadow: 0 12px 22px rgba(255, 68, 79, 0.28);
+    }
+
+    .deriv-live__sequence {
+        gap: 0.5rem;
+    }
+
+    .deriv-live__sequence-tile {
+        min-width: 2.7rem;
+        padding: 0.58rem 0.72rem;
+    }
+
+    .deriv-live__double-grid:last-child {
+        align-items: start;
+    }
+
+    @include mobile-or-tablet-screen {
+        padding-bottom: calc(23rem + env(safe-area-inset-bottom, 0px));
+
+        .deriv-live__hero--analysis,
+        .deriv-live__panel {
+            padding: 1.05rem;
+        }
+
+        .deriv-live__field input,
+        .deriv-live__field select {
+            min-height: 3.7rem;
+        }
+    }
+}
+
+.theme--dark {
+    .deriv-live--analysis {
+        .deriv-live__hero--analysis {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0) 22%), var(--dl-panel);
+            box-shadow: 0 24px 42px rgba(0, 0, 0, 0.38), 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+        }
+
+        .deriv-live__panel--digit-board,
+        .deriv-live__panel--module {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0) 24%), var(--dl-panel);
+            box-shadow: 0 24px 42px rgba(0, 0, 0, 0.38), 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+        }
+
+        .deriv-live__hero--analysis::after,
+        .deriv-live__panel--digit-board::before,
+        .deriv-live__panel--module::before {
+            background: linear-gradient(90deg, transparent, rgba(50, 55, 56, 0.96), transparent);
+        }
+
+        .deriv-live__field input,
+        .deriv-live__field select {
+            background: var(--dl-input-bg);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+        }
+
+        .deriv-live__metric,
+        .deriv-live__stat-card,
+        .deriv-live__sequence-tile,
+        .deriv-live__digit-button {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0) 28%), var(--dl-surface);
+            box-shadow: 0 14px 28px rgba(0, 0, 0, 0.24), 0 1px 0 rgba(255, 255, 255, 0.018) inset;
+        }
+
+        .deriv-live__panel-header h3,
+        .deriv-live__module-head h3,
+        .deriv-live__metric-label,
+        .deriv-live__digit-value,
+        .deriv-live__sequence-tile {
+            color: #ffffff;
+        }
+
+        .deriv-live__module-head p,
+        .deriv-live__digit-percent,
+        .deriv-live__metric-helper,
+        .deriv-live__stat-helper {
+            color: #f4f4f5;
+        }
+
+        .deriv-live__digit-button:hover {
+            border-color: rgba(56, 189, 248, 0.6);
+            box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.24), 0 12px 22px rgba(56, 189, 248, 0.12);
+        }
+
+        .deriv-live__digit-button--active {
+            background: #ff444f;
+            border-color: #ff444f;
+            box-shadow: 0 0 0 1px rgba(255, 68, 79, 0.36), 0 14px 26px rgba(255, 68, 79, 0.25);
+        }
+    }
+}

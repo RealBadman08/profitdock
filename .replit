@@ -1,0 +1,11 @@
+run = "npm run start"
+entrypoint = "src/app/app.tsx"
+
+[env]
+VITE_ENV = "development"
+
+[nix]
+channel = "stable-23_11"
+
+[dependencies]
+nodejs-20_x = "pkgs.nodejs_20"

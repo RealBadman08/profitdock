@@ -1,0 +1,197 @@
+.mobile-menu {
+    height: 100%;
+
+    &__toggle {
+        padding-inline-start: 1rem;
+        padding-inline-end: 1rem;
+        border-inline-end: 1px solid var(--general-section-1);
+        display: flex;
+        height: 100%;
+        cursor: pointer;
+    }
+
+    &__footer {
+        justify-content: center;
+        height: 4rem;
+    }
+
+    &__header {
+        display: flex;
+        padding-inline-end: 1.6rem;
+        padding-inline-start: 0.4rem;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+
+        &__language {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+    }
+
+    &__content {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background: var(--general-main-1);
+        color: var(--text-general);
+
+        &__platform {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-bottom: 1px solid var(--general-section-1);
+            min-height: 7rem;
+        }
+
+        .deriv-context-menu {
+            box-shadow: none !important;
+        }
+
+        &__items {
+            position: relative;
+            height: 100%;
+            padding-top: 1rem;
+
+            &--padding {
+                padding-inline-start: 4.8rem;
+                padding-inline-end: 1.6rem;
+            }
+
+            &--bottom-border {
+                border-bottom: 1px solid var(--general-section-1);
+            }
+
+            &__item {
+                height: 5.6rem;
+                cursor: pointer;
+                width: 100%;
+
+                .deriv-toggle-switch {
+                    margin-left: auto;
+                    margin-right: 1.6rem;
+                }
+
+                &--active {
+                    .deriv-text {
+                        color: var(--text-prominent);
+                        font-weight: bold;
+                    }
+                }
+            }
+
+            &--right-margin {
+                margin-inline-end: 1.6rem;
+            }
+
+            &--chevron {
+                position: absolute;
+                right: 1.5rem;
+            }
+
+            &__icons {
+                g > path,
+                path {
+                    fill: var(--text-prominent);
+                }
+            }
+        }
+    }
+
+    &__language-drawer {
+        padding-inline-start: 0.8rem;
+        padding-inline-end: 0.8rem;
+
+        button {
+            height: auto;
+        }
+
+        .languages-modal__body-button {
+            height: 88px;
+            width: 133px;
+            display: flex;
+            align-items: center;
+            flex-direction: column;
+            padding: 8px;
+
+            .deriv-text {
+                color: var(--text-prominent) !important;
+            }
+
+            &-selected {
+                border: 1px solid var(--brand-blue, var(--brand-secondary));
+                border-radius: 4px;
+            }
+        }
+    }
+
+    &__back-btn {
+        display: flex;
+        align-items: center;
+        padding: 3.2rem;
+        padding-top: 2rem;
+        cursor: pointer;
+
+        span {
+            margin-inline-start: 1.6rem;
+        }
+    }
+
+    .deriv-drawer__container {
+        background: var(--general-main-1);
+    }
+
+    &__brand-card {
+        justify-content: flex-start;
+        gap: 1.2rem;
+        padding: 1.4rem 2rem;
+    }
+
+    &__brand-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 4rem;
+        height: 4rem;
+        border-radius: 1.2rem;
+        background: linear-gradient(135deg, #ff444f, #d71920);
+        color: #ffffff;
+        font-size: 1.45rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        box-shadow: 0 0.8rem 2rem rgba(255, 68, 79, 0.24);
+    }
+
+    &__brand-wordmark {
+        display: flex;
+        align-items: baseline;
+        gap: 0.2rem;
+        line-height: 1;
+    }
+
+    &__brand-word {
+        color: var(--text-prominent);
+        letter-spacing: -0.05em;
+
+        &--profit {
+            font-size: 2.35rem;
+            font-style: italic;
+            font-weight: 800;
+        }
+
+        &--dock {
+            font-size: 2.35rem;
+            font-weight: 500;
+        }
+    }
+
+    &__toggle,
+    &__back-btn,
+    .deriv-drawer__header__close-btn {
+        button > svg > path,
+        svg > path {
+            fill: var(--text-prominent);
+        }
+    }
+}

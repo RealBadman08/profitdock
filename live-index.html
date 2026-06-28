@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en" dir="auto">
+    <head>
+        <meta charset="UTF-8" />
+        <link rel="icon" type="image/svg+xml" href="/deriv-logo.svg" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+        <!-- PWA Manifest -->
+        <link rel="manifest" href="/manifest.json" />
+
+        <!-- PWA Meta Tags -->
+        <meta name="theme-color" content="#ff444f" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Deriv Bot" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="msapplication-TileColor" content="#ff444f" />
+        <meta name="msapplication-tap-highlight" content="no" />
+
+        <!-- Apple Touch Icons -->
+        <link rel="apple-touch-icon" href="/assets/icons/pwa/icon-152x152.png" />
+        <link rel="apple-touch-icon" sizes="152x152" href="/assets/icons/pwa/icon-152x152.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/pwa/icon-192x192.png" />
+        <meta name="title" content="Build a trading bot without coding | Deriv Bot." />
+        <meta
+            name="description"
+            content="Import your current bot or learn how to create a trading bot from scratch with our detailed guides, FAQs, and tutorials. Start with a quick strategy!"
+        />
+        <meta property="og:title" content="Deriv Bot" />
+        <meta
+            property="og:description"
+            content="Import your current bot or learn how to create a trading bot from scratch with our detailed guides, FAQs, and tutorials. Start with a quick strategy!"
+        />
+        <title>Build a trading bot without coding | Deriv Bot.</title>
+        <style>
+            :root {
+                font-size: 62.5%;
+            }
+        </style>
+        <script>
+            const profitdock_hosts = ['profitdock.site', 'www.profitdock.site'];
+            const is_profitdock_host = profitdock_hosts.includes(window.location.hostname);
+            const profitdock_reset_version = 'profitdock-cache-reset-2026-04-27-v2';
+
+            if (window.location.hostname === 'profitdock.site') {
+                const preferred_url = new URL(window.location.href);
+                preferred_url.hostname = 'www.profitdock.site';
+                window.location.replace(preferred_url.toString());
+            } else if (is_profitdock_host) {
+                try {
+                    const current_url = new URL(window.location.href);
+                    const reset_key = 'profitdock.cache-reset.version';
+                    const should_force_refresh = localStorage.getItem(reset_key) !== profitdock_reset_version;
+
+                    if (should_force_refresh) {
+                        localStorage.setItem(reset_key, profitdock_reset_version);
+
+                        if (!current_url.searchParams.has('pd_refresh')) {
+                            current_url.searchParams.set('pd_refresh', Date.now().toString());
+                            window.location.replace(current_url.toString());
+                        }
+                    } else if (current_url.searchParams.has('pd_refresh')) {
+                        current_url.searchParams.delete('pd_refresh');
+                        window.history.replaceState({}, '', current_url.toString());
+                    }
+                } catch (error) {
+                    console.error('[HTML] ProfitDock cache reset bootstrap failed:', error);
+                }
+            }
+        </script>
+    <script defer src="/static/js/lib-react.b66660c4.js"></script><script defer src="/static/js/lib-router.289893c3.js"></script><script defer src="/static/js/226.b30ec8b1.js"></script><script defer src="/static/js/index.5727412a.js"></script><link href="/static/css/226.7b5680c9.css" rel="stylesheet"><link href="/static/css/index.9954f06c.css" rel="stylesheet"></head>
+
+    <body class="body theme theme--light">
+        <div id="modal_root" class="modal-root"></div>
+        <div id="popup_root" class="popup-root"></div>
+        <div id="root"></div>
+        <!-- LiveChat script -->
+        <script type="text/javascript" defer>
+            window.__lc = window.__lc || {};
+            window.__lc.license = 12049137;
+            window.__lc.asyncInit = true;
+            (function (n, t, c) {
+                function i(n) {
+                    return e._h ? e._h.apply(null, n) : e._q.push(n);
+                }
+                var e = {
+                    _q: [],
+                    _h: null,
+                    _v: '2.0',
+                    on: function () {
+                        i(['on', c.call(arguments)]);
+                    },
+                    once: function () {
+                        i(['once', c.call(arguments)]);
+                    },
+                    off: function () {
+                        i(['off', c.call(arguments)]);
+                    },
+                    get: function () {
+                        if (!e._h) throw new Error('[LiveChatWidget] You can’t use getters before load.');
+                        return i(['get', c.call(arguments)]);
+                    },
+                    call: function () {
+                        i(['call', c.call(arguments)]);
+                    },
+                    init: function () {
+                        setTimeout(() => {
+                            var n = t.createElement('script');
+                            ((n.async = !0),
+                                (n.type = 'text/javascript'),
+                                (n.src = 'https://cdn.livechatinc.com/tracking.js'),
+                                t.head.appendChild(n));
+                        }, 3000);
+                    },
+                };
+                (!n.__lc.asyncInit && e.init(), (n.LiveChatWidget = n.LiveChatWidget || e));
+            })(window, document, [].slice);
+        </script>
+        <!-- End LiveChat script -->
+
+        <!-- Browser Service Worker Prevention -->
+        <script>
+            // Check browser compatibility and prevent service worker issues
+            const userAgent = navigator.userAgent.toLowerCase();
+            const isFirefox = userAgent.includes('firefox');
+            const isSafari = userAgent.includes('safari') && !userAgent.includes('chrome');
+            const isProfitDockDomain =
+                window.location.hostname === 'profitdock.site' || window.location.hostname === 'www.profitdock.site';
+            const shouldSkipSW = isFirefox || isSafari || isProfitDockDomain;
+
+            if (shouldSkipSW) {
+                const browserName = isProfitDockDomain ? 'ProfitDock domain' : isFirefox ? 'Firefox' : 'Safari';
+                console.log(
+                    `[HTML] ${browserName} detected - preventing service worker registration to avoid chunk loading issues`
+                );
+
+                // Cleanup any existing service workers
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker
+                        .getRegistrations()
+                        .then(registrations => {
+                            registrations.forEach(registration => {
+                                console.log(`[HTML] Unregistering existing SW for ${browserName}:`, registration.scope);
+                                registration.unregister();
+                            });
+                        })
+                        .catch(error => {
+                            console.error('[HTML] Failed to cleanup service workers:', error);
+                        });
+                }
+
+                if ('caches' in window) {
+                    caches
+                        .keys()
+                        .then(cacheNames => Promise.all(cacheNames.map(cacheName => caches.delete(cacheName))))
+                        .then(() => {
+                            console.log(`[HTML] Cleared CacheStorage entries for ${browserName}`);
+                        })
+                        .catch(error => {
+                            console.error('[HTML] Failed to clear caches:', error);
+                        });
+                }
+            }
+
+            // Check online/offline status
+            console.log('[HTML] Online status:', navigator.onLine);
+            window.addEventListener('online', () => {
+                console.log('[HTML] Back online');
+            });
+            window.addEventListener('offline', () => {
+                console.log('[HTML] Gone offline');
+            });
+
+            // Listen for service worker messages if registered by PWA utils (non-problematic browsers only)
+            if ('serviceWorker' in navigator && !shouldSkipSW) {
+                navigator.serviceWorker.addEventListener('message', event => {
+                    console.log('[HTML] Message from service worker:', event.data);
+                });
+            }
+        </script>
+    </body>
+</html>
+
