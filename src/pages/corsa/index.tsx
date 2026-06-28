@@ -409,6 +409,7 @@ const CorsaPage = observer(() => {
     const signalStreakRef = useRef(signalStreak);
     const predictionRef = useRef(prediction);
     const marketsRef = useRef(markets);
+    const processedContractsRef = useRef<Set<number>>(new Set());
 
     const selectedMarketInfo = useMemo(
         () => markets.find(market => market.symbol === selectedMarket) || markets[0],
@@ -471,9 +472,11 @@ const CorsaPage = observer(() => {
         (contract: ProposalOpenContract) => {
             transactions.pushTransaction({ ...contract, accountID: getActiveTransactionAccountId() } as ProposalOpenContract);
             const isSold = Boolean((contract as { is_sold?: number | boolean }).is_sold);
+            const contractId = Number(contract.contract_id);
+            
             setPositions(previous =>
                 previous.map(position =>
-                    position.contractId === contract.contract_id
+                    position.contractId === contractId
                         ? {
                               ...position,
                               entrySpot: contract.entry_tick_display_value || contract.entry_tick || position.entrySpot,
@@ -492,11 +495,12 @@ const CorsaPage = observer(() => {
                         : position
                 )
             );
-            if (!isSold || !contract.contract_id) return;
+            
+            if (!isSold || !contractId || processedContractsRef.current.has(contractId)) return;
+            processedContractsRef.current.add(contractId);
 
-            cleanupContractsRef.current.get(contract.contract_id)?.();
-            cleanupContractsRef.current.delete(contract.contract_id);
-            const contractId = Number(contract.contract_id);
+            cleanupContractsRef.current.get(contractId)?.();
+            cleanupContractsRef.current.delete(contractId);
             const market = contractMarketRef.current[contractId] || String(contract.underlying_symbol || contract.underlying || '');
             if (market) activeByMarketRef.current[market] = false;
 
@@ -798,6 +802,7 @@ const CorsaPage = observer(() => {
         signalActiveRef.current = {};
         sessionPnlRef.current = 0;
         isRunningRef.current = true;
+        processedContractsRef.current = new Set();
         setPositions([]);
         setStats({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
         setIsRunning(true);

@@ -997,12 +997,14 @@ const FlipperSwitcherPage = observer(() => {
         const stakeOneBefore = stakeOneRef.current || baseStakeOneRef.current;
         const stakeTwoBefore = stakeTwoRef.current || baseStakeTwoRef.current;
         const normalizedMultiplier = normalizeMartingaleMultiplier(martingaleMultiplier, 1);
-        // Martingale based on NET pair result: loss → multiply BOTH, win → reset BOTH
-        const netLoss = batchPnl < 0;
-        const nextStakeOne = netLoss
+        
+        const firstLegLoss = firstLegResult ? firstLegResult.profit < 0 : false;
+        const secondLegLoss = secondLegResult ? secondLegResult.profit < 0 : false;
+        
+        const nextStakeOne = firstLegLoss
             ? roundMartingaleStake(stakeOneBefore * normalizedMultiplier)
             : roundMartingaleStake(baseStakeOneRef.current);
-        const nextStakeTwo = netLoss
+        const nextStakeTwo = secondLegLoss
             ? roundMartingaleStake(stakeTwoBefore * normalizedMultiplier)
             : roundMartingaleStake(baseStakeTwoRef.current);
         // Write back to refs so the next executePair picks up the updated stakes
@@ -1011,7 +1013,8 @@ const FlipperSwitcherPage = observer(() => {
 
         console.info(
             '[MARTINGALE]', 'flipper:pair',
-            'netLoss=', netLoss, 'batchPnl=', batchPnl,
+            'batchPnl=', batchPnl,
+            'firstLegLoss=', firstLegLoss, 'secondLegLoss=', secondLegLoss,
             'stakeOneBefore=', stakeOneBefore, 'stakeOneAfter=', nextStakeOne,
             'stakeTwoBefore=', stakeTwoBefore, 'stakeTwoAfter=', nextStakeTwo,
             'multiplier=', normalizedMultiplier
