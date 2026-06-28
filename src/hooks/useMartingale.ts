@@ -3,8 +3,8 @@ import { useCallback, useRef, useState } from 'react';
 export const roundMartingaleStake = (value: number) => Number(value.toFixed(2));
 
 export const normalizeMartingaleMultiplier = (value: string | number, fallback = 1) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) && parsed > 0 ? Math.max(parsed, 1) : fallback;
+    const parsed = Number(String(value).replace(',', '.'));
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
 
 export const getNextMartingaleStake = ({

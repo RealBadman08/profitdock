@@ -504,7 +504,7 @@ const CorsaPage = observer(() => {
             const market = contractMarketRef.current[contractId] || String(contract.underlying_symbol || contract.underlying || '');
             if (market) activeByMarketRef.current[market] = false;
 
-            const realizedProfit = typeof contract.profit === 'number' ? contract.profit : 0;
+            const realizedProfit = contract.profit != null ? Number(contract.profit) : 0;
             const currentMarketStake = contractStakeRef.current[contractId] || stakeByMarketRef.current[market] || baseStakeRef.current;
             const martingaleMultiplier = normalizeMartingaleMultiplier(martingaleRef.current, 1);
             // Direct arithmetic — single source of truth via refs, no store

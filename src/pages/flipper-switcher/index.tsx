@@ -559,7 +559,7 @@ const FlipperSwitcherPage = observer(() => {
                                   (contract.is_sold
                                       ? liveContract.current_spot_display_value || liveContract.current_spot
                                       : position.exitSpot),
-                              profit: typeof contract.profit === 'number' ? contract.profit : position.profit,
+                              profit: contract.profit != null ? Number(contract.profit) : position.profit,
                               status: contract.is_sold ? 'closed' : 'live',
                           }
                         : position
