@@ -601,7 +601,15 @@ const CorsaPage = observer(() => {
                             symbol: market.symbol,
                         })
                     );
-                    return { buy: await buyQuote(tradeApi, quote.proposalId, quote.askPrice), quote };
+                    
+                    try {
+                        const buyRes = await buyQuote(tradeApi, quote.proposalId, quote.askPrice);
+                        console.info('[CORSA BUY RESPONSE SUCCESS]', JSON.stringify(buyRes));
+                        return { buy: buyRes, quote };
+                    } catch (err: any) {
+                        console.error('[CORSA BUY REJECTED]', err?.error?.code, err?.error?.message, JSON.stringify(err));
+                        throw err;
+                    }
                 };
                 let tradeApi = api;
                 let trade;
