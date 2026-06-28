@@ -590,208 +590,210 @@ const FlipperSwitcherPage = observer(() => {
     };
 
     const runFlipperLoop = async () => {
-        let currentStakeOne = toPositiveNumber(stakeOne, 0);
-        let currentStakeTwo = toPositiveNumber(stakeTwo, 0);
-        baseStakeOneRef.current = currentStakeOne;
-        baseStakeTwoRef.current = currentStakeTwo;
+        try {
+            let currentStakeOne = toPositiveNumber(stakeOne, 0);
+            let currentStakeTwo = toPositiveNumber(stakeTwo, 0);
+            baseStakeOneRef.current = currentStakeOne;
+            baseStakeTwoRef.current = currentStakeTwo;
 
-        let currentLossStreak = 0;
-        let currentRunCount = 0;
-        let currentSessionPnl = 0;
+            let currentLossStreak = 0;
+            let currentRunCount = 0;
+            let currentSessionPnl = 0;
 
-        const updatePositionsUi = (contract: any, legIndex: number, activeLegs: any) => {
-            const liveContract = contract;
-            transactions.pushTransaction({
-                ...contract,
-                accountID: getActiveTransactionAccountId(),
-            });
-            const status = contract.status;
-            const isSettled = status === 'won' || status === 'lost';
-            setPositions(prev => {
-                const existing = prev.find(p => p.contractId === contract.contract_id);
-                if (existing) {
-                    return prev.map(p => p.contractId === contract.contract_id ? {
-                        ...p,
-                        entrySpot: contract.entry_tick_display_value || contract.entry_tick || p.entrySpot,
-                        exitSpot: contract.exit_tick_display_value || contract.exit_tick || (isSettled ? liveContract.current_spot_display_value || liveContract.current_spot : p.exitSpot),
-                        profit: contract.profit != null ? Number(contract.profit) : p.profit,
-                        status: isSettled ? 'closed' : 'live'
-                    } : p);
-                } else {
-                    return [...prev, {
-                        buyPrice: contract.buy_price,
-                        contractId: contract.contract_id,
-                        contractType: contract.contract_type,
-                        entrySpot: contract.entry_tick_display_value || contract.entry_tick,
-                        exitSpot: contract.exit_tick_display_value || contract.exit_tick || liveContract.current_spot_display_value || liveContract.current_spot,
-                        label: activeLegs[legIndex].label,
-                        legIndex,
-                        market: contract.underlying,
-                        profit: Number(contract.profit || 0),
-                        runId: currentRunIdRef.current,
-                        stake: contract.buy_price,
-                        status: isSettled ? 'closed' : 'live'
-                    }];
-                }
-            });
-        };
-
-        const waitForEntryTrigger = async (marketSymbol: string, api: ApiLike) => {
-            const hasEntryDigit = entryPointRef.current !== '';
-            if (!hasEntryDigit) {
-                if (!turboRef.current) await new Promise(r => setTimeout(r, 500));
-                return;
-            }
-
-            return new Promise<void>((resolve) => {
-                let sub;
-                sub = api.onMessage().subscribe((message) => {
-                    const data = normalizeApiMessage(message);
-                    if (data.msg_type === 'tick' && data.tick?.symbol === marketSymbol) {
-                        const digit = getLastDigit(data.tick.quote);
-                        const target = Math.max(0, Math.min(9, Math.trunc(Number(entryPointRef.current || 0))));
-                        if (digit === target) {
-                            sub.unsubscribe();
-                            resolve();
-                        }
+            const updatePositionsUi = (contract: any, legIndex: number, activeLegs: any) => {
+                const liveContract = contract;
+                transactions.pushTransaction({
+                    ...contract,
+                    accountID: getActiveTransactionAccountId(),
+                });
+                const status = contract.status;
+                const isSettled = status === 'won' || status === 'lost';
+                setPositions(prev => {
+                    const existing = prev.find(p => p.contractId === contract.contract_id);
+                    if (existing) {
+                        return prev.map(p => p.contractId === contract.contract_id ? {
+                            ...p,
+                            entrySpot: contract.entry_tick_display_value || contract.entry_tick || p.entrySpot,
+                            exitSpot: contract.exit_tick_display_value || contract.exit_tick || (isSettled ? liveContract.current_spot_display_value || liveContract.current_spot : p.exitSpot),
+                            profit: contract.profit != null ? Number(contract.profit) : p.profit,
+                            status: isSettled ? 'closed' : 'live'
+                        } : p);
+                    } else {
+                        return [...prev, {
+                            buyPrice: contract.buy_price,
+                            contractId: contract.contract_id,
+                            contractType: contract.contract_type,
+                            entrySpot: contract.entry_tick_display_value || contract.entry_tick,
+                            exitSpot: contract.exit_tick_display_value || contract.exit_tick || liveContract.current_spot_display_value || liveContract.current_spot,
+                            label: activeLegs[legIndex].label,
+                            legIndex,
+                            market: contract.underlying,
+                            profit: Number(contract.profit || 0),
+                            runId: currentRunIdRef.current,
+                            stake: contract.buy_price,
+                            status: isSettled ? 'closed' : 'live'
+                        }];
                     }
                 });
-                api.send({ subscribe: 1, ticks: marketSymbol }).catch(() => {});
-            });
-        };
+            };
 
-        while (runningRef.current) {
-            const activeLegs = selectedLegs;
-            const baseMarketInfo = selectedMarketInfoRef.current;
-            if (!activeLegs || !baseMarketInfo) {
-                setIsRunning(false);
-                runningRef.current = false;
-                break;
-            }
+            const waitForEntryTrigger = async (marketSymbol: string, api: ApiLike) => {
+                const hasEntryDigit = entryPointRef.current !== '';
+                if (!hasEntryDigit) {
+                    if (!turboRef.current) await new Promise(r => setTimeout(r, 500));
+                    return;
+                }
 
-            const api = await ensureTradingApi();
-            if (!api) {
-                setIsRunning(false);
-                runningRef.current = false;
-                break;
-            }
+                return new Promise<void>((resolve) => {
+                    let sub;
+                    sub = api.onMessage().subscribe((message) => {
+                        const data = normalizeApiMessage(message);
+                        if (data.msg_type === 'tick' && data.tick?.symbol === marketSymbol) {
+                            const digit = getLastDigit(data.tick.quote);
+                            const target = Math.max(0, Math.min(9, Math.trunc(Number(entryPointRef.current || 0))));
+                            if (digit === target) {
+                                sub.unsubscribe();
+                                resolve();
+                            }
+                        }
+                    });
+                    api.send({ subscribe: 1, ticks: marketSymbol }).catch(() => {});
+                });
+            };
 
-            const marketCandidates = switchMarketRef.current && switchMarketSymbolsRef.current.length > 0 
-                ? selectedSwitchMarkets : [selectedMarketInfoRef.current];
-            const currentMarketIndex = marketCandidates.findIndex(m => m.symbol === selectedMarketInfoRef.current.symbol);
-            const orderedCandidates = [
-                ...marketCandidates.slice(Math.max(currentMarketIndex, 0)),
-                ...marketCandidates.slice(0, Math.max(currentMarketIndex, 0)),
-            ];
-
-            await waitForEntryTrigger(orderedCandidates[0].symbol, api);
-            if (!runningRef.current) break;
-
-            const duration = turboRef.current ? 1 : toPositiveInteger(durationTicksRef.current, 1);
-            const firstDuration = getDurationForLeg(activeLegs[0], duration);
-            const secondDuration = getDurationForLeg(activeLegs[1], duration);
-            const predOne = Math.max(0, Math.min(9, Math.trunc(Number(predictionOneRef.current || entryPointRef.current || 0))));
-            const predTwo = Math.max(0, Math.min(9, Math.trunc(Number(predictionTwoRef.current || entryPointRef.current || 0))));
-
-            let quoteBundle = null;
-            for (const marketInfo of orderedCandidates) {
-                try {
-                    const [firstQuote, secondQuote] = await Promise.all([
-                        requestQuote(api, createProposalPayload({ amount: currentStakeOne, contractType: activeLegs[0].contractType, currency, duration: firstDuration, prediction: predOne, predictionMode: activeLegs[0].predictionMode, symbol: marketInfo.symbol })),
-                        requestQuote(api, createProposalPayload({ amount: currentStakeTwo, contractType: activeLegs[1].contractType, currency, duration: secondDuration, prediction: predTwo, predictionMode: activeLegs[1].predictionMode, symbol: marketInfo.symbol }))
-                    ]);
-                    quoteBundle = { firstQuote, marketInfo, secondQuote };
+            while (runningRef.current) {
+                const activeLegs = selectedLegs;
+                const baseMarketInfo = selectedMarketInfoRef.current;
+                if (!activeLegs || !baseMarketInfo) {
+                    setIsRunning(false);
+                    runningRef.current = false;
                     break;
-                } catch (e) {
-                    if (!switchMarketRef.current || orderedCandidates.length <= 1) throw e;
+                }
+
+                const api = await ensureTradingApi();
+                if (!api) {
+                    setIsRunning(false);
+                    runningRef.current = false;
+                    break;
+                }
+
+                const marketCandidates = switchMarketRef.current && switchMarketSymbolsRef.current.length > 0 
+                    ? selectedSwitchMarkets : [selectedMarketInfoRef.current];
+                const currentMarketIndex = marketCandidates.findIndex(m => m.symbol === selectedMarketInfoRef.current.symbol);
+                const orderedCandidates = [
+                    ...marketCandidates.slice(Math.max(currentMarketIndex, 0)),
+                    ...marketCandidates.slice(0, Math.max(currentMarketIndex, 0)),
+                ];
+
+                await waitForEntryTrigger(orderedCandidates[0].symbol, api);
+                if (!runningRef.current) break;
+
+                const duration = turboRef.current ? 1 : toPositiveInteger(durationTicksRef.current, 1);
+                const firstDuration = getDurationForLeg(activeLegs[0], duration);
+                const secondDuration = getDurationForLeg(activeLegs[1], duration);
+                const predOne = Math.max(0, Math.min(9, Math.trunc(Number(predictionOneRef.current || entryPointRef.current || 0))));
+                const predTwo = Math.max(0, Math.min(9, Math.trunc(Number(predictionTwoRef.current || entryPointRef.current || 0))));
+
+                let quoteBundle = null;
+                for (const marketInfo of orderedCandidates) {
+                    try {
+                        const [firstQuote, secondQuote] = await Promise.all([
+                            requestQuote(api, createProposalPayload({ amount: currentStakeOne, contractType: activeLegs[0].contractType, currency, duration: firstDuration, prediction: predOne, predictionMode: activeLegs[0].predictionMode, symbol: marketInfo.symbol })),
+                            requestQuote(api, createProposalPayload({ amount: currentStakeTwo, contractType: activeLegs[1].contractType, currency, duration: secondDuration, prediction: predTwo, predictionMode: activeLegs[1].predictionMode, symbol: marketInfo.symbol }))
+                        ]);
+                        quoteBundle = { firstQuote, marketInfo, secondQuote };
+                        break;
+                    } catch (e) {
+                        if (!switchMarketRef.current || orderedCandidates.length <= 1) throw e;
+                    }
+                }
+
+                if (!quoteBundle) {
+                    setFeedback('No supported market available.');
+                    break;
+                }
+
+                if (quoteBundle.marketInfo.symbol !== selectedMarketInfoRef.current.symbol) {
+                    selectedMarketInfoRef.current = quoteBundle.marketInfo;
+                    setSelectedMarket(quoteBundle.marketInfo.symbol);
+                }
+
+                currentRunIdRef.current = Date.now();
+                let firstId, secondId;
+                try {
+                    const [b1, b2] = await Promise.all([
+                        buyQuote(api, quoteBundle.firstQuote.proposalId, quoteBundle.firstQuote.askPrice),
+                        buyQuote(api, quoteBundle.secondQuote.proposalId, quoteBundle.secondQuote.askPrice)
+                    ]);
+                    firstId = b1.contract_id;
+                    secondId = b2.contract_id;
+                } catch (err) {
+                    setFeedback('Buy failed: ' + (err.message || String(err)));
+                    break;
+                }
+
+                const [p1, p2] = await Promise.all([
+                    waitForSettlement(api, firstId, (c) => updatePositionsUi(c, 0, activeLegs)),
+                    waitForSettlement(api, secondId, (c) => updatePositionsUi(c, 1, activeLegs))
+                ]);
+
+                const netProfit = p1 + p2;
+                currentSessionPnl = Number((currentSessionPnl + netProfit).toFixed(2));
+                currentRunCount++;
+                
+                const lostBatch = netProfit <= 0;
+                const lostAnyLeg = p1 < 0 || p2 < 0;
+
+                if (lostBatch) {
+                    currentLossStreak++;
+                    const multiplier = toPositiveNumber(martingaleRef.current, 1);
+                    const normMult = normalizeMartingaleMultiplier(multiplier, 1);
+                    currentStakeOne = roundMartingaleStake(currentStakeOne * normMult);
+                    currentStakeTwo = roundMartingaleStake(currentStakeTwo * normMult);
+                } else {
+                    currentLossStreak = 0;
+                    currentStakeOne = baseStakeOneRef.current;
+                    currentStakeTwo = baseStakeTwoRef.current;
+                }
+
+                setStakeOne(roundStakeValue(currentStakeOne));
+                setStakeTwo(roundStakeValue(currentStakeTwo));
+                setStats(prev => ({
+                    lost: prev.lost + (lostBatch ? 1 : 0),
+                    runs: currentRunCount,
+                    totalPnl: currentSessionPnl,
+                    won: prev.won + (!lostBatch ? 1 : 0),
+                }));
+
+                const maxR = toPositiveInteger(roundsRef.current, 0);
+                const lossesT = toPositiveInteger(lossesToSwitchRef.current, 1);
+                const tp = toPositiveNumber(takeProfitRef.current);
+                const sl = toPositiveNumber(stopLossRef.current);
+
+                if (switchOnLossRef.current && currentLossStreak >= lossesT) {
+                    currentLossStreak = 0;
+                    const cIdx = marketCandidates.findIndex(m => m.symbol === selectedMarketInfoRef.current.symbol);
+                    if (cIdx >= 0 && marketCandidates.length > 1) {
+                        const nextM = marketCandidates[(cIdx + 1) % marketCandidates.length];
+                        selectedMarketInfoRef.current = nextM;
+                        setSelectedMarket(nextM.symbol);
+                        setFeedback(`Switched market to ${nextM.display_name || nextM.symbol} after ${lossesT} losses.`);
+                        if (!turboRef.current) await new Promise(r => setTimeout(r, 1000));
+                    }
+                }
+
+                if ((maxR > 0 && currentRunCount >= maxR) || (tp > 0 && currentSessionPnl >= tp) || (sl > 0 && currentSessionPnl <= -sl)) {
+                    setFeedback('Limit reached. Stopped.');
+                    break;
                 }
             }
-
-            if (!quoteBundle) {
-                setFeedback('No supported market available.');
-                break;
-            }
-
-            if (quoteBundle.marketInfo.symbol !== selectedMarketInfoRef.current.symbol) {
-                selectedMarketInfoRef.current = quoteBundle.marketInfo;
-                setSelectedMarket(quoteBundle.marketInfo.symbol);
-            }
-
-            currentRunIdRef.current = Date.now();
-            let firstId, secondId;
-            try {
-                const [b1, b2] = await Promise.all([
-                    buyQuote(api, quoteBundle.firstQuote.proposalId, quoteBundle.firstQuote.askPrice),
-                    buyQuote(api, quoteBundle.secondQuote.proposalId, quoteBundle.secondQuote.askPrice)
-                ]);
-                firstId = b1.contract_id;
-                secondId = b2.contract_id;
-            } catch (err) {
-                setFeedback('Buy failed: ' + (err.message || String(err)));
-                break;
-            }
-
-            const [p1, p2] = await Promise.all([
-                waitForSettlement(api, firstId, (c) => updatePositionsUi(c, 0, activeLegs)),
-                waitForSettlement(api, secondId, (c) => updatePositionsUi(c, 1, activeLegs))
-            ]);
-
-            const netProfit = p1 + p2;
-            currentSessionPnl = Number((currentSessionPnl + netProfit).toFixed(2));
-            currentRunCount++;
-            
-            const lostBatch = netProfit <= 0;
-            const lostAnyLeg = p1 < 0 || p2 < 0;
-
-            if (lostBatch) {
-                currentLossStreak++;
-                const multiplier = toPositiveNumber(martingaleRef.current, 1);
-                const normMult = normalizeMartingaleMultiplier(multiplier, 1);
-                currentStakeOne = roundMartingaleStake(currentStakeOne * normMult);
-                currentStakeTwo = roundMartingaleStake(currentStakeTwo * normMult);
-            } else {
-                currentLossStreak = 0;
-                currentStakeOne = baseStakeOneRef.current;
-                currentStakeTwo = baseStakeTwoRef.current;
-            }
-
-            console.info('[FLIPPER]', 'stakeOne=', currentStakeOne, 'stakeTwo=', currentStakeTwo, 'netProfit=', netProfit);
-            
-            setStakeOne(roundStakeValue(currentStakeOne));
-            setStakeTwo(roundStakeValue(currentStakeTwo));
-            setStats(prev => ({
-                lost: prev.lost + (lostBatch ? 1 : 0),
-                runs: currentRunCount,
-                totalPnl: currentSessionPnl,
-                won: prev.won + (!lostBatch ? 1 : 0),
-            }));
-
-            if (switchOnLossRef.current && lostAnyLeg && currentLossStreak >= toPositiveInteger(lossesToSwitchRef.current, 1)) {
-                currentLossStreak = 0;
-                setCustomLegs(prev => {
-                    const currentPairKey = getPairKeyFromLegs(prev);
-                    if (currentPairKey === "custom" || currentPairKey === "none") return prev;
-                    return STRATEGY_PAIRS.find(pair => pair.key === getNextPairKey(currentPairKey))?.legs || STRATEGY_PAIRS[0].legs;
-                });
-            }
-
-            if (switchMarketRef.current && lostAnyLeg && orderedCandidates.length > 1) {
-                const nextMarket = orderedCandidates[1];
-                selectedMarketInfoRef.current = nextMarket;
-                setSelectedMarket(nextMarket.symbol);
-            }
-
-            const maxR = toPositiveInteger(roundsRef.current, 0);
-            const tp = toPositiveNumber(takeProfitRef.current);
-            const sl = toPositiveNumber(stopLossRef.current);
-            if ((maxR > 0 && currentRunCount >= maxR) || (tp > 0 && currentSessionPnl >= tp) || (sl > 0 && currentSessionPnl <= -sl)) {
-                setFeedback('Limit reached. Stopped.');
-                break;
-            }
+        } catch (error) {
+            console.error('[FlipperLoop Error]', error);
+            setFeedback(error instanceof Error ? error.message : 'Flipper Switcher stopped due to an error.');
+        } finally {
+            setIsRunning(false);
+            runningRef.current = false;
         }
-        
-        setIsRunning(false);
-        runningRef.current = false;
     };
 
     const handleRun = () => {
