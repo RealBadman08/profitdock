@@ -620,7 +620,7 @@ const FlipperSwitcherPage = observer(() => {
                         } : p);
                     } else {
                         return [...prev, {
-                            buyPrice: contract.buy_price,
+                            buyPrice: Number(contract.buy_price) || 0,
                             contractId: contract.contract_id,
                             contractType: contract.contract_type,
                             entrySpot: contract.entry_tick_display_value || contract.entry_tick,
@@ -630,7 +630,7 @@ const FlipperSwitcherPage = observer(() => {
                             market: contract.underlying,
                             profit: Number(contract.profit || 0),
                             runId: currentRunIdRef.current,
-                            stake: contract.buy_price,
+                            stake: Number(contract.buy_price) || 0,
                             status: isSettled ? 'closed' : 'live'
                         }];
                     }
