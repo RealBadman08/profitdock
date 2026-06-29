@@ -560,7 +560,7 @@ const FlipperSwitcherPage = observer(() => {
         };
     }, []);
 
-    const waitForSettlement = (api: ApiLike, contractId: number, onUpdate: (contract: any) => void): Promise<number> => {
+    const waitForSettlement = (api: ApiLike, contractId: number, onUpdate: (contract: any) => void): Promise<{ profit: number; won: boolean }> => {
         return new Promise((resolve, reject) => {
             let cleanup = null;
             let resolved = false;
@@ -573,7 +573,8 @@ const FlipperSwitcherPage = observer(() => {
                     if (!resolved && (status === 'won' || status === 'lost')) {
                         resolved = true;
                         if (cleanup) cleanup();
-                        resolve(Number(contract.profit || 0));
+                        // Use status field directly — never infer win/loss from profit amount
+                        resolve({ profit: Number(contract.profit ?? 0), won: status === 'won' });
                     }
                 },
                 (errorMsg) => {
@@ -734,17 +735,23 @@ const FlipperSwitcherPage = observer(() => {
                     break;
                 }
 
-                const [p1, p2] = await Promise.all([
+                const [r1, r2] = await Promise.all([
                     waitForSettlement(api, firstId, (c) => updatePositionsUi(c, 0, activeLegs)),
                     waitForSettlement(api, secondId, (c) => updatePositionsUi(c, 1, activeLegs))
                 ]);
 
-                const netProfit = p1 + p2;
+                const netProfit = r1.profit + r2.profit;
                 currentSessionPnl = Number((currentSessionPnl + netProfit).toFixed(2));
                 currentRunCount++;
 
-                // Each leg's martingale reacts ONLY to its own result, using its own multiplier.
-                if (p1 > 0) {
+                console.log('[FLIPPER]',
+                    'round', currentRunCount,
+                    '| leg1:', r1.won ? 'WON' : 'LOST', 'profit=', r1.profit, '→ nextStake=', currentStakeOne,
+                    '| leg2:', r2.won ? 'WON' : 'LOST', 'profit=', r2.profit, '→ nextStake=', currentStakeTwo
+                );
+
+                // Each leg reacts ONLY to its own settlement status from the API
+                if (r1.won) {
                     currentLossStreakOne = 0;
                     currentStakeOne = baseStakeOneRef.current;
                 } else {
@@ -753,7 +760,7 @@ const FlipperSwitcherPage = observer(() => {
                     currentStakeOne = roundMartingaleStake(currentStakeOne * normMult);
                 }
 
-                if (p2 > 0) {
+                if (r2.won) {
                     currentLossStreakTwo = 0;
                     currentStakeTwo = baseStakeTwoRef.current;
                 } else {
@@ -762,11 +769,10 @@ const FlipperSwitcherPage = observer(() => {
                     currentStakeTwo = roundMartingaleStake(currentStakeTwo * normMult);
                 }
 
-                const won = p1 > 0 || p2 > 0;
+                console.log('[FLIPPER] after update — stake1=', currentStakeOne, 'streak1=', currentLossStreakOne, 'stake2=', currentStakeTwo, 'streak2=', currentLossStreakTwo);
+
+                const won = r1.won || r2.won;
                 const lostBatch = !won;
-
-                console.log('[FLIPPER]', 'p1=', p1, 'stake1=', currentStakeOne, 'streak1=', currentLossStreakOne, 'p2=', p2, 'stake2=', currentStakeTwo, 'streak2=', currentLossStreakTwo);
-
                 setStakeOne(roundStakeValue(currentStakeOne));
                 setStakeTwo(roundStakeValue(currentStakeTwo));
                 setStats(prev => ({
