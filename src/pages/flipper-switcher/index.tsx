@@ -596,7 +596,8 @@ const FlipperSwitcherPage = observer(() => {
             baseStakeOneRef.current = currentStakeOne;
             baseStakeTwoRef.current = currentStakeTwo;
 
-            let currentLossStreak = 0;
+            let currentLossStreakOne = 0;
+            let currentLossStreakTwo = 0;
             let currentRunCount = 0;
             let currentSessionPnl = 0;
 
@@ -741,24 +742,31 @@ const FlipperSwitcherPage = observer(() => {
                 currentSessionPnl = Number((currentSessionPnl + netProfit).toFixed(2));
                 currentRunCount++;
 
-                // Win = either leg paid out (p1 > 0 OR p2 > 0).
-                // Loss (martingale escalates) = BOTH legs lost simultaneously — rare in normal markets.
-                const won = p1 > 0 || p2 > 0;
-                const lostBatch = !won;
-
-                console.log('[FLIPPER]', 'stakeUsed=', currentStakeOne, 'p1=', p1, 'p2=', p2, 'won=', won);
-
-                if (lostBatch) {
-                    currentLossStreak++;
+                // Each leg's martingale reacts ONLY to its own result.
+                if (p1 > 0) {
+                    currentLossStreakOne = 0;
+                    currentStakeOne = baseStakeOneRef.current;
+                } else {
+                    currentLossStreakOne++;
                     const multiplier = toPositiveNumber(martingaleRef.current, 1);
                     const normMult = normalizeMartingaleMultiplier(multiplier, 1);
                     currentStakeOne = roundMartingaleStake(currentStakeOne * normMult);
-                    currentStakeTwo = roundMartingaleStake(currentStakeTwo * normMult);
-                } else {
-                    currentLossStreak = 0;
-                    currentStakeOne = baseStakeOneRef.current;
-                    currentStakeTwo = baseStakeTwoRef.current;
                 }
+
+                if (p2 > 0) {
+                    currentLossStreakTwo = 0;
+                    currentStakeTwo = baseStakeTwoRef.current;
+                } else {
+                    currentLossStreakTwo++;
+                    const multiplier = toPositiveNumber(martingaleRef.current, 1);
+                    const normMult = normalizeMartingaleMultiplier(multiplier, 1);
+                    currentStakeTwo = roundMartingaleStake(currentStakeTwo * normMult);
+                }
+
+                const won = p1 > 0 || p2 > 0;
+                const lostBatch = !won;
+
+                console.log('[FLIPPER]', 'p1=', p1, 'stake1=', currentStakeOne, 'streak1=', currentLossStreakOne, 'p2=', p2, 'stake2=', currentStakeTwo, 'streak2=', currentLossStreakTwo);
 
                 setStakeOne(roundStakeValue(currentStakeOne));
                 setStakeTwo(roundStakeValue(currentStakeTwo));
@@ -774,14 +782,18 @@ const FlipperSwitcherPage = observer(() => {
                 const tp = toPositiveNumber(takeProfitRef.current);
                 const sl = toPositiveNumber(stopLossRef.current);
 
-                if (switchOnLossRef.current && currentLossStreak >= lossesT) {
-                    currentLossStreak = 0;
+                // Switch market if EITHER side has escalated past the threshold
+                if (switchOnLossRef.current && (currentLossStreakOne >= lossesT || currentLossStreakTwo >= lossesT)) {
+                    currentLossStreakOne = 0;
+                    currentLossStreakTwo = 0;
+                    currentStakeOne = baseStakeOneRef.current;
+                    currentStakeTwo = baseStakeTwoRef.current;
                     const cIdx = marketCandidates.findIndex(m => m.symbol === selectedMarketInfoRef.current.symbol);
                     if (cIdx >= 0 && marketCandidates.length > 1) {
                         const nextM = marketCandidates[(cIdx + 1) % marketCandidates.length];
                         selectedMarketInfoRef.current = nextM;
                         setSelectedMarket(nextM.symbol);
-                        setFeedback(`Switched market to ${nextM.display_name || nextM.symbol} after ${lossesT} losses.`);
+                        setFeedback(`Switched market to ${nextM.display_name || nextM.symbol} after ${lossesT} losses on a leg.`);
                         if (!turboRef.current) await new Promise(r => setTimeout(r, 1000));
                     }
                 }
