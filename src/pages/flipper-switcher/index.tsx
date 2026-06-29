@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Component, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { MarketIcon } from '@/components/market/market-icon';
 import { isCustomLegacyOAuthDomain } from '@/components/shared/utils/config/config';
@@ -833,12 +833,12 @@ const FlipperSwitcherPage = observer(() => {
         runningRef.current = true;
         setIsRunning(true);
         setStats({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
+        // runFlipperLoop handles entry-digit waiting internally via waitForEntryTrigger.
+        // Always start the loop — never hang here with the ref set but nothing running.
         if (entryPoint !== '') {
-            waitingForEntryDigitRef.current = true;
             setFeedback(localize('Waiting for entry digit to appear...'));
-        } else {
-            void runFlipperLoop();
         }
+        void runFlipperLoop();
     };
 
     useEffect(() => {
@@ -1139,5 +1139,41 @@ const FlipperSwitcherPage = observer(() => {
     );
 });
 
-export default FlipperSwitcherPage;
+class FlipperErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; errorMsg: string }> {
+    state = { hasError: false, errorMsg: '' };
+
+    static getDerivedStateFromError(error: unknown) {
+        return { hasError: true, errorMsg: String(error) };
+    }
+
+    componentDidCatch(error: unknown) {
+        console.error('[FLIPPER SWITCHER CRASHED]', error);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div style={{ padding: 24, color: 'white', background: '#1a1a2e', borderRadius: 8, margin: 16 }}>
+                    <p style={{ fontWeight: 600, marginBottom: 8 }}>⚠️ Flipper Switcher hit an error and stopped.</p>
+                    <p style={{ fontSize: 12, opacity: 0.6, marginBottom: 16 }}>{this.state.errorMsg}</p>
+                    <button
+                        style={{ padding: '8px 16px', background: '#6c47ff', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                        onClick={() => this.setState({ hasError: false, errorMsg: '' })}
+                    >
+                        Reload this tab
+                    </button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+const FlipperSwitcherPageWithBoundary = () => (
+    <FlipperErrorBoundary>
+        <FlipperSwitcherPage />
+    </FlipperErrorBoundary>
+);
+
+export default FlipperSwitcherPageWithBoundary;
 
