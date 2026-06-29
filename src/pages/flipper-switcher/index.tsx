@@ -405,7 +405,8 @@ const FlipperSwitcherPage = observer(() => {
     const [customLegs, setCustomLegs] = useState<SelectedStrategyLegs>([null, null]);
     const [stakeOne, setStakeOne] = useState('');
     const [stakeTwo, setStakeTwo] = useState('');
-    const [martingale, setMartingale] = useState('1.25');
+    const [martingaleOne, setMartingaleOne] = useState('1.25');
+    const [martingaleTwo, setMartingaleTwo] = useState('1.25');
     const [durationTicks, setDurationTicks] = useState('1');
     const [entryPoint, setEntryPoint] = useState('');
     const [predictionOne, setPredictionOne] = useState('');
@@ -434,7 +435,8 @@ const FlipperSwitcherPage = observer(() => {
     const lossStreakRef = useRef(0);
     const nextLegSlotRef = useRef<0 | 1>(0);
     const selectedMarketInfoRef = useRef<MarketSymbol | null>(null);
-    const martingaleRef = useRef(martingale);
+    const martingaleOneRef = useRef(martingaleOne);
+    const martingaleTwoRef = useRef(martingaleTwo);
     const executePairRef = useRef<(() => void) | null>(null);
     // Direct ref-based martingale tracking — bypasses the store entirely
     const stakeOneRef = useRef(0);
@@ -494,9 +496,8 @@ const FlipperSwitcherPage = observer(() => {
         selectedMarketInfoRef.current = selectedMarketInfo || null;
     }, [selectedMarketInfo]);
 
-    useEffect(() => {
-        martingaleRef.current = martingale;
-    }, [martingale]);
+    useEffect(() => { martingaleOneRef.current = martingaleOne; }, [martingaleOne]);
+    useEffect(() => { martingaleTwoRef.current = martingaleTwo; }, [martingaleTwo]);
 
     useEffect(() => {
         entryPointRef.current = entryPoint;
@@ -742,14 +743,13 @@ const FlipperSwitcherPage = observer(() => {
                 currentSessionPnl = Number((currentSessionPnl + netProfit).toFixed(2));
                 currentRunCount++;
 
-                // Each leg's martingale reacts ONLY to its own result.
+                // Each leg's martingale reacts ONLY to its own result, using its own multiplier.
                 if (p1 > 0) {
                     currentLossStreakOne = 0;
                     currentStakeOne = baseStakeOneRef.current;
                 } else {
                     currentLossStreakOne++;
-                    const multiplier = toPositiveNumber(martingaleRef.current, 1);
-                    const normMult = normalizeMartingaleMultiplier(multiplier, 1);
+                    const normMult = normalizeMartingaleMultiplier(toPositiveNumber(martingaleOneRef.current, 1), 1);
                     currentStakeOne = roundMartingaleStake(currentStakeOne * normMult);
                 }
 
@@ -758,8 +758,7 @@ const FlipperSwitcherPage = observer(() => {
                     currentStakeTwo = baseStakeTwoRef.current;
                 } else {
                     currentLossStreakTwo++;
-                    const multiplier = toPositiveNumber(martingaleRef.current, 1);
-                    const normMult = normalizeMartingaleMultiplier(multiplier, 1);
+                    const normMult = normalizeMartingaleMultiplier(toPositiveNumber(martingaleTwoRef.current, 1), 1);
                     currentStakeTwo = roundMartingaleStake(currentStakeTwo * normMult);
                 }
 
@@ -943,6 +942,14 @@ const FlipperSwitcherPage = observer(() => {
                             />
                         </label>
                         <label>
+                            {localize('Mult x')}
+                            <input
+                                value={index === 0 ? martingaleOne : martingaleTwo}
+                                onChange={event => (index === 0 ? setMartingaleOne(event.target.value) : setMartingaleTwo(event.target.value))}
+                                inputMode='decimal'
+                            />
+                        </label>
+                        <label>
                             {localize('Pred')}
                             <input
                                 value={index === 0 ? predictionOne : predictionTwo}
@@ -968,10 +975,6 @@ const FlipperSwitcherPage = observer(() => {
                             ))}
                         </select>
                     </div>
-                </label>
-                <label className='flipper-page__field flipper-page__field--wide'>
-                    {localize('Martingale x')}
-                    <input value={martingale} onChange={event => setMartingale(event.target.value)} inputMode='decimal' />
                 </label>
                 <label className='flipper-page__field'>
                     {localize('Ticks')}
