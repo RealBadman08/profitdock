@@ -789,10 +789,11 @@ const FlipperSwitcherPage = observer(() => {
 
                 // Switch market if EITHER side has escalated past the threshold
                 if (switchOnLossRef.current && (currentLossStreakOne >= lossesT || currentLossStreakTwo >= lossesT)) {
+                    // Reset streaks so we don't switch on EVERY subsequent round until a win,
+                    // but DO NOT reset stakes — the escalated martingale stake must carry over
+                    // to the new market to recover the loss.
                     currentLossStreakOne = 0;
                     currentLossStreakTwo = 0;
-                    currentStakeOne = baseStakeOneRef.current;
-                    currentStakeTwo = baseStakeTwoRef.current;
                     const cIdx = marketCandidates.findIndex(m => m.symbol === selectedMarketInfoRef.current.symbol);
                     if (cIdx >= 0 && marketCandidates.length > 1) {
                         const nextM = marketCandidates[(cIdx + 1) % marketCandidates.length];
