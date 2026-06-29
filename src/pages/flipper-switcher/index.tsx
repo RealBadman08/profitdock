@@ -740,9 +740,13 @@ const FlipperSwitcherPage = observer(() => {
                 const netProfit = p1 + p2;
                 currentSessionPnl = Number((currentSessionPnl + netProfit).toFixed(2));
                 currentRunCount++;
-                
-                const lostBatch = netProfit <= 0;
-                const lostAnyLeg = p1 < 0 || p2 < 0;
+
+                // Win = either leg paid out (p1 > 0 OR p2 > 0).
+                // Loss (martingale escalates) = BOTH legs lost simultaneously — rare in normal markets.
+                const won = p1 > 0 || p2 > 0;
+                const lostBatch = !won;
+
+                console.log('[FLIPPER]', 'stakeUsed=', currentStakeOne, 'p1=', p1, 'p2=', p2, 'won=', won);
 
                 if (lostBatch) {
                     currentLossStreak++;
@@ -762,7 +766,7 @@ const FlipperSwitcherPage = observer(() => {
                     lost: prev.lost + (lostBatch ? 1 : 0),
                     runs: currentRunCount,
                     totalPnl: currentSessionPnl,
-                    won: prev.won + (!lostBatch ? 1 : 0),
+                    won: prev.won + (won ? 1 : 0),
                 }));
 
                 const maxR = toPositiveInteger(roundsRef.current, 0);
