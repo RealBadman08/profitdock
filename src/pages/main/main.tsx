@@ -8,6 +8,7 @@ import CopyTradingNavIcon from '@/components/copy-trading-nav-icon';
 import AccumulatorsNavIcon from '@/components/accumulators-nav-icon';
 import CorsaNavIcon from '@/components/corsa-nav-icon';
 import FlipperSwitcherNavIcon from '@/components/flipper-switcher-nav-icon';
+import MatchtoolNavIcon from '@/components/matchtool-nav-icon';
 import { generateOAuthURL } from '@/components/shared';
 import {
     ensureCustomDomainAppId,
@@ -54,6 +55,7 @@ const CopyTrading = lazy(() => import('../copy-trading'));
 const AccumulatorsPage = lazy(() => import('../accumulators'));
 const FlipperSwitcherPage = lazy(() => import('../flipper-switcher'));
 const CorsaPage = lazy(() => import('../corsa'));
+const MatchtoolPage = lazy(() => import('../matchtool'));
 
 const AppWrapper = observer(() => {
     const { connectionStatus } = useApiBase();
@@ -96,6 +98,7 @@ const AppWrapper = observer(() => {
         'accumulators',
         'flipper_switcher',
         'corsa',
+        'matchtool',
     ];
     const { isDesktop } = useDevice();
     const location = useLocation();
@@ -526,6 +529,21 @@ const AppWrapper = observer(() => {
                                 <div className='new-feature-wrapper'>
                                     <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Corsa...')} />}>
                                         <CorsaPage />
+                                    </Suspense>
+                                </div>
+                            </div>
+                            <div
+                                label={
+                                    <>
+                                        <MatchtoolNavIcon height='24px' width='24px' />
+                                        <Localize i18n_default_text='Matchtool' />
+                                    </>
+                                }
+                                id='id-matchtool'
+                            >
+                                <div className='new-feature-wrapper'>
+                                    <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Matchtool...')} />}>
+                                        <MatchtoolPage />
                                     </Suspense>
                                 </div>
                             </div>

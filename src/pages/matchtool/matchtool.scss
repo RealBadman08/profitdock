@@ -1,0 +1,142 @@
+.matchtool-page {
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    color: var(--text-general);
+    background-color: var(--general-main-1);
+    height: 100%;
+    overflow-y: auto;
+    font-family: 'IBM Plex Sans', sans-serif;
+
+    &__header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+        font-size: 24px;
+        font-weight: bold;
+    }
+
+    &__controls {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        background: var(--general-section-1);
+        padding: 16px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+    }
+
+    &__field {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 14px;
+        font-weight: 500;
+
+        select, input {
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border-normal);
+            background: var(--general-main-2);
+            color: var(--text-general);
+            font-size: 14px;
+            outline: none;
+
+            &:focus {
+                border-color: var(--brand-secondary);
+            }
+        }
+    }
+
+    &__select-wrap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--general-main-2);
+        border: 1px solid var(--border-normal);
+        border-radius: 4px;
+        padding-left: 8px;
+
+        select {
+            border: none;
+            background: transparent;
+            flex: 1;
+        }
+    }
+
+    &__run-btn {
+        background: var(--brand-secondary);
+        color: var(--text-colored-background);
+        border: none;
+        border-radius: 4px;
+        padding: 12px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        transition: opacity 0.2s;
+
+        &:hover {
+            opacity: 0.9;
+        }
+
+        &:disabled {
+            background: var(--general-disabled);
+            color: var(--text-disabled);
+            cursor: not-allowed;
+        }
+    }
+
+    &__results-title {
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 12px;
+        text-transform: uppercase;
+        color: var(--text-less-prominent);
+    }
+
+    &__table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--general-section-1);
+        border-radius: 8px;
+        overflow: hidden;
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-divider);
+            font-size: 14px;
+        }
+
+        th {
+            font-weight: bold;
+            color: var(--text-less-prominent);
+            background: var(--general-main-2);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+    }
+
+    &__profit--win {
+        color: var(--text-profit-success);
+        font-weight: bold;
+    }
+
+    &__profit--loss {
+        color: var(--text-loss-danger);
+        font-weight: bold;
+    }
+
+    &__error {
+        color: var(--text-loss-danger);
+        margin-bottom: 16px;
+        font-weight: bold;
+    }
+}
