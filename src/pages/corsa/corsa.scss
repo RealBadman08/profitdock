@@ -107,45 +107,26 @@
     }
 
     &__select-wrap {
-        align-items: center;
         background: #fff;
         border: 1px solid #cfd9e5;
         border-radius: 1.25rem;
-        display: flex;
+        display: grid;
         gap: 1rem;
+        grid-template-columns: auto 1fr;
         min-height: 7rem;
-        overflow: hidden;
         padding: 0 1.6rem;
 
         select {
-            appearance: none;
-            background: transparent;
+            align-self: center;
             border: 0;
             box-shadow: none;
-            color: inherit;
-            flex: 1;
-            font-size: 2rem;
+            font-size: 1.8rem;
             font-weight: 800;
-            line-height: normal;
             min-width: 0;
             outline: none;
-            overflow: hidden;
             padding: 0;
             text-align: left;
-            text-overflow: ellipsis;
-            white-space: nowrap;
             width: 100%;
-        }
-
-        &::after {
-            border-left: 0.45rem solid transparent;
-            border-right: 0.45rem solid transparent;
-            border-top: 0.55rem solid #5f6f82;
-            content: '';
-            flex-shrink: 0;
-            height: 0;
-            pointer-events: none;
-            width: 0;
         }
     }
 
@@ -315,6 +296,11 @@ body.theme--dark .corsa-page {
         color: #f8fafc;
     }
 
+    .corsa-page__select-wrap select {
+        background: transparent;
+        color: #f8fafc;
+    }
+
     .corsa-page__market-name {
         color: #f8fafc;
     }
@@ -359,8 +345,7 @@ body.theme--dark .corsa-page {
         }
 
         &__select-wrap select {
-            font-size: 1.6rem;
-            min-height: 5.4rem;
+            font-size: 1.5rem;
         }
 
         &__digit-row {
