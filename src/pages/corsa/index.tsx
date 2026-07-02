@@ -374,6 +374,9 @@ const getDisplayItems = ({
     });
 
 const CorsaPage = observer(() => {
+    const modeIndicatorRef = useRef<HTMLDivElement>(null);
+    const modeSingleBtnRef = useRef<HTMLButtonElement>(null);
+    const modeAllBtnRef = useRef<HTMLButtonElement>(null);
     const { transactions } = useStore();
     const { authData, connectionStatus } = useApiBase();
     const currency = authData?.currency || getStoredProfitdockActiveCurrency() || 'USD';
@@ -389,7 +392,6 @@ const CorsaPage = observer(() => {
     const [takeProfit, setTakeProfit] = useState('');
     const [stopLoss, setStopLoss] = useState('');
     const [isRunning, setIsRunning] = useState(false);
-    const [feedback, setFeedback] = useState(localize('Ready.'));
     const [detectors, setDetectors] = useState<Record<string, DetectorState>>({});
     const [, setPositions] = useState<CorsaPosition[]>([]);
     const [stats, setStats] = useState({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
@@ -450,6 +452,57 @@ const CorsaPage = observer(() => {
     useEffect(() => { marketsRef.current = markets; }, [markets]);
 
     useEffect(() => {
+        let isActive = true;
+        let messageSub: { unsubscribe: () => void } | null = null;
+
+        const startPassiveListening = async () => {
+            const api = await ensureTradingApi();
+            if (!api || !isActive) return;
+
+            messageSub = api.onMessage().subscribe((message: unknown) => {
+                if (isRunningRef.current) return;
+
+                const data = normalizeApiMessage<TickResponse>(message);
+                if (data.msg_type === 'tick' && data.tick?.symbol) {
+                    const symbol = data.tick.symbol;
+                    if (watchedMarketSymbols.includes(symbol)) {
+                        setDetectors(prev => {
+                            const current = prev[symbol] || { history: [], priceHistory: [], streak: 0, lastQuote: null };
+                            const tick = data.tick;
+                            
+                            if (!tick || current.lastQuote === tick.quote) return prev;
+
+                            const digit = getLastDigit(tick.quote);
+                            // Filter out recurring duplicate digits (2+ consecutive same digit)
+                            if (current.history.length >= 2 && current.history[0] === digit && current.history[1] === digit) {
+                                return { ...prev, [symbol]: { ...current, lastQuote: tick.quote } };
+                            }
+                            const history = [digit, ...current.history].slice(0, 50);
+                            const priceHistory = [tick.quote, ...current.priceHistory].slice(0, 50);
+                            
+                            return {
+                                ...prev,
+                                [symbol]: { ...current, history, priceHistory, lastQuote: tick.quote }
+                            };
+                        });
+                    }
+                }
+            });
+
+            watchedMarketSymbols.forEach(symbol => {
+                api.send({ subscribe: 1, ticks: symbol }).catch(() => {});
+            });
+        };
+
+        void startPassiveListening();
+
+        return () => {
+            isActive = false;
+            if (messageSub) messageSub.unsubscribe();
+        };
+    }, [watchedMarketSymbols, ensureTradingApi]);
+
+    useEffect(() => {
         let isCancelled = false;
         const loadMarkets = async () => {
             if (!api_base.active_symbols.length && api_base.active_symbols_promise) {
@@ -506,7 +559,11 @@ const CorsaPage = observer(() => {
     const runCorsaLoopForMarket = (symbol: string) => {
         let currentStake = toPositiveNumber(stake, 0);
         baseStakeRef.current = currentStake;
-        let detector = { history: [], priceHistory: [], streak: 0 };
+        // Preserve existing detector state instead of resetting
+        const existingDetector = detectors[symbol];
+        let detector = existingDetector
+            ? { history: [...existingDetector.history], priceHistory: [...existingDetector.priceHistory], streak: existingDetector.streak }
+            : { history: [], priceHistory: [], streak: 0 };
         const handlerId = `corsa-tick-${symbol}`;
         
         const registerListener = async () => {
@@ -530,6 +587,11 @@ const CorsaPage = observer(() => {
 
                 const tick = data.tick;
                 const digit = getLastDigit(tick.quote);
+                
+                // Filter out recurring duplicate digits (2+ consecutive same digit)
+                if (detector.history.length >= 2 && detector.history[0] === digit && detector.history[1] === digit) {
+                    return;
+                }
                 
                 const liveContractType = contractTypeRef.current;
                 const targetStreak = toPositiveInteger(signalStreakRef.current, 1);
@@ -629,11 +691,7 @@ const CorsaPage = observer(() => {
                     }
 
                     if (isRunningRef.current) {
-                        detector = { history: [], priceHistory: [], streak: 0 };
-                        setDetectors(prev => ({
-                            ...prev,
-                            [symbol]: { ...detector, lastQuote: null }
-                        }));
+                        // Don't reset detector - let digits continue progressing
                         registerListener();
                     }
                 }
@@ -649,12 +707,10 @@ const CorsaPage = observer(() => {
         if (isRunning) {
             isRunningRef.current = false;
             setIsRunning(false);
-            setFeedback(localize('Stopped. Open contracts will continue to settle.'));
             return;
         }
         const baseStake = toPositiveNumber(stake, 0);
         if (baseStake <= 0) {
-            setFeedback(localize('Enter a stake before running Corsa.'));
             return;
         }
         baseStakeRef.current = baseStake;
@@ -669,8 +725,8 @@ const CorsaPage = observer(() => {
         processedContractsRef.current = new Set();
         setPositions([]);
         setStats({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
+        // Do NOT reset detectors - preserve existing digit history
         setIsRunning(true);
-        setFeedback('');
 
         watchedMarketSymbols.forEach(symbol => runCorsaLoopForMarket(symbol));
     };
@@ -691,7 +747,6 @@ const CorsaPage = observer(() => {
 
                 isRunningRef.current = false;
                 setIsRunning(false);
-                setFeedback(localize('Stopped. Open contracts will continue to settle.'));
             }),
         []
     );
@@ -706,14 +761,15 @@ const CorsaPage = observer(() => {
         <div className='corsa-page'>
             <section className='corsa-page__controls'>
                 <div className='corsa-page__mode' role='group'>
-                    <button type='button' className={marketMode === 'single' ? 'corsa-page__mode-button--active' : ''} onClick={() => setMarketMode('single')}>
+                    <div className='corsa-page__mode-indicator' ref={modeIndicatorRef} style={{ transform: marketMode === 'all' ? 'translateX(100%)' : 'translateX(0)' }} />
+                    <button type='button' ref={modeSingleBtnRef} className={`corsa-page__mode-btn ${marketMode === 'single' ? 'corsa-page__mode-btn--active' : ''}`} onClick={() => setMarketMode('single')}>
                         {localize('Single Market')}
                     </button>
-                    <button type='button' className={marketMode === 'all' ? 'corsa-page__mode-button--active' : ''} onClick={() => setMarketMode('all')}>
+                    <button type='button' ref={modeAllBtnRef} className={`corsa-page__mode-btn ${marketMode === 'all' ? 'corsa-page__mode-btn--active' : ''}`} onClick={() => setMarketMode('all')}>
                         {localize('Multiple Markets')}
                     </button>
                 </div>
-                <label className='corsa-page__field corsa-page__field--wide'>
+                <label className='corsa-page__field'>
                     <span>{localize('Market')}</span>
                     <div className='corsa-page__select-wrap'>
                         <MarketIcon type={selectedMarketInfo?.symbol || selectedMarket} size='sm' />
@@ -728,24 +784,26 @@ const CorsaPage = observer(() => {
                 </label>
                 <label className='corsa-page__field'>
                     <span>{localize('Contract')}</span>
-                    <select value={contractType} onChange={event => setContractType(event.target.value as CorsaDirection)}>
-                        {DIRECTIONS.map(direction => (
-                            <option key={direction.contractType} value={direction.contractType}>
-                                {direction.label}
-                            </option>
-                        ))}
-                    </select>
+                    <div className='corsa-page__select-wrap'>
+                        <select value={contractType} onChange={event => setContractType(event.target.value as CorsaDirection)}>
+                            {DIRECTIONS.map(direction => (
+                                <option key={direction.contractType} value={direction.contractType}>
+                                    {direction.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
                 </label>
                 <label className='corsa-page__field'>
                     <span>{localize('Stake')}</span>
                     <input value={stake} onChange={event => setStake(event.target.value)} inputMode='decimal' placeholder='0.35' />
                 </label>
                 <label className='corsa-page__field'>
-                    <span>{localize('Martingale x')}</span>
+                    <span>{localize('Martingale')}</span>
                     <input value={martingale} onChange={event => setMartingale(event.target.value)} inputMode='decimal' />
                 </label>
                 <label className='corsa-page__field'>
-                    <span>{localize('Signal streak')}</span>
+                    <span>{localize('Streak')}</span>
                     <input value={signalStreak} onChange={event => setSignalStreak(event.target.value)} inputMode='numeric' />
                 </label>
                 <label className='corsa-page__field'>
@@ -775,7 +833,6 @@ const CorsaPage = observer(() => {
             </section>
 
             <section className='corsa-page__watch-card'>
-                {feedback && <p className='corsa-page__feedback'>{feedback}</p>}
                 <div className='corsa-page__market-list'>
                     {visibleDetectors.map(({ detector, market, symbol }) => (
                         <div className='corsa-page__market-row' key={symbol}>
@@ -791,7 +848,7 @@ const CorsaPage = observer(() => {
                                             className={`corsa-page__digit corsa-page__digit--${item.tone} ${
                                                 index === 0 ? 'corsa-page__digit--current' : ''
                                             }`}
-                                            key={`${symbol}-${item.label}-${index}`}
+                                            key={`${symbol}-${index}`}
                                         >
                                             {item.label}
                                         </b>

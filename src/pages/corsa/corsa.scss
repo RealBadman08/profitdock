@@ -35,25 +35,39 @@
         grid-column: 1 / -1;
         grid-template-columns: repeat(2, minmax(0, 1fr));
         overflow: hidden;
-        padding: 0;
-
-        button {
-            background: transparent;
-            border: 0;
-            color: #344054;
-            cursor: pointer;
-            font-size: 2.1rem;
-            font-weight: 900;
-            min-height: 7.2rem;
-            padding: 0 2rem;
-            transition: background 160ms ease, color 160ms ease, box-shadow 160ms ease;
-        }
+        padding: 0.4rem;
+        position: relative;
     }
 
-    &__mode-button--active {
-        background: #ff444f !important;
+    &__mode-indicator {
+        background: #ff444f;
+        border-radius: 1.2rem;
         box-shadow: 0 1rem 2rem rgb(255 68 79 / 20%);
-        color: #fff !important;
+        height: calc(100% - 0.8rem);
+        left: 0.4rem;
+        position: absolute;
+        top: 0.4rem;
+        transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        width: calc(50% - 0.4rem);
+        z-index: 0;
+    }
+
+    &__mode-btn {
+        background: transparent;
+        border: 0;
+        color: #344054;
+        cursor: pointer;
+        font-size: 2.1rem;
+        font-weight: 900;
+        min-height: 7.2rem;
+        padding: 0 2rem;
+        position: relative;
+        transition: color 200ms ease;
+        z-index: 1;
+
+        &--active {
+            color: #fff;
+        }
     }
 
     &__field {
@@ -97,22 +111,39 @@
         background: #fff;
         border: 1px solid #cfd9e5;
         border-radius: 1.25rem;
-        display: grid;
+        display: flex;
         gap: 1rem;
-        grid-template-columns: auto 1fr;
         min-height: 7rem;
+        overflow: hidden;
         padding: 0 1.6rem;
 
         select {
             align-self: center;
+            appearance: none;
             border: 0;
             box-shadow: none;
+            flex: 1;
             height: 100%;
             line-height: 1.2;
             min-height: 6.6rem;
+            min-width: 0;
+            overflow: hidden;
             padding: 0;
             text-align: left;
+            text-overflow: ellipsis;
+            white-space: nowrap;
             width: 100%;
+        }
+
+        &::after {
+            border-left: 0.45rem solid transparent;
+            border-right: 0.45rem solid transparent;
+            border-top: 0.55rem solid #5f6f82;
+            content: '';
+            flex-shrink: 0;
+            height: 0;
+            pointer-events: none;
+            width: 0;
         }
     }
 
@@ -212,10 +243,12 @@
         font-size: 2rem;
         font-style: normal;
         font-weight: 900;
+        font-variant-numeric: tabular-nums;
         height: 5.4rem;
         justify-content: center;
         min-width: 0;
         padding: 0 1.3rem;
+        transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
 
         &--odd,
         &--positive {
@@ -260,8 +293,16 @@ body.theme--dark .corsa-page {
         border-color: rgb(255 255 255 / 12%);
     }
 
-    .corsa-page__mode button {
+    .corsa-page__mode-indicator {
+        background: #ff444f;
+    }
+
+    .corsa-page__mode-btn {
         color: #d8e2ee;
+
+        &--active {
+            color: #fff;
+        }
     }
 
     .corsa-page__field input,
@@ -303,7 +344,7 @@ body.theme--dark .corsa-page {
 @media (max-width: 560px) {
     .corsa-page {
         &__mode {
-            button {
+            .corsa-page__mode-btn {
                 font-size: 1.55rem;
                 min-height: 5.6rem;
             }
@@ -313,6 +354,11 @@ body.theme--dark .corsa-page {
         &__field select,
         &__select-wrap {
             min-height: 5.8rem;
+        }
+
+        &__select-wrap select {
+            font-size: 1.6rem;
+            min-height: 5.4rem;
         }
 
         &__digit-row {

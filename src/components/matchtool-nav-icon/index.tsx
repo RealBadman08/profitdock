@@ -9,11 +9,20 @@ const MatchtoolNavIcon = ({ className, height = 24, width = 24 }: TIconProps) =>
         className={classNames('matchtool-nav-icon', className)}
         fill='none'
         height={height}
-        viewBox='0 0 24 24'
+        viewBox='0 0 32 32'
         width={width}
         xmlns='http://www.w3.org/2000/svg'
     >
-        <path fill='var(--text-general)' d='M21 3H3C2 3 1 4 1 5V19C1 20 2 21 3 21H21C22 21 23 20 23 19V5C23 4 22 3 21 3ZM21 19H3V5H21V19ZM11 7H8V9H11V7ZM11 11H8V13H11V11ZM11 15H8V17H11V15ZM16 7H13V9H16V7ZM16 11H13V13H16V11ZM16 15H13V17H16V15Z' />
+        {/* Official Deriv DIGITMATCH / Matches icon paths */}
+        <path
+            fill='currentColor'
+            d='m10.01 8.457 5.654 5.658a2.667 2.667 0 0 1 0 3.77l-5.656 5.658-.008-.01a2.65 2.65 0 0 1 0-3.752l2.445-2.448-7.111.016v-2.682h7.111L10 12.22a2.65 2.65 0 0 1 0-3.753zm11.98 0 .01.01a2.65 2.65 0 0 1 0 3.752l-2.445 2.448 7.112-.016v2.682h-7.112l2.447 2.447a2.65 2.65 0 0 1 0 3.753l-.01.01-4.658-4.659.997-.999a2.667 2.667 0 0 0 0-3.77l-.997-.999z'
+        />
+        <path
+            fill='currentColor'
+            opacity='0.5'
+            d='M17.334 21.333v5.334h-2.667v-5.334zm0-16v5.334h-2.667V5.333z'
+        />
     </svg>
 );
 
