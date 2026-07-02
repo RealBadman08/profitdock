@@ -118,15 +118,17 @@
         padding: 0 1.6rem;
 
         select {
-            align-self: center;
             appearance: none;
+            background: transparent;
             border: 0;
             box-shadow: none;
+            color: inherit;
             flex: 1;
-            height: 100%;
-            line-height: 1.2;
-            min-height: 6.6rem;
+            font-size: 2rem;
+            font-weight: 800;
+            line-height: normal;
             min-width: 0;
+            outline: none;
             overflow: hidden;
             padding: 0;
             text-align: left;
