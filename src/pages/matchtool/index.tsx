@@ -378,10 +378,6 @@ const MatchtoolPage = observer(() => {
             throw new Error('Log in to an account before running MatchTool.');
         }
 
-        if (isDemoAccount(currentAccount)) {
-            throw new Error('MatchTool requires a real-money account. Please switch from Demo to Real.');
-        }
-
         if (localStorage.getItem('active_loginid') !== currentAccount.loginid) {
             localStorage.setItem('active_loginid', currentAccount.loginid);
             if (currentAccount.token) localStorage.setItem('authToken', currentAccount.token);
@@ -603,6 +599,12 @@ const MatchtoolPage = observer(() => {
     };
 
     const maxCount = Math.max(...model.counts, 1);
+    const minCount = Math.min(...model.counts);
+    const getBarColor = (count: number) => {
+        if (maxCount === minCount) return '#cbd5e1';
+        const hue = ((count - minCount) / (maxCount - minCount)) * 120;
+        return `hsl(${hue}, 80%, 45%)`;
+    };
 
     return (
         <div className='matchtool-page'>
@@ -691,13 +693,12 @@ const MatchtoolPage = observer(() => {
                 <section className='matchtool-page__analysis'>
                     <div className='matchtool-page__chart' aria-busy={isLoadingAnalysis}>
                         {model.counts.map((count, digit) => {
-                            const isGlow = topNDigitsSet.has(digit);
                             const height = Math.max(6, (count / maxCount) * 100);
                             return (
-                                <div className={`matchtool-page__bar-cell ${isGlow ? 'matchtool-page__bar-cell--glow' : ''}`} key={digit}>
+                                <div className='matchtool-page__bar-cell' key={digit}>
                                     <span>{formatPercent(model.frequencies[digit] || 0)}</span>
                                     <div className='matchtool-page__bar-track'>
-                                        <div className='matchtool-page__bar' style={{ height: `${height}%` }} />
+                                        <div className='matchtool-page__bar' style={{ height: `${height}%`, backgroundColor: getBarColor(count) }} />
                                     </div>
                                     <b>{digit}</b>
                                 </div>
@@ -707,10 +708,6 @@ const MatchtoolPage = observer(() => {
                 </section>
 
                 <section className='matchtool-page__round'>
-                    <div className='matchtool-page__section-head'>
-                        <span>This round</span>
-                        <strong>{roundRows.length ? `${roundRows.length} contracts` : 'No round yet'}</strong>
-                    </div>
                     <div className='matchtool-page__table' role='table'>
                         <div className='matchtool-page__table-row matchtool-page__table-row--head' role='row'>
                             <span>Digit</span>

@@ -113,17 +113,17 @@
         align-items: center;
         display: grid;
         justify-items: center;
-        min-height: 24rem;
+        min-height: 32rem;
         overflow: visible;
         padding: 0.6rem;
     }
 
     &__orbit-svg {
         display: block;
-        height: clamp(24rem, 30vh, 32rem);
-        max-width: 68rem;
+        height: clamp(30rem, 40vh, 42rem);
+        max-width: 80rem;
         overflow: visible;
-        width: min(100%, 68rem);
+        width: min(100%, 80rem);
     }
 
     &__orbit-guide {
@@ -675,7 +675,7 @@ body.theme--dark .mesh-page {
         }
 
         &__orbit-svg {
-            height: 22rem;
+            height: 28rem;
         }
     }
 }
@@ -700,11 +700,11 @@ body.theme--dark .mesh-page {
         }
 
         &__orbit {
-            min-height: 18rem;
+            min-height: 24rem;
         }
 
         &__orbit-svg {
-            height: 18rem;
+            height: 24rem;
             width: 100%;
         }
 

@@ -675,10 +675,6 @@ const MeshPage = observer(() => {
             throw new Error('Log in to an account before Mesh can execute trades.');
         }
 
-        if (isDemoAccount(currentAccount)) {
-            throw new Error('Mesh requires a real-money account. Please switch from Demo to Real.');
-        }
-
         if (localStorage.getItem('active_loginid') !== currentAccount.loginid) {
             localStorage.setItem('active_loginid', currentAccount.loginid);
             if (currentAccount.token) {
@@ -800,7 +796,7 @@ const MeshPage = observer(() => {
 
         socket.onopen = () => {
             send({
-                count: WINDOW_SIZE,
+                count: 1000,
                 end: 'latest',
                 style: 'ticks',
                 ticks_history: selectedMarket,
