@@ -9,6 +9,7 @@ import AccumulatorsNavIcon from '@/components/accumulators-nav-icon';
 import CorsaNavIcon from '@/components/corsa-nav-icon';
 import FlipperSwitcherNavIcon from '@/components/flipper-switcher-nav-icon';
 import MatchtoolNavIcon from '@/components/matchtool-nav-icon';
+import MeshNavIcon from '@/components/mesh-nav-icon';
 import { generateOAuthURL } from '@/components/shared';
 import {
     ensureCustomDomainAppId,
@@ -56,6 +57,7 @@ const AccumulatorsPage = lazy(() => import('../accumulators'));
 const FlipperSwitcherPage = lazy(() => import('../flipper-switcher'));
 const CorsaPage = lazy(() => import('../corsa'));
 const MatchtoolPage = lazy(() => import('../matchtool'));
+const MeshPage = lazy(() => import('../mesh'));
 
 const AppWrapper = observer(() => {
     const { connectionStatus } = useApiBase();
@@ -99,6 +101,7 @@ const AppWrapper = observer(() => {
         'flipper_switcher',
         'corsa',
         'matchtool',
+        'mesh',
     ];
     const { isDesktop } = useDevice();
     const location = useLocation();
@@ -536,14 +539,29 @@ const AppWrapper = observer(() => {
                                 label={
                                     <>
                                         <MatchtoolNavIcon height='24px' width='24px' />
-                                        <Localize i18n_default_text='Matchtool' />
+                                        <Localize i18n_default_text='MatchTool' />
                                     </>
                                 }
                                 id='id-matchtool'
                             >
                                 <div className='new-feature-wrapper'>
-                                    <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Matchtool...')} />}>
+                                    <Suspense fallback={<ChunkLoader message={localize('Please wait, loading MatchTool...')} />}>
                                         <MatchtoolPage />
+                                    </Suspense>
+                                </div>
+                            </div>
+                            <div
+                                label={
+                                    <>
+                                        <MeshNavIcon height='24px' width='24px' />
+                                        <Localize i18n_default_text='MESH' />
+                                    </>
+                                }
+                                id='id-mesh'
+                            >
+                                <div className='new-feature-wrapper'>
+                                    <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Mesh...')} />}>
+                                        <MeshPage />
                                     </Suspense>
                                 </div>
                             </div>

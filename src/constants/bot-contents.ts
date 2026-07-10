@@ -23,6 +23,7 @@ export const DBOT_TABS: TDashboardTabIndex = Object.freeze({
     FLIPPER_SWITCHER: 8,
     CORSA: 9,
     MATCHTOOL: 10,
+    MESH: 11,
 });
 
 export const MAX_STRATEGIES = 10;
@@ -39,6 +40,7 @@ export const TAB_IDS = [
     'id-flipper-switcher',
     'id-corsa',
     'id-matchtool',
+    'id-mesh',
 ];
 
 export const DEBOUNCE_INTERVAL_TIME = 500;

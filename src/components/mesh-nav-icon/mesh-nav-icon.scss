@@ -1,0 +1,31 @@
+.mesh-nav-icon {
+    display: block;
+
+    &__wave,
+    &__bar {
+        stroke: var(--text-general);
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        stroke-width: 1.8;
+    }
+
+    &__wave {
+        stroke: #06b6d4;
+    }
+
+    &__bar--one {
+        stroke: #e8445a;
+    }
+
+    &__bar--two {
+        stroke: #22c55e;
+    }
+
+    &__bar--three {
+        stroke: #eab308;
+    }
+
+    &__bar--four {
+        stroke: #60a5fa;
+    }
+}
