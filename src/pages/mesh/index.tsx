@@ -45,6 +45,7 @@ type DigitModel = {
     counts: number[];
     frequencies: number[];
     rank: number[];
+    gap: number[];
     total: number;
 };
 type MeshSignal = {
@@ -129,8 +130,12 @@ const getPipSizeFromMarket = (market?: MarketSymbol | null) => {
 
 const buildDigitModel = (history: number[]): DigitModel => {
     const counts = new Array(10).fill(0);
-    history.forEach(digit => {
-        if (digit >= 0 && digit <= 9) counts[digit] += 1;
+    const gap = new Array(10).fill(history.length);
+    history.forEach((digit, index) => {
+        if (digit >= 0 && digit <= 9) {
+            counts[digit] += 1;
+            gap[digit] = history.length - 1 - index;
+        }
     });
     const total = history.length || 1;
     const frequencies = counts.map(count => count / total);
@@ -142,7 +147,7 @@ const buildDigitModel = (history: number[]): DigitModel => {
             rank[entry.digit] = index;
         });
 
-    return { counts, frequencies, rank, total: history.length };
+    return { counts, frequencies, rank, gap, total: history.length };
 };
 
 const zScore = (observed: number, expected: number, n: number) => {
@@ -388,23 +393,26 @@ const DigitRing = ({
     frequency,
     isHit,
     rank,
+    gap,
+    z,
 }: {
     digit: number;
     frequency: number;
     isHit: boolean;
     rank: number;
+    gap: number;
+    z: number;
 }) => {
     const radius = 23;
     const circumference = 2 * Math.PI * radius;
     const color = getRankColor(rank);
     const dash = Math.max(0.01, frequency) * circumference;
+    const deviationColor = z > 0 ? '#22c55e' : z < 0 ? '#e8445a' : '#64748b';
 
     return (
         <div className={`mesh-page__digit-ring ${isHit ? 'mesh-page__digit-ring--hit' : ''}`}>
+            {isHit && <div className='mesh-page__digit-indicator' />}
             <svg viewBox='0 0 58 58'>
-                {rank === 0 && (
-                    <circle className='mesh-page__digit-ripple' cx='29' cy='29' fill='none' r='23' stroke={color.background} strokeWidth='1.5' />
-                )}
                 <circle className='mesh-page__digit-track' cx='29' cy='29' fill='none' r={radius} strokeWidth='5' />
                 <circle
                     className='mesh-page__digit-arc'
@@ -416,18 +424,23 @@ const DigitRing = ({
                     strokeDasharray={`${dash} ${circumference - dash}`}
                     strokeLinecap='round'
                     strokeWidth='5'
-                    style={{ filter: rank === 0 ? `drop-shadow(0 0 6px ${color.background})` : undefined }}
                 />
                 <text fill={color.foreground} x='29' y='34'>
                     {digit}
                 </text>
             </svg>
-            <span>{formatPercent(frequency)}</span>
+            <div className='mesh-page__digit-stats'>
+                <span>{formatPercent(frequency)}</span>
+                <div className='mesh-page__digit-metrics'>
+                    <span style={{ color: deviationColor }}>{formatZ(z)}</span>
+                    <span className='mesh-page__digit-gap'>{gap}t ago</span>
+                </div>
+            </div>
         </div>
     );
 };
 
-const MeshOrbit = ({ lastHit, model }: { lastHit: { digit: number; nonce: number } | null; model: DigitModel }) => {
+const MeshOrbit = ({ lastHit, model, historyDigits }: { lastHit: { digit: number; nonce: number } | null; model: DigitModel; historyDigits: number[] }) => {
     const centerX = 180;
     const centerY = 132;
     const orbitRadius = 68;
@@ -459,6 +472,27 @@ const MeshOrbit = ({ lastHit, model }: { lastHit: { digit: number; nonce: number
             .map(other => ({ from: point, key: `${point.digit}-${other.digit}`, to: other }))
     );
 
+    const historyTrail = [];
+    for (let i = historyDigits.length - 1; i > 0 && i >= historyDigits.length - 8; i--) {
+        const fromDigit = historyDigits[i];
+        const toDigit = historyDigits[i - 1];
+        if (fromDigit !== undefined && toDigit !== undefined && points[fromDigit] && points[toDigit]) {
+            const age = historyDigits.length - 1 - i;
+            const opacity = Math.max(0.1, 0.7 - age * 0.1);
+            historyTrail.push(
+                <line
+                    className='mesh-page__orbit-trail-line'
+                    key={`trail-${i}`}
+                    opacity={opacity}
+                    x1={points[fromDigit].x}
+                    x2={points[toDigit].x}
+                    y1={points[fromDigit].y}
+                    y2={points[toDigit].y}
+                />
+            );
+        }
+    }
+
     return (
         <section className='mesh-page__orbit' aria-label='Mesh digit animation'>
             <svg className='mesh-page__orbit-svg' viewBox='0 0 360 266' role='img'>
@@ -473,16 +507,7 @@ const MeshOrbit = ({ lastHit, model }: { lastHit: { digit: number; nonce: number
                         y2={line.to.y}
                     />
                 ))}
-                {leaders.map(point => (
-                    <line
-                        className='mesh-page__orbit-line mesh-page__orbit-line--hot'
-                        key={`hot-${point.digit}`}
-                        x1={recentPoint.x}
-                        x2={point.x}
-                        y1={recentPoint.y}
-                        y2={point.y}
-                    />
-                ))}
+                {historyTrail}
                 {points.map(point => {
                     const color = getRankColor(point.rank);
                     const isHit = point.digit === recentDigit;
@@ -520,28 +545,19 @@ const MeshOrbit = ({ lastHit, model }: { lastHit: { digit: number; nonce: number
 };
 
 const SignalCard = ({
-    activeEditor,
     isExecuting,
     manualBarrier,
     onBarrierChange,
-    onConfirm,
-    onOpenEditor,
+    onExecute,
     signal,
-    stakeValue,
-    setStakeValue,
 }: {
-    activeEditor: SignalKind | null;
     isExecuting: boolean;
     manualBarrier?: number;
     onBarrierChange: (kind: 'over' | 'under', barrier: number) => void;
-    onConfirm: () => void;
-    onOpenEditor: () => void;
+    onExecute: () => void;
     signal: MeshSignal;
-    stakeValue: string;
-    setStakeValue: (value: string) => void;
 }) => {
     const enabled = Math.abs(signal.z) >= ENABLED_Z_SCORE;
-    const isOpen = activeEditor === signal.id;
 
     return (
         <article
@@ -556,7 +572,6 @@ const SignalCard = ({
         >
             <div className='mesh-page__signal-head'>
                 <h3>{signal.label}</h3>
-                <span className={`mesh-page__z-badge ${getBadgeClass(signal.z)}`}>{formatZ(signal.z)}</span>
             </div>
             <div className='mesh-page__metric-grid'>
                 {(signal.id === 'over' || signal.id === 'under') && (
@@ -605,25 +620,9 @@ const SignalCard = ({
                     <strong>{formatPercent(signal.observed)}</strong>
                 </div>
             </div>
-            <button className='mesh-page__execute' disabled={!enabled || isExecuting} onClick={onOpenEditor} type='button'>
+            <button className='mesh-page__execute' disabled={!enabled || isExecuting} onClick={onExecute} type='button'>
                 {isExecuting ? 'Executing' : signal.buttonText}
             </button>
-            {isOpen && (
-                <div className='mesh-page__stake-row'>
-                    <input
-                        aria-label={`${signal.label} stake`}
-                        inputMode='decimal'
-                        onChange={event => setStakeValue(event.target.value)}
-                        onKeyDown={event => {
-                            if (event.key === 'Enter') onConfirm();
-                        }}
-                        value={stakeValue}
-                    />
-                    <button disabled={isExecuting} onClick={onConfirm} type='button'>
-                        Confirm
-                    </button>
-                </div>
-            )}
         </article>
     );
 };
@@ -640,9 +639,7 @@ const MeshPage = observer(() => {
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [manualBarriers, setManualBarriers] = useState<Partial<Record<'over' | 'under', number>>>({});
-    const [activeEditor, setActiveEditor] = useState<SignalKind | null>(null);
     const [stakeValue, setStakeValue] = useState('1');
-    const [lastStake, setLastStake] = useState('1');
     const [feedback, setFeedback] = useState<string | null>(null);
     const [executingSignal, setExecutingSignal] = useState<SignalKind | null>(null);
     const [flashByCard, setFlashByCard] = useState<Partial<Record<SignalKind, string>>>({});
@@ -695,10 +692,6 @@ const MeshPage = observer(() => {
 
         if (!api || !hasTradingSession()) {
             throw new Error('ProfitDock is still reconnecting to the trading session.');
-        }
-
-        if (isDemoAccount({ ...resolvedAccount, loginid: activeLoginId })) {
-            throw new Error('Mesh refused to execute because the active account is demo.');
         }
 
         return api;
@@ -874,7 +867,6 @@ const MeshPage = observer(() => {
 
         setExecutingSignal(signal.id);
         setFeedback(null);
-        setLastStake(stakeValue);
 
         try {
             const api = await ensureTradingApi();
@@ -896,7 +888,6 @@ const MeshPage = observer(() => {
             const profit = await waitForSettlement(api, contractId, updateTransaction);
             flashCard(signal.id, profit > 0 ? '#22c55e' : '#e8445a');
             setFeedback(`Mesh ${signal.label} settled ${profit >= 0 ? '+' : ''}${profit.toFixed(2)} ${currency}.`);
-            setActiveEditor(null);
         } catch (caughtError) {
             setFeedback(caughtError instanceof Error ? caughtError.message : 'Unable to place Mesh trade.');
         } finally {
@@ -942,23 +933,39 @@ const MeshPage = observer(() => {
                             />
                         </div>
                     </label>
+                    <label className='mesh-page__market-field' htmlFor='mesh-stake'>
+                        <div className='mesh-page__select-wrap'>
+                            <input
+                                id='mesh-stake'
+                                inputMode='decimal'
+                                onChange={event => setStakeValue(event.target.value)}
+                                placeholder='Stake'
+                                type='number'
+                                value={stakeValue}
+                            />
+                        </div>
+                    </label>
                 </section>
 
                 {error && <div className='mesh-page__notice'>{error}</div>}
                 {feedback && <div className='mesh-page__notice mesh-page__notice--trade'>{feedback}</div>}
 
-                <MeshOrbit lastHit={lastHit} model={model} />
+                <MeshOrbit historyDigits={recentDigits} lastHit={lastHit} model={model} />
 
                 <section className='mesh-page__rings' aria-busy={isLoadingHistory}>
-                    <div className='mesh-page__section-label'>Digit frequency</div>
+                    <div className='mesh-page__section-label'>
+                        Digit frequency <span className="mesh-page__sample-size">(n={model.total})</span>
+                    </div>
                     <div className='mesh-page__ring-row'>
                         {Array.from({ length: 10 }, (_, digit) => (
                             <DigitRing
                                 digit={digit}
                                 frequency={model.frequencies[digit] || 0}
+                                gap={model.gap[digit] ?? model.total}
                                 isHit={lastHit?.digit === digit}
                                 key={`${digit}-${lastHit?.digit === digit ? lastHit.nonce : 0}`}
                                 rank={model.rank[digit] ?? 9}
+                                z={zScore(model.frequencies[digit] || 0, 0.1, model.total)}
                             />
                         ))}
                     </div>
@@ -968,19 +975,12 @@ const MeshPage = observer(() => {
                     <div className='mesh-page__signal-grid'>
                         {signals.slice(0, 2).map(signal => (
                             <SignalCard
-                                activeEditor={activeEditor}
                                 isExecuting={executingSignal === signal.id}
                                 key={signal.id}
                                 manualBarrier={manualBarriers[signal.id as 'over' | 'under']}
                                 onBarrierChange={(kind, barrier) => setManualBarriers(previous => ({ ...previous, [kind]: barrier }))}
-                                onConfirm={() => void executeSignal(signal)}
-                                onOpenEditor={() => {
-                                    setStakeValue(lastStake);
-                                    setActiveEditor(signal.id);
-                                }}
-                                setStakeValue={setStakeValue}
+                                onExecute={() => void executeSignal(signal)}
                                 signal={signal}
-                                stakeValue={stakeValue}
                             />
                         ))}
                     </div>
@@ -989,18 +989,11 @@ const MeshPage = observer(() => {
                     <div className='mesh-page__signal-grid'>
                         {signals.slice(2, 4).map(signal => (
                             <SignalCard
-                                activeEditor={activeEditor}
                                 isExecuting={executingSignal === signal.id}
                                 key={signal.id}
                                 onBarrierChange={(kind, barrier) => setManualBarriers(previous => ({ ...previous, [kind]: barrier }))}
-                                onConfirm={() => void executeSignal(signal)}
-                                onOpenEditor={() => {
-                                    setStakeValue(lastStake);
-                                    setActiveEditor(signal.id);
-                                }}
-                                setStakeValue={setStakeValue}
+                                onExecute={() => void executeSignal(signal)}
                                 signal={signal}
-                                stakeValue={stakeValue}
                             />
                         ))}
                     </div>
@@ -1009,18 +1002,11 @@ const MeshPage = observer(() => {
                     <div className='mesh-page__signal-grid'>
                         {signals.slice(4).map(signal => (
                             <SignalCard
-                                activeEditor={activeEditor}
                                 isExecuting={executingSignal === signal.id}
                                 key={signal.id}
                                 onBarrierChange={(kind, barrier) => setManualBarriers(previous => ({ ...previous, [kind]: barrier }))}
-                                onConfirm={() => void executeSignal(signal)}
-                                onOpenEditor={() => {
-                                    setStakeValue(lastStake);
-                                    setActiveEditor(signal.id);
-                                }}
-                                setStakeValue={setStakeValue}
+                                onExecute={() => void executeSignal(signal)}
                                 signal={signal}
-                                stakeValue={stakeValue}
                             />
                         ))}
                     </div>

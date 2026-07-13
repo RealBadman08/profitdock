@@ -39,12 +39,13 @@ type PublicRequestResponse = {
     history?: { prices?: number[] };
     msg_type?: string;
     pip_size?: number;
+    subscription?: { id?: string };
+    tick?: { epoch: number; pip_size?: number; quote: number; symbol: string };
 };
 type DigitPick = {
     count: number;
     digit: number;
     frequency: number;
-    type: 'hot' | 'cold';
 };
 type DigitModel = {
     counts: number[];
@@ -107,6 +108,13 @@ const publicRequest = <T extends PublicRequestResponse>(payload: Record<string, 
     });
 
 const getDigitFromPrice = (price: number, pipSize: number) => Number(price.toFixed(pipSize).slice(-1));
+const getPipSizeFromMarket = (market?: MatchMarket | null) => {
+    const pip = typeof market?.pip === 'number' ? market.pip : Number(market?.pip);
+    if (Number.isFinite(pip) && pip > 0) {
+        return Math.max(0, Math.round(Math.abs(Math.log10(pip))));
+    }
+    return 2;
+};
 const isDemoLoginId = (loginid?: string) => /^(VR|VRTC|VRW)/i.test(String(loginid || ''));
 const isDemoAccount = (account?: Partial<StoredAccount> | null) =>
     account?.account_type === 'demo' || account?.is_virtual === true || isDemoLoginId(account?.loginid);
@@ -159,27 +167,16 @@ const buildDigitModel = (digits: number[]): DigitModel => {
     return { counts, frequencies, total };
 };
 
-const pickHotAndColdDigits = (digitHistory: number[], totalPredictions: number): DigitPick[] => {
+const pickTopDigits = (digitHistory: number[], totalPredictions: number): DigitPick[] => {
     const model = buildDigitModel(digitHistory);
     const sortedAscending = Array.from({ length: 10 }, (_, digit) => digit).sort(
         (left, right) => model.counts[left] - model.counts[right] || left - right
     );
-    const hotCount = Math.ceil(totalPredictions / 2);
-    const coldCount = totalPredictions - hotCount;
-    const coldDigits = sortedAscending.slice(0, coldCount).map(digit => ({
+    return sortedAscending.slice(-totalPredictions).map(digit => ({
         count: model.counts[digit],
         digit,
         frequency: model.frequencies[digit],
-        type: 'cold' as const,
     }));
-    const hotDigits = sortedAscending.slice(-hotCount).map(digit => ({
-        count: model.counts[digit],
-        digit,
-        frequency: model.frequencies[digit],
-        type: 'hot' as const,
-    }));
-
-    return [...hotDigits, ...coldDigits];
 };
 
 const fetchRecentDigitHistory = async (symbol: string, count = LOOKBACK_TICK_COUNT) => {
@@ -330,15 +327,18 @@ const MatchtoolPage = observer(() => {
     const [stake, setStake] = useState('');
     const [predictionCount, setPredictionCount] = useState('');
     const [analysisDigits, setAnalysisDigits] = useState<number[]>([]);
+    const [pipSize, setPipSize] = useState(2);
     const [isLoadingMarkets, setIsLoadingMarkets] = useState(true);
     const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(false);
     const [isRunning, setIsRunning] = useState(false);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [roundRows, setRoundRows] = useState<RoundRow[]>([]);
     const stopRequestedRef = useRef(false);
+    const tickSocketRef = useRef<WebSocket | null>(null);
+    const tickSubscriptionIdRef = useRef<string | null>(null);
 
     const currency = authData?.currency || getStoredProfitdockActiveCurrency() || 'USD';
-    const analysisTickCount = Number(analysisTicks);
+    const analysisTickCount = Number(analysisTicks) || 1000;
     const selectedMarketInfo = useMemo(
         () => markets.find(market => market.symbol === selectedMarket) || markets[0] || null,
         [markets, selectedMarket]
@@ -392,13 +392,8 @@ const MatchtoolPage = observer(() => {
         }
 
         const api = getDerivApi();
-        const resolvedAccount = getActiveStoredAccount();
-        const activeLoginId = localStorage.getItem('active_loginid') || api_base.account_id || resolvedAccount?.loginid || '';
         if (!api || !hasTradingSession()) {
             throw new Error('ProfitDock is still reconnecting to the trading session.');
-        }
-        if (isDemoAccount({ ...resolvedAccount, loginid: activeLoginId })) {
-            throw new Error('MatchTool refused to run because the active account is demo.');
         }
 
         return api;
@@ -473,25 +468,87 @@ const MatchtoolPage = observer(() => {
 
     useEffect(() => {
         if (!selectedMarket) return undefined;
+
         let isCancelled = false;
-        const loadAnalysis = async () => {
-            setIsLoadingAnalysis(true);
-            try {
-                const history = await fetchRecentDigitHistory(selectedMarket, analysisTickCount);
-                if (!isCancelled) setAnalysisDigits(history.digits);
-            } catch (error) {
-                if (!isCancelled) setFeedback(error instanceof Error ? error.message : 'Unable to load MatchTool analysis.');
-            } finally {
-                if (!isCancelled) setIsLoadingAnalysis(false);
+        let hasRequestedStream = false;
+        const marketPipSize = getPipSizeFromMarket(selectedMarketInfo);
+        setIsLoadingAnalysis(true);
+        setAnalysisDigits([]);
+        tickSubscriptionIdRef.current = null;
+        tickSocketRef.current?.close();
+
+        const socket = new WebSocket(DERIV_PUBLIC_WS_URL);
+        tickSocketRef.current = socket;
+        const send = (payload: Record<string, unknown>) => {
+            if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(payload));
+        };
+
+        const timeout = window.setTimeout(() => {
+            if (!isCancelled) {
+                setIsLoadingAnalysis(false);
+                setFeedback('Unable to load the MatchTool tick window.');
+            }
+            socket.close();
+        }, 18000);
+
+        socket.onopen = () => {
+            send({
+                count: 1000,
+                end: 'latest',
+                style: 'ticks',
+                ticks_history: selectedMarket,
+            });
+        };
+
+        socket.onmessage = event => {
+            const data = normalizeApiMessage<PublicRequestResponse>(JSON.parse(String(event.data)));
+            if (!data || isCancelled) return;
+            if (data.error) {
+                window.clearTimeout(timeout);
+                setIsLoadingAnalysis(false);
+                setFeedback(data.error.message || 'Unable to load the MatchTool tick window.');
+                return;
+            }
+
+            if (data.history?.prices) {
+                window.clearTimeout(timeout);
+                const nextPipSize = typeof data.pip_size === 'number' ? data.pip_size : marketPipSize;
+                setPipSize(nextPipSize);
+                setAnalysisDigits(data.history.prices.map(price => getDigitFromPrice(Number(price), nextPipSize)).slice(-analysisTickCount));
+                setIsLoadingAnalysis(false);
+                if (!hasRequestedStream) {
+                    hasRequestedStream = true;
+                    send({ subscribe: 1, ticks: selectedMarket });
+                }
+                return;
+            }
+
+            if (data.msg_type === 'tick' && data.tick?.symbol === selectedMarket) {
+                const nextPipSize = typeof data.tick.pip_size === 'number' ? data.tick.pip_size : pipSize;
+                const digit = getDigitFromPrice(data.tick.quote, nextPipSize);
+                if (data.subscription?.id) tickSubscriptionIdRef.current = data.subscription.id;
+                setPipSize(nextPipSize);
+                setAnalysisDigits(previous => [...previous, digit].slice(-analysisTickCount));
             }
         };
 
-        void loadAnalysis();
+        socket.onerror = () => {
+            window.clearTimeout(timeout);
+            if (!isCancelled) {
+                setIsLoadingAnalysis(false);
+                setFeedback('Unable to open the MatchTool tick stream.');
+            }
+        };
 
         return () => {
             isCancelled = true;
+            window.clearTimeout(timeout);
+            if (socket.readyState === WebSocket.OPEN && tickSubscriptionIdRef.current) {
+                send({ forget: tickSubscriptionIdRef.current });
+            }
+            socket.close();
         };
-    }, [analysisTickCount, selectedMarket]);
+    }, [analysisTickCount, pipSize, selectedMarket, selectedMarketInfo]);
 
     useEffect(() => {
         emitProfitdockTradeStatus({
@@ -539,11 +596,9 @@ const MatchtoolPage = observer(() => {
         setFeedback(null);
 
         try {
-            const history = await fetchRecentDigitHistory(selectedMarketInfo.symbol, LOOKBACK_TICK_COUNT);
-            const picks = pickHotAndColdDigits(history.digits, predictions);
+            const picks = pickTopDigits(analysisDigits, predictions);
             console.log('[MATCHTOOL]', 'picks=', picks);
             setRoundRows(picks.map(pick => ({ ...pick, result: 'pending' })));
-            setAnalysisDigits(history.digits);
 
             if (stopRequestedRef.current) {
                 throw new Error('MatchTool stopped before trades were placed.');
@@ -578,7 +633,7 @@ const MatchtoolPage = observer(() => {
                             } as ProposalOpenContract & { accountID?: string; source?: string });
                         });
                         const result = profit > 0 ? 'won' : 'lost';
-                        console.log('[MATCHTOOL RESULT]', 'digit=', pick.digit, 'type=', pick.type, 'profit=', profit);
+                        console.log('[MATCHTOOL RESULT]', 'digit=', pick.digit, 'profit=', profit);
                         updateRoundRow(pick.digit, { profit, result });
                         return { pick, profit };
                     } catch (error) {
@@ -683,7 +738,14 @@ const MatchtoolPage = observer(() => {
                             {isRunning ? 'Running' : 'Run'}
                         </button>
                         <div className='matchtool-page__top-digits'>
-                            Top 6 most likely: {top6Digits.join(', ')}
+                            {Array.from({ length: 10 }, (_, digit) => (
+                                <div
+                                    key={digit}
+                                    className={`matchtool-page__digit-circle ${topNDigitsSet.has(digit) ? 'matchtool-page__digit-circle--active' : ''}`}
+                                >
+                                    {digit}
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </section>
@@ -711,16 +773,14 @@ const MatchtoolPage = observer(() => {
                     <div className='matchtool-page__table' role='table'>
                         <div className='matchtool-page__table-row matchtool-page__table-row--head' role='row'>
                             <span>Digit</span>
-                            <span>Type</span>
                             <span>Frequency</span>
                             <span>Result</span>
                             <span>P&L</span>
                         </div>
                         {roundRows.length ? (
                             roundRows.map(row => (
-                                <div className='matchtool-page__table-row' key={`${row.digit}-${row.type}`} role='row'>
+                                <div className='matchtool-page__table-row' key={`${row.digit}`} role='row'>
                                     <strong>{row.digit}</strong>
-                                    <span className={`matchtool-page__type matchtool-page__type--${row.type}`}>{row.type}</span>
                                     <span>
                                         {row.count} / {formatPercent(row.frequency)}
                                     </span>
@@ -731,7 +791,7 @@ const MatchtoolPage = observer(() => {
                                 </div>
                             ))
                         ) : (
-                            <div className='matchtool-page__empty'>Run one MatchTool round to populate real contract results.</div>
+                            <div className='matchtool-page__empty'></div>
                         )}
                     </div>
                 </section>

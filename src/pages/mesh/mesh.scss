@@ -38,7 +38,7 @@
         align-items: end;
         display: grid;
         gap: 0.9rem;
-        grid-template-columns: minmax(0, 1fr) auto auto;
+        grid-template-columns: minmax(0, 1fr) minmax(12rem, 1fr) minmax(12rem, 1fr);
     }
 
     &__market-field {
@@ -140,13 +140,13 @@
         stroke-linecap: round;
         stroke-width: 1.6;
         transform-origin: 180px 118px;
+    }
 
-        &--hot {
-            animation: mesh-line-beat 1400ms ease-in-out infinite;
-            opacity: 0.62;
-            stroke: #4b5563;
-            stroke-width: 1.8;
-        }
+    &__orbit-trail-line {
+        stroke: #4b5563;
+        stroke-linecap: round;
+        stroke-width: 1.8;
+        transform-origin: 180px 118px;
     }
 
     &__orbit-node {
@@ -210,9 +210,10 @@
     &__digit-ring {
         align-items: center;
         display: grid;
-        gap: 0.2rem;
+        gap: 0.6rem;
         justify-items: center;
         min-width: 5.6rem;
+        position: relative;
         transform-origin: center;
 
         svg {
@@ -229,15 +230,52 @@
             fill: #102033;
         }
 
-        span {
+        &--hit {
+            animation: mesh-hit-scale 300ms ease both;
+        }
+    }
+
+    &__digit-indicator {
+        position: absolute;
+        top: -6px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 8px;
+        height: 8px;
+        background: #22c55e;
+        border-radius: 50%;
+        box-shadow: 0 0 6px #22c55e;
+    }
+
+    &__digit-stats {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.2rem;
+
+        > span {
             color: #5f6f82;
             font-size: 1.1rem;
             font-weight: 800;
         }
+    }
 
-        &--hit {
-            animation: mesh-hit-scale 300ms ease both;
-        }
+    &__digit-metrics {
+        display: flex;
+        gap: 0.4rem;
+        font-size: 0.75rem;
+        font-weight: 900;
+    }
+
+    &__digit-gap {
+        color: #8b98aa;
+    }
+
+    &__sample-size {
+        font-size: 0.85rem;
+        color: #8b98aa;
+        text-transform: none;
+        letter-spacing: normal;
     }
 
     &__digit-track {
@@ -248,11 +286,6 @@
         transform: rotate(-90deg);
         transform-origin: 29px 29px;
         transition: stroke-dasharray 300ms ease, stroke 80ms ease;
-    }
-
-    &__digit-ripple {
-        animation: mesh-ripple 1s linear infinite;
-        transform-origin: 29px 29px;
     }
 
     &__signals {
@@ -419,36 +452,7 @@
         }
     }
 
-    &__stake-row {
-        display: grid;
-        gap: 0.8rem;
-        grid-template-columns: minmax(0, 1fr) auto;
 
-        input,
-        button {
-            border-radius: 0.8rem;
-            font-size: 1.3rem;
-            font-weight: 900;
-            min-height: 3.6rem;
-        }
-
-        input {
-            background: #fff;
-            border: 1px solid #cbd5e1;
-            color: #102033;
-            min-width: 0;
-            outline: none;
-            padding: 0 1rem;
-        }
-
-        button {
-            background: #0f172a;
-            border: 0;
-            color: #f8fafc;
-            cursor: pointer;
-            padding: 0 1.4rem;
-        }
-    }
 }
 
 /* Dark Theme Overrides */
@@ -502,10 +506,10 @@ body.theme--dark .mesh-page {
 
     .mesh-page__orbit-line {
         stroke: #5a6373;
+    }
 
-        &--hot {
-            stroke: #a8b2c4;
-        }
+    .mesh-page__orbit-trail-line {
+        stroke: #a8b2c4;
     }
 
     .mesh-page__orbit-bubble {
@@ -520,7 +524,7 @@ body.theme--dark .mesh-page {
         fill: #f4f4f5;
     }
 
-    .mesh-page__digit-ring span {
+    .mesh-page__digit-stats > span {
         color: #888;
     }
 
@@ -580,18 +584,7 @@ body.theme--dark .mesh-page {
         color: #888;
     }
 
-    .mesh-page__stake-row {
-        input {
-            background: #10141d;
-            border-color: #2a2a2a;
-            color: #f4f4f5;
-        }
 
-        button {
-            background: #f4f4f5;
-            color: #080808;
-        }
-    }
 }
 
 @keyframes mesh-ripple {
