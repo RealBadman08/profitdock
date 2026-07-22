@@ -37,6 +37,11 @@ type CorsaDirection =
 type MarketMode = 'single' | 'all';
 type DetectorState = { history: number[]; lastQuote: number | null; priceHistory: number[]; streak: number };
 type CorsaDisplayItem = { label: string; tone: 'empty' | 'negative' | 'positive' };
+type TicksHistoryResponse = {
+    error?: { message?: string };
+    history?: { prices?: Array<number | string> };
+    msg_type?: string;
+};
 type CorsaPosition = {
     buyPrice: number;
     contractId: number;
@@ -313,6 +318,23 @@ const getCorsaSignalStreak = ({
     return streak;
 };
 
+const detectorFromHistory = (prices: Array<number | string>): DetectorState | null => {
+    const newestFirst = prices
+        .map(price => Number(price))
+        .filter(price => Number.isFinite(price))
+        .reverse()
+        .slice(0, 50);
+
+    if (!newestFirst.length) return null;
+
+    return {
+        history: newestFirst.map(getLastDigit),
+        lastQuote: newestFirst[0],
+        priceHistory: newestFirst,
+        streak: 0,
+    };
+};
+
 const getCorsaDisplayItem = ({
     contractType,
     digit,
@@ -458,6 +480,35 @@ const CorsaPage = observer(() => {
         const startPassiveListening = async () => {
             const api = await ensureTradingApi();
             if (!api || !isActive) return;
+
+            // Seed each visible market with Deriv's real recent ticks before the
+            // stream starts, so the table is meaningful as soon as it opens.
+            await Promise.all(
+                watchedMarketSymbols.map(async symbol => {
+                    try {
+                        const response = (await api.send({
+                            adjust_start_time: 1,
+                            count: 50,
+                            end: 'latest',
+                            style: 'ticks',
+                            ticks_history: symbol,
+                        })) as TicksHistoryResponse;
+                        const seeded = detectorFromHistory(response.history?.prices || []);
+                        if (!seeded || !isActive) return;
+
+                        setDetectors(prev => {
+                            const current = prev[symbol];
+                            return current?.history?.length >= 9
+                                ? prev
+                                : { ...prev, [symbol]: seeded };
+                        });
+                    } catch (error) {
+                        console.warn('[Corsa] Historical ticks unavailable for', symbol, error);
+                    }
+                })
+            );
+
+            if (!isActive) return;
 
             messageSub = api.onMessage().subscribe((message: unknown) => {
                 if (isRunningRef.current) return;
@@ -773,6 +824,9 @@ const CorsaPage = observer(() => {
                     <span>{localize('Market')}</span>
                     <div className='corsa-page__select-wrap'>
                         <MarketIcon type={selectedMarketInfo?.symbol || selectedMarket} size='sm' />
+                        <span className='corsa-page__select-value'>
+                            {selectedMarketInfo?.display_name || selectedMarket}
+                        </span>
                         <select value={selectedMarket} onChange={event => setSelectedMarket(event.target.value)} disabled={marketMode === 'all'}>
                             {markets.map(market => (
                                 <option key={market.symbol} value={market.symbol}>
@@ -784,7 +838,8 @@ const CorsaPage = observer(() => {
                 </label>
                 <label className='corsa-page__field'>
                     <span>{localize('Contract')}</span>
-                    <div className='corsa-page__select-wrap'>
+                    <div className='corsa-page__select-wrap corsa-page__select-wrap--plain'>
+                        <span className='corsa-page__select-value'>{selectedDirection.label}</span>
                         <select value={contractType} onChange={event => setContractType(event.target.value as CorsaDirection)}>
                             {DIRECTIONS.map(direction => (
                                 <option key={direction.contractType} value={direction.contractType}>

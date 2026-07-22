@@ -1,7 +1,9 @@
 import { getRoundedNumber } from '@/components/shared';
 import { api_base } from '../../api/api-base';
 import { contract as broadcastContract, contractStatus } from '../utils/broadcast';
-import { openContractReceived, sell } from './state/actions';
+import { openContractReceived, sell, start } from './state/actions';
+
+const tradeEachTickEnabled = options => options?.tradeEachTickEnabled ?? options?.timeMachineEnabled;
 
 export default Engine =>
     class OpenContract extends Engine {
@@ -36,6 +38,13 @@ export default Engine =>
                         }
 
                         this.store.dispatch(sell());
+
+                        // A per-tick strategy must re-enter BEFORE_PURCHASE after
+                        // settlement. The generated interpreter loop then waits
+                        // for the next real tick before placing the next contract.
+                        if (tradeEachTickEnabled(this.options)) {
+                            this.store.dispatch(start());
+                        }
                     } else {
                         this.store.dispatch(openContractReceived());
                     }

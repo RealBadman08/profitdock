@@ -107,6 +107,7 @@
     }
 
     &__select-wrap {
+        align-items: center;
         background: #fff;
         border: 1px solid #cfd9e5;
         border-radius: 1.25rem;
@@ -115,19 +116,49 @@
         grid-template-columns: auto 1fr;
         min-height: 7rem;
         padding: 0 1.6rem;
+        position: relative;
 
         select {
-            align-self: center;
-            border: 0;
-            box-shadow: none;
-            font-size: 1.8rem;
-            font-weight: 800;
-            min-width: 0;
-            outline: none;
-            padding: 0;
-            text-align: left;
-            width: 100%;
+            cursor: pointer;
+            inset: 0;
+            opacity: 0;
+            position: absolute;
+            z-index: 2;
         }
+
+        &--plain {
+            grid-template-columns: 1fr;
+            justify-items: center;
+        }
+
+        &:not(.corsa-page__select-wrap--plain) {
+            grid-template-columns: 2.4rem minmax(0, 1fr) 2.4rem;
+
+            &::after {
+                content: '';
+                display: block;
+                height: 1px;
+                width: 2.4rem;
+            }
+        }
+    }
+
+    &__select-value {
+        align-items: center;
+        align-self: stretch;
+        color: #102033;
+        display: flex;
+        font-size: 1.8rem;
+        font-weight: 800;
+        justify-content: center;
+        line-height: 1.15;
+        min-width: 0;
+        overflow: hidden;
+        padding: 0 0.4rem;
+        text-align: center;
+        text-overflow: ellipsis;
+        text-transform: none;
+        white-space: nowrap;
     }
 
     &__run {
@@ -298,6 +329,10 @@ body.theme--dark .corsa-page {
 
     .corsa-page__select-wrap select {
         background: transparent;
+        color: transparent;
+    }
+
+    .corsa-page__select-value {
         color: #f8fafc;
     }
 
@@ -345,6 +380,10 @@ body.theme--dark .corsa-page {
         }
 
         &__select-wrap select {
+            font-size: 1.5rem;
+        }
+
+        &__select-value {
             font-size: 1.5rem;
         }
 

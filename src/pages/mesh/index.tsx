@@ -157,6 +157,11 @@ const zScore = (observed: number, expected: number, n: number) => {
 
 const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`;
 const formatZ = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}σ`;
+const clampDigitValue = (value: string | number, fallback = 5) => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return fallback;
+    return Math.max(0, Math.min(9, Math.round(numericValue)));
+};
 const isDemoLoginId = (loginid?: string) => /^(VR|VRTC|VRW)/i.test(String(loginid || ''));
 const isDemoAccount = (account?: Partial<StoredAccount> | null) =>
     account?.account_type === 'demo' || account?.is_virtual === true || isDemoLoginId(account?.loginid);
@@ -186,7 +191,11 @@ const getActiveStoredAccount = () => {
     return accounts.find(account => account.loginid === activeLoginId) || accounts[0] || null;
 };
 
-const buildSignals = (model: DigitModel, manualBarriers: Partial<Record<'over' | 'under', number>>): MeshSignal[] => {
+const buildSignals = (
+    model: DigitModel,
+    manualBarriers: Partial<Record<'over' | 'under', number>>,
+    selectedDigit: number
+): MeshSignal[] => {
     const getOverSignal = () => {
         const candidates = Array.from({ length: 8 }, (_, index) => index + 1).map(barrier => {
             const overCount = model.counts.slice(barrier + 1).reduce((sum, count) => sum + count, 0);
@@ -213,12 +222,13 @@ const buildSignals = (model: DigitModel, manualBarriers: Partial<Record<'over' |
         model.counts.filter((_, digit) => digit % 2 === 0).reduce((sum, count) => sum + count, 0) /
         Math.max(model.total, 1);
     const oddObserved = 1 - evenObserved;
-    const matchDigit = model.frequencies
-        .map((frequency, digit) => ({ digit, frequency, z: zScore(frequency, 0.1, model.total) }))
-        .sort((left, right) => right.z - left.z)[0];
-    const differDigit = model.frequencies
-        .map((frequency, digit) => ({ digit, frequency, z: zScore(frequency, 0.1, model.total) }))
-        .sort((left, right) => left.z - right.z)[0];
+    const selectedDigitStats = {
+        digit: selectedDigit,
+        frequency: model.frequencies[selectedDigit] || 0,
+        z: zScore(model.frequencies[selectedDigit] || 0, 0.1, model.total),
+    };
+    const matchDigit = selectedDigitStats;
+    const differDigit = selectedDigitStats;
 
     const createSignal = (
         id: SignalKind,
@@ -440,110 +450,105 @@ const DigitRing = ({
     );
 };
 
-const MeshOrbit = ({ lastHit, model, historyDigits }: { lastHit: { digit: number; nonce: number } | null; model: DigitModel; historyDigits: number[] }) => {
-    const centerX = 180;
-    const centerY = 132;
-    const orbitRadius = 68;
+const MeshOrbit = ({
+    historyDigits,
+    lastHit,
+    model,
+}: {
+    historyDigits: number[];
+    lastHit: { digit: number; nonce: number } | null;
+    model: DigitModel;
+}) => {
+    const centerX = 250;
+    const centerY = 190;
+    const orbitRadius = 112;
+    const currentDigit = lastHit?.digit ?? historyDigits[historyDigits.length - 1] ?? 0;
     const points = Array.from({ length: 10 }, (_, digit) => {
         const angle = -Math.PI / 2 + (digit / 10) * Math.PI * 2;
-        const rank = model.rank[digit] ?? 9;
         const frequency = model.frequencies[digit] || 0;
         const count = model.counts[digit] || 0;
+        const isCurrent = digit === currentDigit;
+        const tone = digit % 2 === 0 ? 'cool' : 'warm';
 
         return {
             count,
             digit,
             frequency,
-            rank,
+            isCurrent,
+            radius: Math.max(18, Math.min(42, 19 + frequency * 108)),
+            tone,
             x: centerX + Math.cos(angle) * orbitRadius,
             y: centerY + Math.sin(angle) * orbitRadius,
         };
     });
-    const leaders = points
-        .slice()
-        .sort((left, right) => right.frequency - left.frequency || left.digit - right.digit)
-        .slice(0, 5);
-    const recentDigit = lastHit?.digit ?? leaders[0]?.digit ?? 0;
-    const recentPoint = points[recentDigit] || points[0];
-    const webLines = leaders.flatMap((point, index) =>
-        leaders
-            .slice(index + 1)
-            .filter(other => Math.abs(point.digit - other.digit) > 1)
-            .map(other => ({ from: point, key: `${point.digit}-${other.digit}`, to: other }))
-    );
+    const trailPairs = [];
 
-    const historyTrail = [];
-    for (let i = historyDigits.length - 1; i > 0 && i >= historyDigits.length - 8; i--) {
-        const fromDigit = historyDigits[i];
-        const toDigit = historyDigits[i - 1];
-        if (fromDigit !== undefined && toDigit !== undefined && points[fromDigit] && points[toDigit]) {
-            const age = historyDigits.length - 1 - i;
-            const opacity = Math.max(0.1, 0.7 - age * 0.1);
-            historyTrail.push(
-                <line
-                    className='mesh-page__orbit-trail-line'
-                    key={`trail-${i}`}
-                    opacity={opacity}
-                    x1={points[fromDigit].x}
-                    x2={points[toDigit].x}
-                    y1={points[fromDigit].y}
-                    y2={points[toDigit].y}
-                />
-            );
+    for (let index = historyDigits.length - 1; index > 0; index--) {
+        const fromDigit = historyDigits[index - 1];
+        const toDigit = historyDigits[index];
+
+        if (points[fromDigit] && points[toDigit] && fromDigit !== toDigit) {
+            trailPairs.push({
+                from: points[fromDigit],
+                key: `${index}-${fromDigit}-${toDigit}`,
+                to: points[toDigit],
+            });
         }
     }
 
     return (
-        <section className='mesh-page__orbit' aria-label='Mesh digit animation'>
-            <svg className='mesh-page__orbit-svg' viewBox='0 0 360 266' role='img'>
+        <section className='mesh-page__orbit' aria-label='Mesh digit analysis animation'>
+            <svg className='mesh-page__orbit-svg' viewBox='0 0 500 386' role='img'>
                 <circle className='mesh-page__orbit-guide' cx={centerX} cy={centerY} r={orbitRadius} />
-                {webLines.map(line => (
+                {trailPairs.map((line, index) => (
                     <line
-                        className='mesh-page__orbit-line'
+                        className={`mesh-page__orbit-trail-line ${
+                            index === 0 ? 'mesh-page__orbit-trail-line--current' : ''
+                        }`}
                         key={line.key}
+                        opacity={index === 0 ? 0.95 : 0.42}
                         x1={line.from.x}
                         x2={line.to.x}
                         y1={line.from.y}
                         y2={line.to.y}
                     />
                 ))}
-                {historyTrail}
-                {points.map(point => {
-                    const color = getRankColor(point.rank);
-                    const isHit = point.digit === recentDigit;
-                    const radius = Math.max(12, Math.min(28, 13 + point.frequency * 72));
-
-                    return (
-                        <g
-                            className={`mesh-page__orbit-node ${isHit ? 'mesh-page__orbit-node--hit' : ''}`}
-                            key={`${point.digit}-${isHit ? lastHit?.nonce || 0 : point.rank}`}
-                            style={
-                                {
-                                    '--mesh-node-fill': point.rank === 9 || isHit ? '#a23a48' : color.background,
-                                    '--mesh-node-text': point.rank === 9 || isHit ? '#ffffff' : color.foreground,
-                                } as React.CSSProperties
-                            }
-                            transform={`translate(${point.x} ${point.y})`}
-                        >
-                            {isHit && <circle className='mesh-page__orbit-pulse' r={radius + 6} />}
-                            <circle className='mesh-page__orbit-bubble' r={radius} />
-                            <text className='mesh-page__orbit-digit' y='-2'>
-                                {point.digit}
-                            </text>
-                            <text className='mesh-page__orbit-percent' y='10'>
-                                {Math.round(point.frequency * 100)}%
-                            </text>
-                            <text className='mesh-page__orbit-count' y={radius + 11}>
-                                {point.count}
-                            </text>
-                        </g>
-                    );
-                })}
+                {points.map(point => (
+                    <g
+                        className={`mesh-page__orbit-node ${
+                            point.isCurrent ? 'mesh-page__orbit-node--hit' : ''
+                        }`}
+                        key={`${point.digit}-${point.isCurrent ? lastHit?.nonce || 0 : point.count}`}
+                        style={
+                            {
+                                '--mesh-node-fill': point.tone === 'cool' ? '#5b6f8d' : '#a98363',
+                                '--mesh-node-text': '#f8fafc',
+                            } as React.CSSProperties
+                        }
+                        transform={`translate(${point.x} ${point.y})`}
+                    >
+                        {point.isCurrent && (
+                            <>
+                                <circle className='mesh-page__orbit-pulse' r={point.radius + 7} />
+                                <circle className='mesh-page__orbit-hot-ring' r={point.radius + 4} />
+                            </>
+                        )}
+                        <circle className='mesh-page__orbit-bubble' r={point.radius} />
+                        <text className='mesh-page__orbit-digit' y='-3'>
+                            {point.digit}
+                        </text>
+                        <text className='mesh-page__orbit-percent' y='8'>
+                            {Math.round(point.frequency * 100)}%
+                        </text>
+                        <text className='mesh-page__orbit-count' y={point.radius + 11}>
+                            {point.count}
+                        </text>
+                    </g>
+                ))}
             </svg>
         </section>
     );
 };
-
 const SignalCard = ({
     isExecuting,
     manualBarrier,
@@ -644,7 +649,9 @@ const MeshPage = observer(() => {
     const [executingSignal, setExecutingSignal] = useState<SignalKind | null>(null);
     const [flashByCard, setFlashByCard] = useState<Partial<Record<SignalKind, string>>>({});
     const [windowSizeStr, setWindowSizeStr] = useState('1000');
+    const [selectedDigitStr, setSelectedDigitStr] = useState('5');
     const windowSize = Number(windowSizeStr) || 10;
+    const selectedDigit = clampDigitValue(selectedDigitStr, 5);
     const tickSocketRef = useRef<WebSocket | null>(null);
     const tickSubscriptionIdRef = useRef<string | null>(null);
 
@@ -654,8 +661,7 @@ const MeshPage = observer(() => {
         [markets, selectedMarket]
     );
     const model = useMemo(() => buildDigitModel(digits), [digits]);
-    const signals = useMemo(() => buildSignals(model, manualBarriers), [manualBarriers, model]);
-    const recentDigits = useMemo(() => digits.slice(-16), [digits]);
+    const signals = useMemo(() => buildSignals(model, manualBarriers, selectedDigit), [manualBarriers, model, selectedDigit]);
     const activeAccount = useMemo(() => {
         const accountFromHook =
             accountList.find(account => account.loginid === activeLoginid) || accountList.find(account => isDemoAccount(account));
@@ -845,7 +851,7 @@ const MeshPage = observer(() => {
             }
             socket.close();
         };
-    }, [pipSize, selectedMarket, selectedMarketInfo]);
+    }, [pipSize, selectedMarket, selectedMarketInfo, windowSize]);
 
     const flashCard = (cardId: SignalKind, color: string) => {
         setFlashByCard(previous => ({ ...previous, [cardId]: color }));
@@ -887,7 +893,7 @@ const MeshPage = observer(() => {
             };
             const profit = await waitForSettlement(api, contractId, updateTransaction);
             flashCard(signal.id, profit > 0 ? '#22c55e' : '#e8445a');
-            setFeedback(`Mesh ${signal.label} settled ${profit >= 0 ? '+' : ''}${profit.toFixed(2)} ${currency}.`);
+            setFeedback(null);
         } catch (caughtError) {
             setFeedback(caughtError instanceof Error ? caughtError.message : 'Unable to place Mesh trade.');
         } finally {
@@ -899,7 +905,7 @@ const MeshPage = observer(() => {
         <div className='mesh-page'>
             <div className='mesh-page__shell'>
                 <section className='mesh-page__topbar'>
-                    <label className='mesh-page__market-field' htmlFor='mesh-market'>
+                    <label className='mesh-page__market-field mesh-page__market-field--market' htmlFor='mesh-market'>
                         <div className='mesh-page__select-wrap'>
                             <MarketIcon type={selectedMarketInfo?.symbol || selectedMarket || 'unknown'} size='sm' />
                             <select
@@ -917,7 +923,8 @@ const MeshPage = observer(() => {
                         </div>
                     </label>
                     <label className='mesh-page__market-field' htmlFor='mesh-window-size'>
-                        <div className='mesh-page__select-wrap'>
+                        <div className='mesh-page__select-wrap mesh-page__select-wrap--inline'>
+                            <span className='mesh-page__input-label'>Tick</span>
                             <input
                                 id='mesh-window-size'
                                 inputMode='numeric'
@@ -933,8 +940,25 @@ const MeshPage = observer(() => {
                             />
                         </div>
                     </label>
+                    <label className='mesh-page__market-field' htmlFor='mesh-digit'>
+                        <div className='mesh-page__select-wrap mesh-page__select-wrap--inline'>
+                            <span className='mesh-page__input-label'>Digit</span>
+                            <select
+                                id='mesh-digit'
+                                onChange={event => setSelectedDigitStr(event.target.value)}
+                                value={selectedDigitStr}
+                            >
+                                {Array.from({ length: 10 }, (_, digit) => (
+                                    <option key={digit} value={digit}>
+                                        {digit}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </label>
                     <label className='mesh-page__market-field' htmlFor='mesh-stake'>
-                        <div className='mesh-page__select-wrap'>
+                        <div className='mesh-page__select-wrap mesh-page__select-wrap--inline'>
+                            <span className='mesh-page__input-label'>Stake</span>
                             <input
                                 id='mesh-stake'
                                 inputMode='decimal'
@@ -950,7 +974,7 @@ const MeshPage = observer(() => {
                 {error && <div className='mesh-page__notice'>{error}</div>}
                 {feedback && <div className='mesh-page__notice mesh-page__notice--trade'>{feedback}</div>}
 
-                <MeshOrbit historyDigits={recentDigits} lastHit={lastHit} model={model} />
+                <MeshOrbit historyDigits={digits} lastHit={lastHit} model={model} />
 
                 <section className='mesh-page__rings' aria-busy={isLoadingHistory}>
                     <div className='mesh-page__section-label'>

@@ -205,6 +205,7 @@ window.Blockly.JavaScript.javascriptGenerator.forBlock.trade_definition = block 
 
     const code = `  
     BinaryBotPrivateInit = function BinaryBotPrivateInit() {
+        BinaryBotPrivateTradeEachTickEnabled = ${should_trade_each_tick};
         Bot.init('${account}', {
           symbol              : '${symbol}',
           contractTypes       : ${JSON.stringify(contract_type_list)},

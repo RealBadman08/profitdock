@@ -2,10 +2,11 @@
     background: linear-gradient(180deg, #fbfcfe 0%, #ffffff 44%, #f6f8fb 100%);
     box-sizing: border-box;
     color: #102033;
-    height: 100%;
-    min-height: calc(100vh - 11rem);
-    overflow: auto;
-    padding: 1rem 1.2rem 2rem;
+    height: auto;
+    min-height: calc(100dvh - 11rem);
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 1rem 1.2rem calc(12rem + env(safe-area-inset-bottom, 0px));
 
     *,
     *::before,
@@ -38,7 +39,7 @@
         align-items: end;
         display: grid;
         gap: 0.9rem;
-        grid-template-columns: minmax(0, 1fr) minmax(12rem, 1fr) minmax(12rem, 1fr);
+        grid-template-columns: minmax(22rem, 1.6fr) minmax(11rem, 0.65fr) minmax(11rem, 0.65fr) minmax(12rem, 0.75fr);
     }
 
     &__market-field {
@@ -81,6 +82,19 @@
         input::placeholder {
             color: #8b98aa;
         }
+
+        &--inline {
+            grid-template-columns: auto minmax(0, 1fr);
+            padding: 0 0.85rem;
+        }
+    }
+
+    &__input-label {
+        color: #5f6f82;
+        font-size: 1.05rem;
+        font-weight: 950;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
     }
 
     &__notice {
@@ -111,26 +125,30 @@
 
     &__orbit {
         align-items: center;
+        background:
+            radial-gradient(circle at 50% 50%, rgba(69, 185, 181, 0.12), transparent 36%),
+            linear-gradient(180deg, #ffffff 0%, #f7fafc 100%);
+        border-color: #d8e2ee;
         display: grid;
         justify-items: center;
-        min-height: 32rem;
-        overflow: visible;
+        min-height: 48rem;
+        overflow: hidden;
         padding: 0.6rem;
     }
 
     &__orbit-svg {
         display: block;
-        height: clamp(30rem, 40vh, 42rem);
-        max-width: 80rem;
+        height: clamp(44rem, 62vh, 66rem);
+        max-width: 116rem;
         overflow: visible;
-        width: min(100%, 80rem);
+        width: min(100%, 116rem);
     }
 
     &__orbit-guide {
         fill: none;
-        opacity: 0.24;
-        stroke: #9ca3af;
-        stroke-dasharray: 3 6;
+        opacity: 0.28;
+        stroke: #a9b7c8;
+        stroke-dasharray: 2 8;
         stroke-width: 1.4;
     }
 
@@ -139,14 +157,20 @@
         stroke: #9ca3af;
         stroke-linecap: round;
         stroke-width: 1.6;
-        transform-origin: 180px 118px;
+        transform-origin: 250px 190px;
     }
 
     &__orbit-trail-line {
-        stroke: #4b5563;
+        stroke: #75849a;
         stroke-linecap: round;
-        stroke-width: 1.8;
-        transform-origin: 180px 118px;
+        stroke-width: 1.9;
+        transform-origin: 250px 190px;
+        transition: opacity 220ms ease, stroke 220ms ease;
+
+        &--current {
+            stroke: #d95064;
+            stroke-width: 2.8;
+        }
     }
 
     &__orbit-node {
@@ -163,14 +187,21 @@
     &__orbit-pulse {
         animation: mesh-orbit-pulse 900ms ease-out infinite;
         fill: none;
-        stroke: #ef4444;
-        stroke-width: 2;
+        stroke: #df4359;
+        stroke-width: 2.4;
+    }
+
+    &__orbit-hot-ring {
+        fill: none;
+        stroke: #d93651;
+        stroke-width: 2.2;
     }
 
     &__orbit-bubble {
         fill: var(--mesh-node-fill);
-        opacity: 0.85;
-        stroke: rgba(0, 0, 0, 0.1);
+        filter: drop-shadow(0 0.6rem 1rem rgba(15, 23, 42, 0.18));
+        opacity: 0.94;
+        stroke: rgba(255, 255, 255, 0.68);
         stroke-width: 1.2;
         transition: fill 220ms ease, r 220ms ease;
     }
@@ -194,7 +225,7 @@
     }
 
     &__orbit-count {
-        fill: #64748b;
+        fill: #5f6f82;
         font-size: 0.75rem;
     }
 
@@ -471,6 +502,7 @@ body.theme--dark .mesh-page {
     }
 
     .mesh-page__market-field > span,
+    .mesh-page__input-label,
     .mesh-page__section-label,
     .mesh-page__metric span {
         color: #888;
@@ -509,10 +541,15 @@ body.theme--dark .mesh-page {
     }
 
     .mesh-page__orbit-trail-line {
-        stroke: #a8b2c4;
+        stroke: #8f9aad;
+
+        &--current {
+            stroke: #ff5a6f;
+        }
     }
 
     .mesh-page__orbit-bubble {
+        filter: drop-shadow(0 0.7rem 1.1rem rgba(0, 0, 0, 0.34));
         stroke: rgba(255, 255, 255, 0.22);
     }
 
@@ -668,7 +705,7 @@ body.theme--dark .mesh-page {
         }
 
         &__orbit-svg {
-            height: 28rem;
+            height: 34rem;
         }
     }
 }
@@ -693,11 +730,11 @@ body.theme--dark .mesh-page {
         }
 
         &__orbit {
-            min-height: 24rem;
+            min-height: 32rem;
         }
 
         &__orbit-svg {
-            height: 24rem;
+            height: 32rem;
             width: 100%;
         }
 

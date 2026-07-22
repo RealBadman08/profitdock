@@ -135,14 +135,6 @@ const STRATEGY_PAIRS: StrategyPair[] = [
             { contractType: 'RUNLOW', label: 'Only Downs' },
         ],
     },
-    {
-        key: 'rise_fall_equal',
-        label: 'Rise = / Fall =',
-        legs: [
-            { contractType: 'CALLE', label: 'Rise =' },
-            { contractType: 'PUTE', label: 'Fall =' },
-        ],
-    },
 ];
 
 const BUTTONS = [
@@ -156,8 +148,6 @@ const BUTTONS = [
     STRATEGY_PAIRS[3].legs[1],
     STRATEGY_PAIRS[4].legs[0],
     STRATEGY_PAIRS[4].legs[1],
-    STRATEGY_PAIRS[5].legs[0],
-    STRATEGY_PAIRS[5].legs[1],
 ];
 
 const getDerivApi = () => api_base.api as ApiLike | undefined;
@@ -405,8 +395,8 @@ const FlipperSwitcherPage = observer(() => {
     const [customLegs, setCustomLegs] = useState<SelectedStrategyLegs>([null, null]);
     const [stakeOne, setStakeOne] = useState('');
     const [stakeTwo, setStakeTwo] = useState('');
-    const [martingaleOne, setMartingaleOne] = useState('1.25');
-    const [martingaleTwo, setMartingaleTwo] = useState('1.25');
+    const [martingaleOne, setMartingaleOne] = useState('2');
+    const [martingaleTwo, setMartingaleTwo] = useState('2');
     const [durationTicks, setDurationTicks] = useState('1');
     const [entryPoint, setEntryPoint] = useState('');
     const [predictionOne, setPredictionOne] = useState('');
@@ -818,10 +808,23 @@ const FlipperSwitcherPage = observer(() => {
         }
     };
 
+    const resetStakeInputsToInitial = useCallback(() => {
+        if (baseStakeOneRef.current > 0) {
+            stakeOneRef.current = baseStakeOneRef.current;
+            setStakeOne(roundStakeValue(baseStakeOneRef.current));
+        }
+
+        if (baseStakeTwoRef.current > 0) {
+            stakeTwoRef.current = baseStakeTwoRef.current;
+            setStakeTwo(roundStakeValue(baseStakeTwoRef.current));
+        }
+    }, []);
+
     const handleRun = () => {
         if (isRunning) {
             runningRef.current = false;
             setIsRunning(false);
+            resetStakeInputsToInitial();
             setFeedback(localize('Flipper Switcher will stop after the current contracts settle.'));
             return;
         }
@@ -879,9 +882,10 @@ const FlipperSwitcherPage = observer(() => {
 
                 runningRef.current = false;
                 setIsRunning(false);
+                resetStakeInputsToInitial();
                 setFeedback(localize('Flipper Switcher will stop after the current contracts settle.'));
             }),
-        []
+        [resetStakeInputsToInitial]
     );
 
     const handleStrategyButton = (leg: StrategyLeg) => {

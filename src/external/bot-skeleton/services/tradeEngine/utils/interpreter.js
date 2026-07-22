@@ -42,9 +42,11 @@ const Interpreter = () => {
     let interpreter = {};
     let onFinish;
 
-    $scope.observer.register('REVERT', watchName =>
-        revert(watchName === 'before' ? $scope.beforeState : $scope.duringState)
-    );
+    $scope.observer.register('REVERT', watchName => {
+        const snapshot = watchName === 'before' ? $scope.beforeState : $scope.duringState;
+        if (!snapshot) return;
+        revert(snapshot);
+    });
 
     function init() {
         $scope = createScope();
