@@ -12,10 +12,15 @@ import {
 import { getMarketsWithoutStepBoomCrashRange, normalizeApiMessage } from '@/features/deriv-live/api';
 import { MarketSymbol } from '@/features/deriv-live/types';
 import { useApiBase } from '@/hooks/useApiBase';
+import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentState';
 import { useStore } from '@/hooks/useStore';
 import { normalizeMartingaleMultiplier, roundMartingaleStake } from '@/hooks/useMartingale';
 
-import { emitProfitdockTradeStatus, subscribeProfitdockTradeStop } from '@/utils/profitdock-trade-controller';
+import {
+    emitProfitdockTradeStatus,
+    subscribeProfitdockTradeStart,
+    subscribeProfitdockTradeStop,
+} from '@/utils/profitdock-trade-controller';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { localize } from '@deriv-com/translations';
 import './flipper-switcher.scss';
@@ -391,25 +396,25 @@ const FlipperSwitcherPage = observer(() => {
     const currency = authData?.currency || getStoredProfitdockActiveCurrency() || 'USD';
     const hasRecoverableSession = useCallback(() => isCustomLegacyOAuthDomain() && hasUsableProfitdockStoredSession(), []);
     const [markets, setMarkets] = useState<MarketSymbol[]>(() => getMarketsWithoutStepBoomCrashRange([]));
-    const [selectedMarket, setSelectedMarket] = useState('1HZ10V');
-    const [customLegs, setCustomLegs] = useState<SelectedStrategyLegs>([null, null]);
-    const [stakeOne, setStakeOne] = useState('');
-    const [stakeTwo, setStakeTwo] = useState('');
-    const [martingaleOne, setMartingaleOne] = useState('2');
-    const [martingaleTwo, setMartingaleTwo] = useState('2');
-    const [durationTicks, setDurationTicks] = useState('1');
-    const [entryPoint, setEntryPoint] = useState('');
-    const [predictionOne, setPredictionOne] = useState('');
-    const [predictionTwo, setPredictionTwo] = useState('');
-    const [switchMarket, setSwitchMarket] = useState(false);
+    const [selectedMarket, setSelectedMarket] = useProfitdockPersistentState('profitdock.flipper.market', '1HZ10V');
+    const [customLegs, setCustomLegs] = useProfitdockPersistentState<SelectedStrategyLegs>('profitdock.flipper.legs', [null, null]);
+    const [stakeOne, setStakeOne] = useProfitdockPersistentState('profitdock.flipper.stakeOne', '');
+    const [stakeTwo, setStakeTwo] = useProfitdockPersistentState('profitdock.flipper.stakeTwo', '');
+    const [martingaleOne, setMartingaleOne] = useProfitdockPersistentState('profitdock.flipper.martingaleOne', '2');
+    const [martingaleTwo, setMartingaleTwo] = useProfitdockPersistentState('profitdock.flipper.martingaleTwo', '2');
+    const [durationTicks, setDurationTicks] = useProfitdockPersistentState('profitdock.flipper.duration', '1');
+    const [entryPoint, setEntryPoint] = useProfitdockPersistentState('profitdock.flipper.entryPoint', '');
+    const [predictionOne, setPredictionOne] = useProfitdockPersistentState('profitdock.flipper.predictionOne', '');
+    const [predictionTwo, setPredictionTwo] = useProfitdockPersistentState('profitdock.flipper.predictionTwo', '');
+    const [switchMarket, setSwitchMarket] = useProfitdockPersistentState('profitdock.flipper.switchMarket', false);
     const [isSwitchMarketPickerOpen, setIsSwitchMarketPickerOpen] = useState(false);
-    const [switchMarketSymbols, setSwitchMarketSymbols] = useState<string[]>([]);
-    const [switchOnLoss, setSwitchOnLoss] = useState(true);
-    const [turbo, setTurbo] = useState(false);
-    const [lossesToSwitch, setLossesToSwitch] = useState('1');
-    const [rounds, setRounds] = useState('');
-    const [takeProfit, setTakeProfit] = useState('');
-    const [stopLoss, setStopLoss] = useState('');
+    const [switchMarketSymbols, setSwitchMarketSymbols] = useProfitdockPersistentState<string[]>('profitdock.flipper.switchMarketSymbols', []);
+    const [switchOnLoss, setSwitchOnLoss] = useProfitdockPersistentState('profitdock.flipper.switchOnLoss', true);
+    const [turbo, setTurbo] = useProfitdockPersistentState('profitdock.flipper.turbo', false);
+    const [lossesToSwitch, setLossesToSwitch] = useProfitdockPersistentState('profitdock.flipper.lossesToSwitch', '1');
+    const [rounds, setRounds] = useProfitdockPersistentState('profitdock.flipper.rounds', '');
+    const [takeProfit, setTakeProfit] = useProfitdockPersistentState('profitdock.flipper.takeProfit', '');
+    const [stopLoss, setStopLoss] = useProfitdockPersistentState('profitdock.flipper.stopLoss', '');
     const [positions, setPositions] = useState<FlipperPosition[]>([]);
     const [feedback, setFeedback] = useState(localize('No positions'));
     const [isRunning, setIsRunning] = useState(false);
@@ -886,6 +891,15 @@ const FlipperSwitcherPage = observer(() => {
                 setFeedback(localize('Flipper Switcher will stop after the current contracts settle.'));
             }),
         [resetStakeInputsToInitial]
+    );
+
+    useEffect(
+        () =>
+            subscribeProfitdockTradeStart(request => {
+                if (request.feature !== 'flipper' || isRunning) return;
+                handleRun();
+            }),
+        [isRunning]
     );
 
     const handleStrategyButton = (leg: StrategyLeg) => {

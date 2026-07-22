@@ -16,9 +16,14 @@ import {
 } from '@/features/deriv-live/api';
 import { MarketSymbol } from '@/features/deriv-live/types';
 import { useApiBase } from '@/hooks/useApiBase';
+import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentState';
 import { useStore } from '@/hooks/useStore';
 import { MarketIcon } from '@/components/market/market-icon';
-import { emitProfitdockTradeStatus, subscribeProfitdockTradeStop } from '@/utils/profitdock-trade-controller';
+import {
+    emitProfitdockTradeStatus,
+    subscribeProfitdockTradeStart,
+    subscribeProfitdockTradeStop,
+} from '@/utils/profitdock-trade-controller';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { localize } from '@deriv-com/translations';
 import './accumulators.scss';
@@ -1147,24 +1152,24 @@ const AccumulatorsPage = observer(() => {
     const store = useStore();
     const { transactions } = store;
     const { authData, connectionStatus } = useApiBase();
-    const [activeTab, setActiveTab] = useState<'manual' | 'auto'>('manual');
-    const [growthRatePercent, setGrowthRatePercent] = useState<number>(3);
-    const [manualMarketSymbol, setManualMarketSymbol] = useState('');
-    const [manualConfigs, setManualConfigs] = useState<Record<string, ManualCardConfig>>({});
+    const [activeTab, setActiveTab] = useProfitdockPersistentState<'manual' | 'auto'>('profitdock.accumulators.mode', 'manual');
+    const [growthRatePercent, setGrowthRatePercent] = useProfitdockPersistentState<number>('profitdock.accumulators.growth', 3);
+    const [manualMarketSymbol, setManualMarketSymbol] = useProfitdockPersistentState('profitdock.accumulators.manualMarket', '');
+    const [manualConfigs, setManualConfigs] = useProfitdockPersistentState<Record<string, ManualCardConfig>>('profitdock.accumulators.manualConfigs', {});
     const [manualTrades, setManualTrades] = useState<Record<string, ManualTradeState>>({});
     const [manualProposal, setManualProposal] = useState<ManualLiveProposalState>(EMPTY_MANUAL_PROPOSAL);
     const [manualChartTicks, setManualChartTicks] = useState<ManualChartTick[]>([]);
     const [manualTickError, setManualTickError] = useState<string | null>(null);
     const [isManualTickLoading, setIsManualTickLoading] = useState(true);
     const [manualBarrierFlash, setManualBarrierFlash] = useState(false);
-    const [autoMarketMode, setAutoMarketMode] = useState<AutoMarketMode>('single');
-    const [autoMarketSymbol, setAutoMarketSymbol] = useState('');
-    const [autoStake, setAutoStake] = useState(AUTO_DEFAULTS.stake);
-    const [autoMartingaleMultiplier, setAutoMartingaleMultiplier] = useState(AUTO_DEFAULTS.martingaleMultiplier);
-    const [autoSessionStopLoss, setAutoSessionStopLoss] = useState(AUTO_DEFAULTS.sessionStopLoss);
-    const [autoStreakLength, setAutoStreakLength] = useState(AUTO_DEFAULTS.streakLength);
-    const [autoThresholdBelow, setAutoThresholdBelow] = useState(AUTO_DEFAULTS.thresholdBelow);
-    const [autoInstantRecovery, setAutoInstantRecovery] = useState(false);
+    const [autoMarketMode, setAutoMarketMode] = useProfitdockPersistentState<AutoMarketMode>('profitdock.accumulators.autoMode', 'single');
+    const [autoMarketSymbol, setAutoMarketSymbol] = useProfitdockPersistentState('profitdock.accumulators.autoMarket', '');
+    const [autoStake, setAutoStake] = useProfitdockPersistentState('profitdock.accumulators.autoStake', AUTO_DEFAULTS.stake);
+    const [autoMartingaleMultiplier, setAutoMartingaleMultiplier] = useProfitdockPersistentState('profitdock.accumulators.autoMartingale', AUTO_DEFAULTS.martingaleMultiplier);
+    const [autoSessionStopLoss, setAutoSessionStopLoss] = useProfitdockPersistentState('profitdock.accumulators.autoStopLoss', AUTO_DEFAULTS.sessionStopLoss);
+    const [autoStreakLength, setAutoStreakLength] = useProfitdockPersistentState('profitdock.accumulators.autoStreak', AUTO_DEFAULTS.streakLength);
+    const [autoThresholdBelow, setAutoThresholdBelow] = useProfitdockPersistentState('profitdock.accumulators.autoThreshold', AUTO_DEFAULTS.thresholdBelow);
+    const [autoInstantRecovery, setAutoInstantRecovery] = useProfitdockPersistentState('profitdock.accumulators.autoRecovery', false);
     const [autoStream, setAutoStream] = useState<StreamState>(EMPTY_AUTO_STREAM);
     const [autoEngine, setAutoEngine] = useState<AutoEngineState>({
         activeProfit: 0,
@@ -3090,6 +3095,15 @@ const AccumulatorsPage = observer(() => {
                 handleStopAuto();
             }),
         [handleStopAuto]
+    );
+
+    useEffect(
+        () =>
+            subscribeProfitdockTradeStart(request => {
+                if (request.feature !== 'accumulators' || autoEngine.running || autoEngine.activeContractId) return;
+                void handleStartAuto();
+            }),
+        [autoEngine.activeContractId, autoEngine.running]
     );
 
     useEffect(() => {

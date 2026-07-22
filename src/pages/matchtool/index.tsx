@@ -10,10 +10,17 @@ import {
     hasUsableProfitdockStoredSession,
 } from '@/external/bot-skeleton/services/api/profitdock-oauth-session';
 import { isExcludedSyntheticMarket, normalizeApiMessage } from '@/features/deriv-live/api';
+import { getProfitdockActiveSymbols } from '@/features/deriv-live/markets';
 import { MarketSymbol } from '@/features/deriv-live/types';
 import { useApiBase } from '@/hooks/useApiBase';
+import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentState';
 import { useStore } from '@/hooks/useStore';
-import { emitProfitdockTradeStatus, subscribeProfitdockTradeStop } from '@/utils/profitdock-trade-controller';
+import {
+    emitProfitdockTradeStatus,
+    subscribeProfitdockTradeStart,
+    subscribeProfitdockTradeStop,
+} from '@/utils/profitdock-trade-controller';
+import { getProfitdockPublicSocketUrl } from '@/external/bot-skeleton/services/api/appId';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { localize } from '@deriv-com/translations';
 import './matchtool.scss';
@@ -72,10 +79,10 @@ type RoundRow = DigitPick & {
     result: 'pending' | 'placed' | 'won' | 'lost' | 'error';
 };
 
-const DERIV_PUBLIC_WS_URL = 'wss://ws.derivws.com/websockets/v3?app_id=1089&l=EN&brand=deriv';
+const DERIV_PUBLIC_WS_URL = getProfitdockPublicSocketUrl();
 const LOOKBACK_TICK_COUNT = 1000;
 const ANALYSIS_TICK_OPTIONS = [25, 50, 100, 1000];
-const MATCHTOOL_FEATURE = 'matchtool' as any;
+const MATCHTOOL_FEATURE = 'matchtool' as const;
 
 const publicRequest = <T extends PublicRequestResponse>(payload: Record<string, unknown>, timeoutMs = 14000) =>
     new Promise<T>((resolve, reject) => {
@@ -322,10 +329,10 @@ const MatchtoolPage = observer(() => {
     const { accountList, activeLoginid, authData, connectionStatus } = useApiBase();
     const { transactions } = useStore();
     const [markets, setMarkets] = useState<MatchMarket[]>([]);
-    const [selectedMarket, setSelectedMarket] = useState('');
-    const [analysisTicks, setAnalysisTicks] = useState('1000');
-    const [stake, setStake] = useState('');
-    const [predictionCount, setPredictionCount] = useState('');
+    const [selectedMarket, setSelectedMarket] = useProfitdockPersistentState('profitdock.matchtool.market', '');
+    const [analysisTicks, setAnalysisTicks] = useProfitdockPersistentState('profitdock.matchtool.ticks', '1000');
+    const [stake, setStake] = useProfitdockPersistentState('profitdock.matchtool.stake', '');
+    const [predictionCount, setPredictionCount] = useProfitdockPersistentState('profitdock.matchtool.predictions', '');
     const [analysisDigits, setAnalysisDigits] = useState<number[]>([]);
     const [pipSize, setPipSize] = useState(2);
     const [isLoadingMarkets, setIsLoadingMarkets] = useState(true);
@@ -405,9 +412,9 @@ const MatchtoolPage = observer(() => {
             setIsLoadingMarkets(true);
             setFeedback(null);
             try {
-                let activeSymbols = api_base.active_symbols as MatchMarket[];
+                let activeSymbols = (await getProfitdockActiveSymbols()) as MatchMarket[];
                 if (!activeSymbols.length) {
-                    const response = await publicRequest<PublicRequestResponse>({ active_symbols: 'brief', product_type: 'basic' });
+                    const response = await publicRequest<PublicRequestResponse>({ active_symbols: 'brief' });
                     activeSymbols = response.active_symbols || [];
                 }
 
@@ -548,10 +555,11 @@ const MatchtoolPage = observer(() => {
             }
             socket.close();
         };
-    }, [analysisTickCount, pipSize, selectedMarket, selectedMarketInfo]);
+    }, [analysisTickCount, selectedMarket]);
 
     useEffect(() => {
         emitProfitdockTradeStatus({
+            canStart: Boolean(markets.length),
             canStop: isRunning,
             feature: MATCHTOOL_FEATURE,
             label: isRunning ? localize('MatchTool running') : localize('MatchTool ready'),
@@ -652,6 +660,15 @@ const MatchtoolPage = observer(() => {
             setIsRunning(false);
         }
     };
+
+    useEffect(
+        () =>
+            subscribeProfitdockTradeStart(request => {
+                if (request.feature !== MATCHTOOL_FEATURE || isRunning) return;
+                void handleRun();
+            }),
+        [isRunning, handleRun]
+    );
 
     const maxCount = Math.max(...model.counts, 1);
     const minCount = Math.min(...model.counts);

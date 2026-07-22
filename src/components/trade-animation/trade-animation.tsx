@@ -8,6 +8,7 @@ import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
 import {
     getProfitdockTradeStatus,
+    requestProfitdockTradeStart,
     requestProfitdockTradeStop,
     subscribeProfitdockTradeStatus,
 } from '@/utils/profitdock-trade-controller';
@@ -115,14 +116,20 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
             ? 'accumulators'
             : safeActiveTab === DBOT_TABS.CORSA
               ? 'corsa'
-              : safeActiveTab === DBOT_TABS.FLIPPER_SWITCHER
-                ? 'flipper'
+                : safeActiveTab === DBOT_TABS.FLIPPER_SWITCHER
+                  ? 'flipper'
+                  : safeActiveTab === DBOT_TABS.MATCHTOOL
+                    ? 'matchtool'
+                    : safeActiveTab === DBOT_TABS.MESH
+                      ? 'mesh'
                 : undefined;
     const profitdockTradeStatus = getProfitdockTradeStatus(active_profitdock_feature);
     const is_profitdock_trade_tab = [
         DBOT_TABS.ACCUMULATORS,
         DBOT_TABS.CORSA,
         DBOT_TABS.FLIPPER_SWITCHER,
+        DBOT_TABS.MATCHTOOL,
+        DBOT_TABS.MESH,
     ].includes(safeActiveTab);
     const is_profitdock_trade_running = Boolean(
         is_profitdock_trade_tab && profitdockTradeStatus?.running && profitdockTradeStatus?.canStop !== false
@@ -155,7 +162,9 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
 
     // Disable the RUN button if:
     // 1. There are no active or saved bots AND the user is not in the bot builder tab
-    const should_disable_run = is_profitdock_trade_tab ? !is_profitdock_trade_running : has_no_bots && !is_bot_builder_tab;
+    const should_disable_run = is_profitdock_trade_tab
+        ? profitdockTradeStatus?.canStart === false && !is_profitdock_trade_running
+        : has_no_bots && !is_bot_builder_tab;
 
     const is_disabled = is_profitdock_trade_running ? false : is_stop_button_visible ? false : shouldDisable || should_disable_run;
 
@@ -250,6 +259,8 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                         if (is_profitdock_trade_tab) {
                             if (is_profitdock_trade_running) {
                                 requestProfitdockTradeStop(profitdockTradeStatus?.feature);
+                            } else if (profitdockTradeStatus?.feature) {
+                                requestProfitdockTradeStart(profitdockTradeStatus.feature);
                             }
                             return;
                         }

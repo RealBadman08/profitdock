@@ -9,9 +9,17 @@ import {
     hasUsableProfitdockStoredSession,
 } from '@/external/bot-skeleton/services/api/profitdock-oauth-session';
 import { isExcludedSyntheticMarket, normalizeApiMessage } from '@/features/deriv-live/api';
+import { getProfitdockActiveSymbols } from '@/features/deriv-live/markets';
 import { MarketSymbol } from '@/features/deriv-live/types';
 import { useApiBase } from '@/hooks/useApiBase';
+import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentState';
 import { useStore } from '@/hooks/useStore';
+import { getProfitdockPublicSocketUrl } from '@/external/bot-skeleton/services/api/appId';
+import {
+    emitProfitdockTradeStatus,
+    subscribeProfitdockTradeStart,
+    subscribeProfitdockTradeStop,
+} from '@/utils/profitdock-trade-controller';
 import { ProposalOpenContract } from '@deriv/api-types';
 import './mesh.scss';
 
@@ -76,7 +84,7 @@ type OpenContractResponse = {
     subscription?: { id?: string };
 };
 
-const DERIV_PUBLIC_WS_URL = 'wss://ws.derivws.com/websockets/v3?app_id=1089&l=EN&brand=deriv';
+const DERIV_PUBLIC_WS_URL = getProfitdockPublicSocketUrl();
 const ENABLED_Z_SCORE = 2;
 const DIGIT_CONTRACTS = new Set(['DIGITOVER', 'DIGITEVEN', 'DIGITMATCH']);
 const SIGNAL_META: Record<SignalKind, { accent: string; textColor: string; label: string }> = {
@@ -636,24 +644,30 @@ const MeshPage = observer(() => {
     const { accountList, activeLoginid, authData, connectionStatus } = useApiBase();
     const { transactions } = useStore();
     const [markets, setMarkets] = useState<MeshMarket[]>([]);
-    const [selectedMarket, setSelectedMarket] = useState('');
+    const [selectedMarket, setSelectedMarket] = useProfitdockPersistentState('profitdock.mesh.market', '');
     const [digits, setDigits] = useState<number[]>([]);
     const [pipSize, setPipSize] = useState(2);
     const [lastHit, setLastHit] = useState<{ digit: number; nonce: number } | null>(null);
     const [isLoadingMarkets, setIsLoadingMarkets] = useState(true);
     const [isLoadingHistory, setIsLoadingHistory] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [manualBarriers, setManualBarriers] = useState<Partial<Record<'over' | 'under', number>>>({});
-    const [stakeValue, setStakeValue] = useState('1');
+    const [manualBarriers, setManualBarriers] = useProfitdockPersistentState<Partial<Record<'over' | 'under', number>>>(
+        'profitdock.mesh.barriers',
+        {}
+    );
+    const [stakeValue, setStakeValue] = useProfitdockPersistentState('profitdock.mesh.stake', '1');
     const [feedback, setFeedback] = useState<string | null>(null);
     const [executingSignal, setExecutingSignal] = useState<SignalKind | null>(null);
+    const [isRunning, setIsRunning] = useState(false);
     const [flashByCard, setFlashByCard] = useState<Partial<Record<SignalKind, string>>>({});
-    const [windowSizeStr, setWindowSizeStr] = useState('1000');
-    const [selectedDigitStr, setSelectedDigitStr] = useState('5');
+    const [windowSizeStr, setWindowSizeStr] = useProfitdockPersistentState('profitdock.mesh.ticks', '1000');
+    const [selectedDigitStr, setSelectedDigitStr] = useProfitdockPersistentState('profitdock.mesh.digit', '5');
     const windowSize = Number(windowSizeStr) || 10;
     const selectedDigit = clampDigitValue(selectedDigitStr, 5);
     const tickSocketRef = useRef<WebSocket | null>(null);
     const tickSubscriptionIdRef = useRef<string | null>(null);
+    const runningRef = useRef(false);
+    const executeSignalRef = useRef<(signal: MeshSignal) => Promise<void>>(async () => undefined);
 
     const currency = authData?.currency || getStoredProfitdockActiveCurrency() || 'USD';
     const selectedMarketInfo = useMemo(
@@ -710,9 +724,9 @@ const MeshPage = observer(() => {
             setIsLoadingMarkets(true);
             setError(null);
             try {
-                let activeSymbols = api_base.active_symbols as MarketSymbol[];
+                let activeSymbols = await getProfitdockActiveSymbols();
                 if (!activeSymbols.length) {
-                    const response = await publicRequest<PublicRequestResponse>({ active_symbols: 'brief', product_type: 'basic' });
+                    const response = await publicRequest<PublicRequestResponse>({ active_symbols: 'brief' });
                     activeSymbols = response.active_symbols || [];
                 }
 
@@ -851,7 +865,7 @@ const MeshPage = observer(() => {
             }
             socket.close();
         };
-    }, [pipSize, selectedMarket, selectedMarketInfo, windowSize]);
+    }, [selectedMarket, windowSize]);
 
     const flashCard = (cardId: SignalKind, color: string) => {
         setFlashByCard(previous => ({ ...previous, [cardId]: color }));
@@ -900,6 +914,62 @@ const MeshPage = observer(() => {
             setExecutingSignal(null);
         }
     };
+
+    useEffect(() => {
+        executeSignalRef.current = executeSignal;
+    });
+
+    const runMeshTrade = useCallback(async () => {
+        if (runningRef.current) return;
+
+        const candidate = [...signals].sort((left, right) => Math.abs(right.z) - Math.abs(left.z))[0];
+        if (!candidate || Math.abs(candidate.z) < ENABLED_Z_SCORE) {
+            setFeedback('No confirmed Mesh signal is available yet.');
+            return;
+        }
+
+        runningRef.current = true;
+        setIsRunning(true);
+        setFeedback(null);
+
+        try {
+            await executeSignalRef.current(candidate);
+        } finally {
+            runningRef.current = false;
+            setIsRunning(false);
+        }
+    }, [signals]);
+
+    useEffect(() => {
+        emitProfitdockTradeStatus({
+            canStart: Boolean(selectedMarketInfo && signals.length),
+            canStop: isRunning,
+            feature: 'mesh',
+            label: isRunning ? 'Mesh running' : 'Mesh ready',
+            running: isRunning,
+        });
+    }, [isRunning, selectedMarketInfo, signals.length]);
+
+    useEffect(
+        () =>
+            subscribeProfitdockTradeStart(request => {
+                if (request.feature !== 'mesh') return;
+                void runMeshTrade();
+            }),
+        [runMeshTrade]
+    );
+
+    useEffect(
+        () =>
+            subscribeProfitdockTradeStop(request => {
+                if (request.feature && request.feature !== 'mesh') return;
+
+                runningRef.current = false;
+                setIsRunning(false);
+                setFeedback('Mesh trading stopped.');
+            }),
+        []
+    );
 
     return (
         <div className='mesh-page'>

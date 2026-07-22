@@ -11,10 +11,15 @@ import {
 import { getMarketsWithoutStepBoomCrashRange, normalizeApiMessage } from '@/features/deriv-live/api';
 import { MarketSymbol } from '@/features/deriv-live/types';
 import { useApiBase } from '@/hooks/useApiBase';
+import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentState';
 import { useStore } from '@/hooks/useStore';
 import { normalizeMartingaleMultiplier, roundMartingaleStake } from '@/hooks/useMartingale';
 
-import { emitProfitdockTradeStatus, subscribeProfitdockTradeStop } from '@/utils/profitdock-trade-controller';
+import {
+    emitProfitdockTradeStatus,
+    subscribeProfitdockTradeStart,
+    subscribeProfitdockTradeStop,
+} from '@/utils/profitdock-trade-controller';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { localize } from '@deriv-com/translations';
 import './corsa.scss';
@@ -403,16 +408,16 @@ const CorsaPage = observer(() => {
     const { authData, connectionStatus } = useApiBase();
     const currency = authData?.currency || getStoredProfitdockActiveCurrency() || 'USD';
     const [markets, setMarkets] = useState<MarketSymbol[]>(() => getCorsaMarkets([]));
-    const [marketMode, setMarketMode] = useState<MarketMode>('single');
-    const [selectedMarket, setSelectedMarket] = useState('1HZ10V');
-    const [contractType, setContractType] = useState<CorsaDirection>('DIGITOVER');
-    const [stake, setStake] = useState('0.35');
-    const [martingale, setMartingale] = useState('2');
-    const [signalStreak, setSignalStreak] = useState('3');
-    const [prediction, setPrediction] = useState('5');
-    const [durationTicks, setDurationTicks] = useState('1');
-    const [takeProfit, setTakeProfit] = useState('');
-    const [stopLoss, setStopLoss] = useState('');
+    const [marketMode, setMarketMode] = useProfitdockPersistentState<MarketMode>('profitdock.corsa.marketMode', 'single');
+    const [selectedMarket, setSelectedMarket] = useProfitdockPersistentState('profitdock.corsa.market', '1HZ10V');
+    const [contractType, setContractType] = useProfitdockPersistentState<CorsaDirection>('profitdock.corsa.contract', 'DIGITOVER');
+    const [stake, setStake] = useProfitdockPersistentState('profitdock.corsa.stake', '0.35');
+    const [martingale, setMartingale] = useProfitdockPersistentState('profitdock.corsa.martingale', '2');
+    const [signalStreak, setSignalStreak] = useProfitdockPersistentState('profitdock.corsa.streak', '3');
+    const [prediction, setPrediction] = useProfitdockPersistentState('profitdock.corsa.prediction', '5');
+    const [durationTicks, setDurationTicks] = useProfitdockPersistentState('profitdock.corsa.duration', '1');
+    const [takeProfit, setTakeProfit] = useProfitdockPersistentState('profitdock.corsa.takeProfit', '');
+    const [stopLoss, setStopLoss] = useProfitdockPersistentState('profitdock.corsa.stopLoss', '');
     const [isRunning, setIsRunning] = useState(false);
     const [detectors, setDetectors] = useState<Record<string, DetectorState>>({});
     const [, setPositions] = useState<CorsaPosition[]>([]);
@@ -800,6 +805,15 @@ const CorsaPage = observer(() => {
                 setIsRunning(false);
             }),
         []
+    );
+
+    useEffect(
+        () =>
+            subscribeProfitdockTradeStart(request => {
+                if (request.feature !== 'corsa' || isRunning) return;
+                handleRun();
+            }),
+        [isRunning]
     );
 
     const visibleDetectors = watchedMarketSymbols.map(symbol => ({

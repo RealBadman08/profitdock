@@ -270,7 +270,7 @@ const RunPanel = observer(() => {
     const { statistics } = transactions;
     const { active_tour, active_tab } = dashboard;
     const { total_payout, total_profit, total_stake, won_contracts, lost_contracts, number_of_runs } = statistics;
-    const { ACCUMULATORS, BOT_BUILDER, CHART, CORSA, FLIPPER_SWITCHER } = DBOT_TABS;
+    const { ACCUMULATORS, BOT_BUILDER, CHART, CORSA, FLIPPER_SWITCHER, MATCHTOOL, MESH } = DBOT_TABS;
 
     React.useEffect(() => {
         onMount();
@@ -285,7 +285,13 @@ const RunPanel = observer(() => {
     }, []);
 
     React.useEffect(() => {
-        const should_collapse_custom_tab_drawer = [ACCUMULATORS, CORSA, FLIPPER_SWITCHER].includes(active_tab);
+        const should_collapse_custom_tab_drawer = [
+            ACCUMULATORS,
+            CORSA,
+            FLIPPER_SWITCHER,
+            MATCHTOOL,
+            MESH,
+        ].includes(active_tab);
 
         if (isDesktop && should_collapse_custom_tab_drawer && is_drawer_open) {
             toggleDrawer(false);
@@ -321,7 +327,15 @@ const RunPanel = observer(() => {
         />
     );
 
-    const show_run_panel = [ACCUMULATORS, BOT_BUILDER, CHART, CORSA, FLIPPER_SWITCHER].includes(active_tab) || active_tour;
+    const show_run_panel = [
+        ACCUMULATORS,
+        BOT_BUILDER,
+        CHART,
+        CORSA,
+        FLIPPER_SWITCHER,
+        MATCHTOOL,
+        MESH,
+    ].includes(active_tab) || active_tour;
     if ((!show_run_panel && isDesktop) || active_tour === 'bot_builder') return null;
 
     return (
