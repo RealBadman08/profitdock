@@ -421,10 +421,8 @@ const MatchtoolPage = observer(() => {
                 const candidates = activeSymbols
                     .filter(isDigitMatchCandidateMarket)
                     .sort((left, right) => (left.display_order || 0) - (right.display_order || 0));
-                const supported: MatchMarket[] = [];
-
-                for (const market of candidates) {
-                    if (isCancelled) return;
+                
+                const candidatePromises = candidates.map(async market => {
                     try {
                         const response = await publicRequest<PublicRequestResponse>({
                             contracts_for: market.symbol,
@@ -434,20 +432,18 @@ const MatchtoolPage = observer(() => {
                             response.contracts_for?.available
                                 ?.map(contract => String(contract.contract_type || '').toUpperCase())
                                 .filter(Boolean) || [];
-                        const confirmedMarket = { ...market, supportedContracts: availableContracts };
-                        if (availableContracts.includes('DIGITMATCH') && isDigitMatchCandidateMarket(confirmedMarket)) {
-                            supported.push(confirmedMarket);
-                            setMarkets([...supported]);
-                            setSelectedMarket(previous =>
-                                previous && supported.some(item => item.symbol === previous)
-                                    ? previous
-                                    : supported.find(item => item.symbol === 'R_50')?.symbol || supported[0].symbol
-                            );
-                        }
+                        return { ...market, supportedContracts: availableContracts };
                     } catch {
-                        // Unsupported or unavailable symbol, skip it.
+                        return null;
                     }
-                }
+                });
+
+                const results = await Promise.all(candidatePromises);
+                if (isCancelled) return;
+
+                const supported = results.filter((market): market is MatchMarket => {
+                    return market !== null && market.supportedContracts.includes('DIGITMATCH') && isDigitMatchCandidateMarket(market);
+                });
 
                 if (isCancelled) return;
                 setMarkets(supported);

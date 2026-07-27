@@ -57,6 +57,7 @@ type ProposalResponse = {
         id?: string;
         longcode?: string;
         spot?: number;
+        payout?: number;
     };
 };
 
@@ -133,6 +134,22 @@ const STRATEGY_PAIRS: StrategyPair[] = [
         ],
     },
     {
+        key: 'higher_lower',
+        label: 'Higher / Lower',
+        legs: [
+            { contractType: 'HIGHER', label: 'Higher', predictionMode: 'barrier' },
+            { contractType: 'LOWER', label: 'Lower', predictionMode: 'barrier' },
+        ],
+    },
+    {
+        key: 'touch_no_touch',
+        label: 'Touch / No Touch',
+        legs: [
+            { contractType: 'ONETOUCH', label: 'Touch', predictionMode: 'barrier' },
+            { contractType: 'NOTOUCH', label: 'No Touch', predictionMode: 'barrier' },
+        ],
+    },
+    {
         key: 'only_up_down',
         label: 'Only Ups / Only Downs',
         legs: [
@@ -153,6 +170,10 @@ const BUTTONS = [
     STRATEGY_PAIRS[3].legs[1],
     STRATEGY_PAIRS[4].legs[0],
     STRATEGY_PAIRS[4].legs[1],
+    STRATEGY_PAIRS[5].legs[0],
+    STRATEGY_PAIRS[5].legs[1],
+    STRATEGY_PAIRS[6].legs[0],
+    STRATEGY_PAIRS[6].legs[1],
 ];
 
 const getDerivApi = () => api_base.api as ApiLike | undefined;
@@ -244,14 +265,18 @@ const createProposalPayload = ({
     contractType: string;
     currency: string;
     duration: number;
-    prediction: number;
+    prediction: number | string;
     predictionMode?: 'barrier' | 'selected_tick';
     symbol: string;
 }) => {
+    let apiContractType = contractType;
+    if (contractType === 'HIGHER') apiContractType = 'CALL';
+    if (contractType === 'LOWER') apiContractType = 'PUT';
+
     const payload: Record<string, unknown> = {
         amount,
         basis: 'stake',
-        contract_type: contractType,
+        contract_type: apiContractType,
         currency,
         duration,
         duration_unit: 't',
@@ -286,6 +311,7 @@ const requestQuote = async (api: ApiLike, payload: Record<string, unknown>) => {
         longcode: response.proposal.longcode,
         proposalId: response.proposal.id,
         spot: response.proposal.spot,
+        payout: response.proposal.payout,
     };
 };
 
@@ -453,6 +479,9 @@ const FlipperSwitcherPage = observer(() => {
     const stopLossRef = useRef(stopLoss);
     const customLegsRef = useRef(customLegs);
 
+    const [quoteOne, setQuoteOne] = useState<{ askPrice: number; payout: number; error?: string } | null>(null);
+    const [quoteTwo, setQuoteTwo] = useState<{ askPrice: number; payout: number; error?: string } | null>(null);
+
     useEffect(() => { turboRef.current = turbo; }, [turbo]);
     useEffect(() => { durationTicksRef.current = durationTicks; }, [durationTicks]);
     useEffect(() => { predictionOneRef.current = predictionOne; }, [predictionOne]);
@@ -515,6 +544,62 @@ const FlipperSwitcherPage = observer(() => {
             return null;
         }
     }, [hasRecoverableSession]);
+
+    useEffect(() => {
+        let isCancelled = false;
+        
+        const fetchQuotes = async () => {
+            if (isRunning) return; 
+            const api = await ensureTradingApi();
+            if (!api || isCancelled) return;
+
+            const duration = turbo ? 1 : toPositiveInteger(durationTicks, 1);
+            
+            const fetchLegQuote = async (leg: StrategyLeg | null, stake: string, pred: string) => {
+                if (!leg || !selectedMarketInfoRef.current) return null;
+                const currentStake = toPositiveNumber(stake, 0);
+                if (currentStake <= 0) return null;
+                
+                const legDuration = getDurationForLeg(leg, duration);
+                const val = pred || entryPoint || '0';
+                const parsedPred = leg.contractType.includes('DIGIT') ? Math.max(0, Math.min(9, Math.trunc(Number(val)))) : val;
+                
+                try {
+                    const quote = await requestQuote(api, createProposalPayload({
+                        amount: currentStake,
+                        contractType: leg.contractType,
+                        currency,
+                        duration: legDuration,
+                        prediction: parsedPred,
+                        predictionMode: leg.predictionMode,
+                        symbol: selectedMarketInfoRef.current.symbol
+                    }));
+                    return { askPrice: quote.askPrice, payout: quote.payout || 0 };
+                } catch (error) {
+                    return { askPrice: 0, payout: 0, error: error instanceof Error ? error.message : 'Error fetching quote' };
+                }
+            };
+
+            const [q1, q2] = await Promise.all([
+                fetchLegQuote(selectedLegs?.[0] || null, stakeOne, predictionOne),
+                fetchLegQuote(selectedLegs?.[1] || null, stakeTwo, predictionTwo)
+            ]);
+
+            if (!isCancelled) {
+                setQuoteOne(q1);
+                setQuoteTwo(q2);
+            }
+        };
+
+        const timer = setTimeout(fetchQuotes, 500); 
+        return () => {
+            isCancelled = true;
+            clearTimeout(timer);
+        };
+    }, [
+        selectedLegs, stakeOne, stakeTwo, predictionOne, predictionTwo, 
+        entryPoint, turbo, durationTicks, selectedMarket, currency, isRunning, ensureTradingApi
+    ]);
 
     useEffect(() => {
         let isCancelled = false;
@@ -689,8 +774,17 @@ const FlipperSwitcherPage = observer(() => {
                 const duration = turboRef.current ? 1 : toPositiveInteger(durationTicksRef.current, 1);
                 const firstDuration = getDurationForLeg(activeLegs[0], duration);
                 const secondDuration = getDurationForLeg(activeLegs[1], duration);
-                const predOne = Math.max(0, Math.min(9, Math.trunc(Number(predictionOneRef.current || entryPointRef.current || 0))));
-                const predTwo = Math.max(0, Math.min(9, Math.trunc(Number(predictionTwoRef.current || entryPointRef.current || 0))));
+
+                const getPredictionValue = (refValue: string, legContractType: string) => {
+                    const val = refValue || entryPointRef.current || '0';
+                    if (legContractType.includes('DIGIT')) {
+                        return Math.max(0, Math.min(9, Math.trunc(Number(val))));
+                    }
+                    return val;
+                };
+
+                const predOne = getPredictionValue(predictionOneRef.current, activeLegs[0].contractType);
+                const predTwo = getPredictionValue(predictionTwoRef.current, activeLegs[1].contractType);
 
                 let quoteBundle = null;
                 for (const marketInfo of orderedCandidates) {
@@ -955,36 +1049,50 @@ const FlipperSwitcherPage = observer(() => {
 
             <section className='flipper-page__active-card'>
                 <h2>{localize('Active strategies (switch-on-loss - {{ losses }} loss)', { losses: lossesToSwitch || '1' })}</h2>
-                {selectedPair.legs.map((leg, index) => (
-                    <div className='flipper-page__active-row' key={leg?.contractType || `empty-${index}`}>
-                        <strong>#{index + 1} - {leg?.label || localize('Select contract')}</strong>
-                        <label>
-                            {localize('Stake')}
-                            <input
-                                value={index === 0 ? stakeOne : stakeTwo}
-                                onChange={event => (index === 0 ? setStakeOne(event.target.value) : setStakeTwo(event.target.value))}
-                                inputMode='decimal'
-                            />
-                        </label>
-                        <label>
-                            {localize('Mult x')}
-                            <input
-                                value={index === 0 ? martingaleOne : martingaleTwo}
-                                onChange={event => (index === 0 ? setMartingaleOne(event.target.value) : setMartingaleTwo(event.target.value))}
-                                inputMode='decimal'
-                            />
-                        </label>
-                        <label>
-                            {localize('Pred')}
-                            <input
-                                value={index === 0 ? predictionOne : predictionTwo}
-                                onChange={event => (index === 0 ? setPredictionOne(event.target.value) : setPredictionTwo(event.target.value))}
-                                inputMode='numeric'
-                                disabled={!leg?.predictionMode}
-                            />
-                        </label>
-                    </div>
-                ))}
+                {selectedPair.legs.map((leg, index) => {
+                    const quote = index === 0 ? quoteOne : quoteTwo;
+                    return (
+                        <div className='flipper-page__active-row' key={leg?.contractType || `empty-${index}`}>
+                            <strong>#{index + 1} - {leg?.label || localize('Select contract')}</strong>
+                            <label>
+                                {localize('Stake')}
+                                <input
+                                    value={index === 0 ? stakeOne : stakeTwo}
+                                    onChange={event => (index === 0 ? setStakeOne(event.target.value) : setStakeTwo(event.target.value))}
+                                    inputMode='decimal'
+                                />
+                            </label>
+                            <label>
+                                {localize('Mult x')}
+                                <input
+                                    value={index === 0 ? martingaleOne : martingaleTwo}
+                                    onChange={event => (index === 0 ? setMartingaleOne(event.target.value) : setMartingaleTwo(event.target.value))}
+                                    inputMode='decimal'
+                                />
+                            </label>
+                            <label>
+                                {leg?.predictionMode === 'barrier' ? localize('Pred / Barrier') : localize('Pred')}
+                                <input
+                                    value={index === 0 ? predictionOne : predictionTwo}
+                                    onChange={event => (index === 0 ? setPredictionOne(event.target.value) : setPredictionTwo(event.target.value))}
+                                    inputMode='text'
+                                    disabled={!leg?.predictionMode}
+                                />
+                            </label>
+                            {quote && (
+                                <div className='flipper-page__quote-display'>
+                                    {quote.error ? (
+                                        <span className='flipper-page__quote-error'>{quote.error}</span>
+                                    ) : (
+                                        <span className='flipper-page__quote-payout'>
+                                            Payout: {formatMoney(quote.payout, currency)} (+{formatMoney(quote.payout - quote.askPrice, currency)})
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
             </section>
 
             <section className='flipper-page__control-panel'>

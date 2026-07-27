@@ -119,6 +119,28 @@
         input:disabled {
             opacity: 0.45;
         }
+
+        .flipper-page__quote-display {
+            grid-column: 1 / -1;
+            font-size: 1.6rem;
+            text-align: right;
+            margin-top: -1rem;
+            padding-bottom: 0.5rem;
+        }
+
+        .flipper-page__quote-error {
+            color: #dc3444;
+            font-weight: 500;
+        }
+
+        .flipper-page__quote-payout {
+            color: #16a34a;
+            font-weight: 600;
+            background: #ecfdf5;
+            padding: 0.4rem 1.2rem;
+            border-radius: 999px;
+            border: 1px solid #d1fae5;
+        }
     }
 
     &__control-panel {
@@ -460,6 +482,12 @@ body.theme--dark .flipper-page {
     .flipper-page__positions > div {
         background: #171c24;
         border-color: rgb(255 255 255 / 12%);
+    }
+
+    .flipper-page__quote-payout {
+        background: #064e3b;
+        color: #34d399;
+        border-color: #065f46;
     }
 
     .flipper-page__positions > span {
