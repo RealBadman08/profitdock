@@ -386,8 +386,10 @@ const requestDirectBuy = async ({
     
     (buyPayload.parameters as Record<string, unknown>)[isCustomLegacyOAuthDomain() ? 'underlying_symbol' : 'symbol'] = symbol;
 
-    if (signal.barrier !== undefined) (buyPayload.parameters as Record<string, unknown>).barrier = String(signal.barrier);
-    if (signal.recommendedDigit !== undefined) (buyPayload.parameters as Record<string, unknown>).barrier = String(signal.recommendedDigit);
+    if (signal.contractType !== 'DIGITEVEN' && signal.contractType !== 'DIGITODD') {
+        if (signal.barrier !== undefined) (buyPayload.parameters as Record<string, unknown>).barrier = String(signal.barrier);
+        if (signal.recommendedDigit !== undefined) (buyPayload.parameters as Record<string, unknown>).barrier = String(signal.recommendedDigit);
+    }
 
     const buyResponse = normalizeApiMessage<BuyResponse>(await api.send(buyPayload));
     if (buyResponse?.error || !buyResponse?.buy?.contract_id) {
