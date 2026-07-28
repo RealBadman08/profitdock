@@ -356,7 +356,7 @@ const waitForSettlement = (api: ApiLike, contractId: number, onUpdate: (contract
             .catch(reject);
     });
 
-const requestProposalThenBuy = async ({
+const requestDirectBuy = async ({
     api,
     currency,
     duration,
@@ -371,35 +371,28 @@ const requestProposalThenBuy = async ({
     stake: number;
     symbol: string;
 }) => {
-    const proposalPayload: Record<string, unknown> = {
-        amount: stake,
-        basis: 'stake',
-        contract_type: signal.contractType,
-        currency,
-        duration,
-        duration_unit: 't',
-        proposal: 1,
+    const buyPayload: Record<string, unknown> = {
+        buy: 1,
+        price: String(stake),
+        parameters: {
+            amount: stake,
+            basis: 'stake',
+            contract_type: signal.contractType,
+            currency,
+            duration,
+            duration_unit: 't',
+        }
     };
-    proposalPayload[isCustomLegacyOAuthDomain() ? 'underlying_symbol' : 'symbol'] = symbol;
+    
+    (buyPayload.parameters as Record<string, unknown>)[isCustomLegacyOAuthDomain() ? 'underlying_symbol' : 'symbol'] = symbol;
 
-    if (signal.barrier !== undefined) proposalPayload.barrier = String(signal.barrier);
-    if (signal.recommendedDigit !== undefined) proposalPayload.barrier = String(signal.recommendedDigit);
+    if (signal.barrier !== undefined) (buyPayload.parameters as Record<string, unknown>).barrier = String(signal.barrier);
+    if (signal.recommendedDigit !== undefined) (buyPayload.parameters as Record<string, unknown>).barrier = String(signal.recommendedDigit);
 
-    const proposalResponse = normalizeApiMessage<ProposalResponse>(await api.send(proposalPayload));
-    if (proposalResponse?.error || !proposalResponse?.proposal?.id || typeof proposalResponse.proposal.ask_price !== 'number') {
-        throw new Error(
-            [proposalResponse?.error?.code, proposalResponse?.error?.message || 'Unable to request a Mesh proposal.']
-                .filter(Boolean)
-                .join(': ')
-        );
-    }
-
-    const buyResponse = normalizeApiMessage<BuyResponse>(
-        await api.send({ buy: proposalResponse.proposal.id, price: String(proposalResponse.proposal.ask_price) })
-    );
+    const buyResponse = normalizeApiMessage<BuyResponse>(await api.send(buyPayload));
     if (buyResponse?.error || !buyResponse?.buy?.contract_id) {
         throw new Error(
-            [buyResponse?.error?.code, buyResponse?.error?.message || 'Unable to place Mesh trade.']
+            [buyResponse?.error?.code, buyResponse?.error?.message || 'Unable to place Mesh bulk trade.']
                 .filter(Boolean)
                 .join(': ')
         );
@@ -926,7 +919,7 @@ const MeshPage = observer(() => {
 
             const promises = Array.from({ length: count }).map(async () => {
                 if (!runningRef.current) return;
-                const buy = await requestProposalThenBuy({
+                const buy = await requestDirectBuy({
                     api,
                     currency,
                     duration: Math.max(1, Math.min(10, Math.trunc(Number(numberOfTicksStr)))),
