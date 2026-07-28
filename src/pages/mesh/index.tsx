@@ -640,6 +640,15 @@ const SignalCard = ({
     );
 };
 
+const TRADE_TYPES = [
+    { label: 'Matches', value: 'matches', contractType: 'DIGITMATCH' },
+    { label: 'Differs', value: 'differs', contractType: 'DIGITDIFF' },
+    { label: 'Even', value: 'even', contractType: 'DIGITEVEN' },
+    { label: 'Odd', value: 'odd', contractType: 'DIGITODD' },
+    { label: 'Over', value: 'over', contractType: 'DIGITOVER' },
+    { label: 'Under', value: 'under', contractType: 'DIGITUNDER' },
+];
+
 const MeshPage = observer(() => {
     const { accountList, activeLoginid, authData, connectionStatus } = useApiBase();
     const { transactions } = useStore();
@@ -660,9 +669,10 @@ const MeshPage = observer(() => {
     const [executingSignal, setExecutingSignal] = useState<SignalKind | null>(null);
     const [isRunning, setIsRunning] = useState(false);
     const [flashByCard, setFlashByCard] = useState<Partial<Record<SignalKind, string>>>({});
-    const [windowSizeStr, setWindowSizeStr] = useProfitdockPersistentState('profitdock.mesh.ticks', '1000');
     const [selectedDigitStr, setSelectedDigitStr] = useProfitdockPersistentState('profitdock.mesh.digit', '5');
-    const windowSize = Number(windowSizeStr) || 10;
+    const [selectedTradeType, setSelectedTradeType] = useProfitdockPersistentState('profitdock.mesh.tradeType', 'matches');
+    const [numberOfTradesStr, setNumberOfTradesStr] = useProfitdockPersistentState('profitdock.mesh.numberOfTrades', '1');
+    const windowSize = 1000;
     const selectedDigit = clampDigitValue(selectedDigitStr, 5);
     const tickSocketRef = useRef<WebSocket | null>(null);
     const tickSubscriptionIdRef = useRef<string | null>(null);
@@ -675,7 +685,6 @@ const MeshPage = observer(() => {
         [markets, selectedMarket]
     );
     const model = useMemo(() => buildDigitModel(digits), [digits]);
-    const signals = useMemo(() => buildSignals(model, manualBarriers, selectedDigit), [manualBarriers, model, selectedDigit]);
     const activeAccount = useMemo(() => {
         const accountFromHook =
             accountList.find(account => account.loginid === activeLoginid) || accountList.find(account => isDemoAccount(account));
@@ -874,6 +883,79 @@ const MeshPage = observer(() => {
         }, 600);
     };
 
+    const handleRun = async () => {
+        if (isRunning) return;
+        const count = Math.max(1, Math.min(100, Math.trunc(Number(numberOfTradesStr))));
+        const stake = Number(stakeValue);
+        const tradeTypeObj = TRADE_TYPES.find(t => t.value === selectedTradeType);
+
+        if (!tradeTypeObj) return;
+        if (!Number.isFinite(stake) || stake <= 0) {
+            setFeedback('Enter a valid stake.');
+            return;
+        }
+        if (!selectedMarketInfo) {
+            setFeedback('Select a market first.');
+            return;
+        }
+
+        setIsRunning(true);
+        setFeedback(null);
+        runningRef.current = true;
+
+        try {
+            const api = await ensureTradingApi();
+            for (let i = 0; i < count; i++) {
+                if (!runningRef.current) break;
+
+                const signal: MeshSignal = {
+                    id: selectedTradeType as SignalKind,
+                    contractType: tradeTypeObj.contractType as MeshContractType,
+                    barrier: selectedDigit,
+                    recommendedDigit: selectedDigit,
+                    accent: '#22c55e',
+                    textColor: '#fff',
+                    buttonText: '',
+                    expected: 0,
+                    label: '',
+                    observed: 0,
+                    z: 0
+                };
+
+                const buy = await requestProposalThenBuy({
+                    api,
+                    currency,
+                    signal,
+                    stake,
+                    symbol: selectedMarketInfo.symbol,
+                });
+
+                const contractId = Number(buy.contract_id);
+                const updateTransaction = (contract: ProposalOpenContract) => {
+                    transactions.pushTransaction({
+                        ...contract,
+                        accountID: getActiveTransactionAccountId(),
+                        source: 'mesh',
+                    } as ProposalOpenContract & { accountID?: string; source?: string });
+                };
+                
+                await waitForSettlement(api, contractId, updateTransaction);
+                // Optional delay to avoid aggressive rate limiting
+                if (i < count - 1) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+            }
+            if (runningRef.current) {
+                setFeedback(`Successfully completed ${count} trade(s).`);
+            }
+        } catch (caughtError) {
+            setFeedback(caughtError instanceof Error ? caughtError.message : 'Unable to place Mesh trade.');
+        } finally {
+            setIsRunning(false);
+            runningRef.current = false;
+        }
+    };
+
     const executeSignal = async (signal: MeshSignal) => {
         const stake = Number(stakeValue);
         if (!Number.isFinite(stake) || stake <= 0) {
@@ -942,21 +1024,21 @@ const MeshPage = observer(() => {
 
     useEffect(() => {
         emitProfitdockTradeStatus({
-            canStart: Boolean(selectedMarketInfo && signals.length),
+            canStart: Boolean(selectedMarketInfo),
             canStop: isRunning,
             feature: 'mesh',
             label: isRunning ? 'Mesh running' : 'Mesh ready',
             running: isRunning,
         });
-    }, [isRunning, selectedMarketInfo, signals.length]);
+    }, [isRunning, selectedMarketInfo]);
 
     useEffect(
         () =>
             subscribeProfitdockTradeStart(request => {
                 if (request.feature !== 'mesh') return;
-                void runMeshTrade();
+                void handleRun();
             }),
-        [runMeshTrade]
+        [handleRun]
     );
 
     useEffect(
@@ -979,7 +1061,7 @@ const MeshPage = observer(() => {
                         <div className='mesh-page__select-wrap'>
                             <MarketIcon type={selectedMarketInfo?.symbol || selectedMarket || 'unknown'} size='sm' />
                             <select
-                                disabled={(isLoadingMarkets && !markets.length) || !markets.length}
+                                disabled={(isLoadingMarkets && !markets.length) || !markets.length || isRunning}
                                 id='mesh-market'
                                 onChange={event => setSelectedMarket(event.target.value)}
                                 value={selectedMarket}
@@ -992,29 +1074,48 @@ const MeshPage = observer(() => {
                             </select>
                         </div>
                     </label>
-                    <label className='mesh-page__market-field' htmlFor='mesh-window-size'>
+                    <label className='mesh-page__market-field' htmlFor='mesh-trade-type'>
                         <div className='mesh-page__select-wrap mesh-page__select-wrap--inline'>
-                            <span className='mesh-page__input-label'>Tick</span>
+                            <span className='mesh-page__input-label'>Trade Type</span>
+                            <select
+                                disabled={isRunning}
+                                id='mesh-trade-type'
+                                onChange={event => setSelectedTradeType(event.target.value)}
+                                value={selectedTradeType}
+                            >
+                                {TRADE_TYPES.map(type => (
+                                    <option key={type.value} value={type.value}>
+                                        {type.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </label>
+                    <label className='mesh-page__market-field' htmlFor='mesh-trades'>
+                        <div className='mesh-page__select-wrap mesh-page__select-wrap--inline'>
+                            <span className='mesh-page__input-label'>Trades</span>
                             <input
-                                id='mesh-window-size'
+                                disabled={isRunning}
+                                id='mesh-trades'
                                 inputMode='numeric'
-                                max='1000'
-                                min='0'
+                                max='100'
+                                min='1'
                                 onChange={event => {
                                     const next = event.target.value;
-                                    if (next === '' || Number(next) <= 1000) setWindowSizeStr(next);
+                                    if (next === '' || Number(next) <= 100) setNumberOfTradesStr(next);
                                 }}
-                                placeholder='0-1000'
+                                placeholder='1-100'
                                 type='number'
-                                value={windowSizeStr}
+                                value={numberOfTradesStr}
                             />
                         </div>
                     </label>
-                    <label className='mesh-page__market-field' htmlFor='mesh-digit'>
+                    <label className='mesh-page__market-field' htmlFor='mesh-prediction'>
                         <div className='mesh-page__select-wrap mesh-page__select-wrap--inline'>
-                            <span className='mesh-page__input-label'>Digit</span>
+                            <span className='mesh-page__input-label'>Prediction</span>
                             <select
-                                id='mesh-digit'
+                                disabled={isRunning}
+                                id='mesh-prediction'
                                 onChange={event => setSelectedDigitStr(event.target.value)}
                                 value={selectedDigitStr}
                             >
@@ -1030,6 +1131,7 @@ const MeshPage = observer(() => {
                         <div className='mesh-page__select-wrap mesh-page__select-wrap--inline'>
                             <span className='mesh-page__input-label'>Stake</span>
                             <input
+                                disabled={isRunning}
                                 id='mesh-stake'
                                 inputMode='decimal'
                                 onChange={event => setStakeValue(event.target.value)}
@@ -1039,6 +1141,10 @@ const MeshPage = observer(() => {
                             />
                         </div>
                     </label>
+                    
+                    <button className='mesh-page__run' disabled={isRunning || !markets.length} onClick={handleRun} type='button'>
+                        {isRunning ? 'Running' : 'Run'}
+                    </button>
                 </section>
 
                 {error && <div className='mesh-page__notice'>{error}</div>}
@@ -1060,47 +1166,6 @@ const MeshPage = observer(() => {
                                 key={`${digit}-${lastHit?.digit === digit ? lastHit.nonce : 0}`}
                                 rank={model.rank[digit] ?? 9}
                                 z={zScore(model.frequencies[digit] || 0, 0.1, model.total)}
-                            />
-                        ))}
-                    </div>
-                </section>
-                <section className='mesh-page__signals'>
-                    <div className='mesh-page__section-label'>Over / Under</div>
-                    <div className='mesh-page__signal-grid'>
-                        {signals.slice(0, 2).map(signal => (
-                            <SignalCard
-                                isExecuting={executingSignal === signal.id}
-                                key={signal.id}
-                                manualBarrier={manualBarriers[signal.id as 'over' | 'under']}
-                                onBarrierChange={(kind, barrier) => setManualBarriers(previous => ({ ...previous, [kind]: barrier }))}
-                                onExecute={() => void executeSignal(signal)}
-                                signal={signal}
-                            />
-                        ))}
-                    </div>
-
-                    <div className='mesh-page__section-label'>Even / Odd</div>
-                    <div className='mesh-page__signal-grid'>
-                        {signals.slice(2, 4).map(signal => (
-                            <SignalCard
-                                isExecuting={executingSignal === signal.id}
-                                key={signal.id}
-                                onBarrierChange={(kind, barrier) => setManualBarriers(previous => ({ ...previous, [kind]: barrier }))}
-                                onExecute={() => void executeSignal(signal)}
-                                signal={signal}
-                            />
-                        ))}
-                    </div>
-
-                    <div className='mesh-page__section-label'>Matches / Differs</div>
-                    <div className='mesh-page__signal-grid'>
-                        {signals.slice(4).map(signal => (
-                            <SignalCard
-                                isExecuting={executingSignal === signal.id}
-                                key={signal.id}
-                                onBarrierChange={(kind, barrier) => setManualBarriers(previous => ({ ...previous, [kind]: barrier }))}
-                                onExecute={() => void executeSignal(signal)}
-                                signal={signal}
                             />
                         ))}
                     </div>

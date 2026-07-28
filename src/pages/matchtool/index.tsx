@@ -415,44 +415,26 @@ const MatchtoolPage = observer(() => {
                 let activeSymbols = (await getProfitdockActiveSymbols()) as MatchMarket[];
                 if (!activeSymbols.length) {
                     const response = await publicRequest<PublicRequestResponse>({ active_symbols: 'brief' });
-                    activeSymbols = response.active_symbols || [];
+                    activeSymbols = (response.active_symbols || []).map(m => ({
+                        ...m,
+                        symbol: m.symbol || m.underlying_symbol,
+                        display_name: m.display_name || m.underlying_symbol_name
+                    })) as any;
                 }
 
                 const candidates = activeSymbols
                     .filter(isDigitMatchCandidateMarket)
                     .sort((left, right) => (left.display_order || 0) - (right.display_order || 0));
                 
-                const candidatePromises = candidates.map(async market => {
-                    try {
-                        const response = await publicRequest<PublicRequestResponse>({
-                            contracts_for: market.symbol,
-                            currency: currency || 'USD',
-                        });
-                        const availableContracts =
-                            response.contracts_for?.available
-                                ?.map(contract => String(contract.contract_type || '').toUpperCase())
-                                .filter(Boolean) || [];
-                        return { ...market, supportedContracts: availableContracts };
-                    } catch {
-                        return null;
-                    }
-                });
-
-                const results = await Promise.all(candidatePromises);
                 if (isCancelled) return;
-
-                const supported = results.filter((market): market is MatchMarket => {
-                    return market !== null && market.supportedContracts.includes('DIGITMATCH') && isDigitMatchCandidateMarket(market);
-                });
-
-                if (isCancelled) return;
-                setMarkets(supported);
+                
+                setMarkets(candidates);
                 setSelectedMarket(previous =>
-                    supported.some(market => market.symbol === previous)
+                    candidates.some(market => market.symbol === previous)
                         ? previous
-                        : supported.find(market => market.symbol === 'R_50')?.symbol || supported[0]?.symbol || ''
+                        : candidates.find(market => market.symbol === '1HZ10V')?.symbol || candidates[0]?.symbol || previous
                 );
-                if (!supported.length) setFeedback('No confirmed Digit Match markets are available right now.');
+                if (!candidates.length) setFeedback('No confirmed Digit Match markets are available right now.');
             } catch (error) {
                 if (!isCancelled) {
                     setFeedback(error instanceof Error ? error.message : 'Unable to load MatchTool markets.');

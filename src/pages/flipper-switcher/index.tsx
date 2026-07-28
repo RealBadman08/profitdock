@@ -36,7 +36,7 @@ type ApiLike = {
 type StrategyLeg = {
     contractType: string;
     label: string;
-    predictionMode?: 'barrier' | 'selected_tick';
+    predictionMode?: 'barrier' | 'selected_tick' | 'none';
 };
 
 type StrategyPair = {
@@ -266,26 +266,47 @@ const createProposalPayload = ({
     currency: string;
     duration: number;
     prediction: number | string;
-    predictionMode?: 'barrier' | 'selected_tick';
+    predictionMode?: 'barrier' | 'selected_tick' | 'none';
     symbol: string;
 }) => {
     let apiContractType = contractType;
-    if (contractType === 'HIGHER') apiContractType = 'CALL';
-    if (contractType === 'LOWER') apiContractType = 'PUT';
+    let finalDurationUnit = 't';
+    let finalDuration = duration;
+
+    if (contractType === 'HIGHER') {
+        finalDuration = Math.max(5, duration); // minimum 5 ticks for Higher/Lower
+    } else if (contractType === 'LOWER') {
+        finalDuration = Math.max(5, duration);
+    } else if (contractType === 'ONETOUCH' || contractType === 'NOTOUCH') {
+        finalDurationUnit = 'm';
+        finalDuration = Math.max(1, duration); // minimum 1 minute for Touch/No Touch
+    }
 
     const payload: Record<string, unknown> = {
         amount,
         basis: 'stake',
         contract_type: apiContractType,
         currency,
-        duration,
-        duration_unit: 't',
+        duration: finalDuration,
+        duration_unit: finalDurationUnit,
         proposal: 1,
-        underlying_symbol: symbol,
     };
 
+    payload[isCustomLegacyOAuthDomain() ? 'underlying_symbol' : 'symbol'] = symbol;
+
     if (predictionMode === 'barrier') {
-        payload.barrier = String(prediction);
+        let barrierValue = String(prediction).trim();
+        if (barrierValue && !barrierValue.startsWith('+') && !barrierValue.startsWith('-')) {
+            const num = Number(barrierValue);
+            if (!isNaN(num) && num > 0) {
+                if (contractType === 'LOWER') {
+                    barrierValue = '-' + barrierValue;
+                } else {
+                    barrierValue = '+' + barrierValue;
+                }
+            }
+        }
+        payload.barrier = barrierValue;
     }
 
     if (predictionMode === 'selected_tick') {
@@ -561,7 +582,12 @@ const FlipperSwitcherPage = observer(() => {
                 if (currentStake <= 0) return null;
                 
                 const legDuration = getDurationForLeg(leg, duration);
-                const val = pred || entryPoint || '0';
+                
+                let val = pred;
+                if (!val) {
+                    val = leg.predictionMode === 'barrier' ? '+0.25' : (entryPoint || '0');
+                }
+                
                 const parsedPred = leg.contractType.includes('DIGIT') ? Math.max(0, Math.min(9, Math.trunc(Number(val)))) : val;
                 
                 try {
@@ -575,8 +601,9 @@ const FlipperSwitcherPage = observer(() => {
                         symbol: selectedMarketInfoRef.current.symbol
                     }));
                     return { askPrice: quote.askPrice, payout: quote.payout || 0 };
-                } catch (error) {
-                    return { askPrice: 0, payout: 0, error: error instanceof Error ? error.message : 'Error fetching quote' };
+                } catch (error: any) {
+                    const msg = error?.error?.message || error?.message || (typeof error === 'string' ? error : 'Error fetching quote');
+                    return { askPrice: 0, payout: 0, error: msg };
                 }
             };
 
@@ -775,16 +802,19 @@ const FlipperSwitcherPage = observer(() => {
                 const firstDuration = getDurationForLeg(activeLegs[0], duration);
                 const secondDuration = getDurationForLeg(activeLegs[1], duration);
 
-                const getPredictionValue = (refValue: string, legContractType: string) => {
-                    const val = refValue || entryPointRef.current || '0';
-                    if (legContractType.includes('DIGIT')) {
+                const getPredictionValue = (refValue: string, leg: StrategyLeg) => {
+                    let val = refValue;
+                    if (!val) {
+                        val = leg.predictionMode === 'barrier' ? '+0.25' : (entryPointRef.current || '0');
+                    }
+                    if (leg.contractType.includes('DIGIT')) {
                         return Math.max(0, Math.min(9, Math.trunc(Number(val))));
                     }
                     return val;
                 };
 
-                const predOne = getPredictionValue(predictionOneRef.current, activeLegs[0].contractType);
-                const predTwo = getPredictionValue(predictionTwoRef.current, activeLegs[1].contractType);
+                const predOne = getPredictionValue(predictionOneRef.current, activeLegs[0]);
+                const predTwo = getPredictionValue(predictionTwoRef.current, activeLegs[1]);
 
                 let quoteBundle = null;
                 for (const marketInfo of orderedCandidates) {
@@ -1054,13 +1084,15 @@ const FlipperSwitcherPage = observer(() => {
                     return (
                         <div className='flipper-page__active-row' key={leg?.contractType || `empty-${index}`}>
                             <strong>#{index + 1} - {leg?.label || localize('Select contract')}</strong>
-                            <label>
-                                {localize('Stake')}
-                                <input
-                                    value={index === 0 ? stakeOne : stakeTwo}
-                                    onChange={event => (index === 0 ? setStakeOne(event.target.value) : setStakeTwo(event.target.value))}
-                                    inputMode='decimal'
-                                />
+                            <label className='flipper-page__stake-label'>
+                                <span>{localize('Stake')}</span>
+                                <div className='flipper-page__stake-input-wrapper'>
+                                    <input
+                                        value={index === 0 ? stakeOne : stakeTwo}
+                                        onChange={event => (index === 0 ? setStakeOne(event.target.value) : setStakeTwo(event.target.value))}
+                                        inputMode='decimal'
+                                    />
+                                </div>
                             </label>
                             <label>
                                 {localize('Mult x')}
@@ -1070,15 +1102,16 @@ const FlipperSwitcherPage = observer(() => {
                                     inputMode='decimal'
                                 />
                             </label>
-                            <label>
-                                {leg?.predictionMode === 'barrier' ? localize('Pred / Barrier') : localize('Pred')}
-                                <input
-                                    value={index === 0 ? predictionOne : predictionTwo}
-                                    onChange={event => (index === 0 ? setPredictionOne(event.target.value) : setPredictionTwo(event.target.value))}
-                                    inputMode='text'
-                                    disabled={!leg?.predictionMode}
-                                />
-                            </label>
+                            {leg?.predictionMode && leg?.predictionMode !== 'none' && (
+                                <label>
+                                    {leg?.predictionMode === 'barrier' ? localize('Barrier') : localize('Prediction')}
+                                    <input
+                                        value={index === 0 ? predictionOne : predictionTwo}
+                                        onChange={event => (index === 0 ? setPredictionOne(event.target.value) : setPredictionTwo(event.target.value))}
+                                        inputMode='text'
+                                    />
+                                </label>
+                            )}
                             {quote && (
                                 <div className='flipper-page__quote-display'>
                                     {quote.error ? (

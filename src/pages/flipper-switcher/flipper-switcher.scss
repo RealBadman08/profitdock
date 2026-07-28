@@ -120,12 +120,20 @@
             opacity: 0.45;
         }
 
+        .flipper-page__stake-label {
+            align-items: flex-start;
+        }
+
+        .flipper-page__stake-input-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            width: 100%;
+        }
+
         .flipper-page__quote-display {
-            grid-column: 1 / -1;
-            font-size: 1.6rem;
-            text-align: right;
-            margin-top: -1rem;
-            padding-bottom: 0.5rem;
+            font-size: 1.3rem;
+            text-align: left;
         }
 
         .flipper-page__quote-error {
@@ -137,9 +145,10 @@
             color: #16a34a;
             font-weight: 600;
             background: #ecfdf5;
-            padding: 0.4rem 1.2rem;
+            padding: 0.2rem 0.8rem;
             border-radius: 999px;
             border: 1px solid #d1fae5;
+            display: inline-block;
         }
     }
 

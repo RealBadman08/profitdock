@@ -39,7 +39,7 @@
         align-items: end;
         display: grid;
         gap: 0.9rem;
-        grid-template-columns: minmax(22rem, 1.6fr) minmax(11rem, 0.65fr) minmax(11rem, 0.65fr) minmax(12rem, 0.75fr);
+        grid-template-columns: minmax(16rem, 1.4fr) minmax(14rem, 1fr) minmax(8rem, 0.8fr) minmax(8rem, 0.8fr) minmax(10rem, 1fr) auto;
     }
 
     &__market-field {
@@ -110,6 +110,31 @@
             background: #eef2ff;
             border-color: #c7d2fe;
             color: #4f46e5;
+        }
+    }
+
+    &__run {
+        align-self: end;
+        background: #22c55e;
+        border: 0;
+        border-radius: 0.8rem;
+        color: #fff;
+        cursor: pointer;
+        font-size: 1.35rem;
+        font-weight: 950;
+        min-height: 4.2rem;
+        padding: 0 2rem;
+        transition: transform 160ms ease, opacity 160ms ease;
+
+        &:hover:not(:disabled) {
+            transform: translateY(-1px);
+            opacity: 0.95;
+        }
+
+        &:disabled {
+            background: #cbd5e1;
+            cursor: not-allowed;
+            color: #64748b;
         }
     }
 
@@ -699,7 +724,9 @@ body.theme--dark .mesh-page {
 
 @media (max-width: 980px) {
     .mesh-page {
-        &__topbar,
+        &__topbar {
+            grid-template-columns: repeat(2, 1fr);
+        }
         &__signal-grid {
             grid-template-columns: 1fr;
         }
