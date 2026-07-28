@@ -910,23 +910,22 @@ const MeshPage = observer(() => {
 
         try {
             const api = await ensureTradingApi();
-            for (let i = 0; i < count; i++) {
-                if (!runningRef.current) break;
+            const signal: MeshSignal = {
+                id: button.kind as SignalKind,
+                contractType: button.contractType as MeshContractType,
+                barrier: selectedDigit,
+                recommendedDigit: selectedDigit,
+                accent: '#22c55e',
+                textColor: '#fff',
+                buttonText: '',
+                expected: 0,
+                label: '',
+                observed: 0,
+                z: 0
+            };
 
-                const signal: MeshSignal = {
-                    id: button.kind as SignalKind,
-                    contractType: button.contractType as MeshContractType,
-                    barrier: selectedDigit,
-                    recommendedDigit: selectedDigit,
-                    accent: '#22c55e',
-                    textColor: '#fff',
-                    buttonText: '',
-                    expected: 0,
-                    label: '',
-                    observed: 0,
-                    z: 0
-                };
-
+            const promises = Array.from({ length: count }).map(async () => {
+                if (!runningRef.current) return;
                 const buy = await requestProposalThenBuy({
                     api,
                     currency,
@@ -946,13 +945,12 @@ const MeshPage = observer(() => {
                 };
                 
                 await waitForSettlement(api, contractId, updateTransaction);
-                // Optional delay to avoid aggressive rate limiting
-                if (i < count - 1) {
-                    await new Promise(resolve => setTimeout(resolve, 500));
-                }
-            }
+            });
+
+            await Promise.allSettled(promises);
+
             if (runningRef.current) {
-                setFeedback(`Successfully completed ${count} trade(s).`);
+                setFeedback(`Successfully completed ${count} bulk trade(s).`);
             }
         } catch (caughtError) {
             setFeedback(caughtError instanceof Error ? caughtError.message : 'Unable to place Mesh trade.');
