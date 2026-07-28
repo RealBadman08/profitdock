@@ -950,7 +950,7 @@ const FlipperSwitcherPage = observer(() => {
     }, []);
 
     const handleRun = () => {
-        if (isRunning) {
+        if (runningRef.current) {
             runningRef.current = false;
             setIsRunning(false);
             resetStakeInputsToInitial();

@@ -891,7 +891,7 @@ const MeshPage = observer(() => {
     };
 
     const handleRun = async (button: { contractType: string; kind: string; label: string }) => {
-        if (isRunning) return;
+        if (runningRef.current) return;
         const count = Math.max(1, Math.min(100, Math.trunc(Number(numberOfTradesStr))));
         const stake = Number(stakeValue);
 

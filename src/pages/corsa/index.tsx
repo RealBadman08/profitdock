@@ -760,7 +760,7 @@ const CorsaPage = observer(() => {
 
 
     const handleRun = () => {
-        if (isRunning) {
+        if (isRunningRef.current) {
             isRunningRef.current = false;
             setIsRunning(false);
             return;

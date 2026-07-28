@@ -341,6 +341,7 @@ const MatchtoolPage = observer(() => {
     const [feedback, setFeedback] = useState<string | null>(null);
     const [roundRows, setRoundRows] = useState<RoundRow[]>([]);
     const stopRequestedRef = useRef(false);
+    const runningRef = useRef(false);
     const tickSocketRef = useRef<WebSocket | null>(null);
     const tickSubscriptionIdRef = useRef<string | null>(null);
 
@@ -560,7 +561,7 @@ const MatchtoolPage = observer(() => {
     };
 
     const handleRun = async () => {
-        if (isRunning) return;
+        if (runningRef.current) return;
         const stakeAmount = toPositiveNumber(stake, 0);
         const predictions = toPredictionCount(predictionCount);
 
@@ -578,6 +579,7 @@ const MatchtoolPage = observer(() => {
         }
 
         stopRequestedRef.current = false;
+        runningRef.current = true;
         setIsRunning(true);
         setFeedback(null);
 
@@ -635,6 +637,7 @@ const MatchtoolPage = observer(() => {
             setRoundRows(previous => previous.map(row => (row.result === 'pending' || row.result === 'placed' ? { ...row, result: 'error' } : row)));
         } finally {
             stopRequestedRef.current = false;
+            runningRef.current = false;
             setIsRunning(false);
         }
     };
