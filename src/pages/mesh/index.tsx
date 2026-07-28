@@ -163,7 +163,7 @@ const zScore = (observed: number, expected: number, n: number) => {
     return stdDev === 0 ? 0 : (observed - expected) / stdDev;
 };
 
-const formatPercent = (value: number) => `${(value * 100).toFixed(1)}%`;
+const formatPercent = (value: number) => `${(value * 100).toFixed(2)}%`;
 const formatZ = (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)}σ`;
 const clampDigitValue = (value: string | number, fallback = 5) => {
     const numericValue = Number(value);
@@ -359,12 +359,14 @@ const waitForSettlement = (api: ApiLike, contractId: number, onUpdate: (contract
 const requestProposalThenBuy = async ({
     api,
     currency,
+    duration,
     signal,
     stake,
     symbol,
 }: {
     api: ApiLike;
     currency: string;
+    duration: number;
     signal: MeshSignal;
     stake: number;
     symbol: string;
@@ -374,7 +376,7 @@ const requestProposalThenBuy = async ({
         basis: 'stake',
         contract_type: signal.contractType,
         currency,
-        duration: 1,
+        duration,
         duration_unit: 't',
         proposal: 1,
     };
@@ -642,16 +644,16 @@ const SignalCard = ({
 
 const TRADE_CATEGORIES = [
     { label: 'Matches / Differs', value: 'matches_differs', buttons: [
-        { label: 'Matches', contractType: 'DIGITMATCH', kind: 'matches', color: '#22c55e' },
-        { label: 'Differs', contractType: 'DIGITDIFF', kind: 'differs', color: '#e8445a' }
+        { label: 'Matches', contractType: 'DIGITMATCH', kind: 'matches', color: '#45a7a1' },
+        { label: 'Differs', contractType: 'DIGITDIFF', kind: 'differs', color: '#dd3a3c' }
     ]},
     { label: 'Even / Odd', value: 'even_odd', buttons: [
-        { label: 'Even', contractType: 'DIGITEVEN', kind: 'even', color: '#22c55e' },
-        { label: 'Odd', contractType: 'DIGITODD', kind: 'odd', color: '#e8445a' }
+        { label: 'Even', contractType: 'DIGITEVEN', kind: 'even', color: '#45a7a1' },
+        { label: 'Odd', contractType: 'DIGITODD', kind: 'odd', color: '#dd3a3c' }
     ]},
     { label: 'Over / Under', value: 'over_under', buttons: [
-        { label: 'Over', contractType: 'DIGITOVER', kind: 'over', color: '#22c55e' },
-        { label: 'Under', contractType: 'DIGITUNDER', kind: 'under', color: '#e8445a' }
+        { label: 'Over', contractType: 'DIGITOVER', kind: 'over', color: '#45a7a1' },
+        { label: 'Under', contractType: 'DIGITUNDER', kind: 'under', color: '#dd3a3c' }
     ]}
 ];
 
@@ -677,6 +679,7 @@ const MeshPage = observer(() => {
     const [selectedDigitStr, setSelectedDigitStr] = useProfitdockPersistentState('profitdock.mesh.digit', '5');
     const [selectedTradeCategory, setSelectedTradeCategory] = useProfitdockPersistentState('profitdock.mesh.tradeCategory', 'matches_differs');
     const [numberOfTradesStr, setNumberOfTradesStr] = useProfitdockPersistentState('profitdock.mesh.numberOfTrades', '1');
+    const [numberOfTicksStr, setNumberOfTicksStr] = useProfitdockPersistentState('profitdock.mesh.numberOfTicks', '1');
     const windowSize = 1000;
     const selectedDigit = clampDigitValue(selectedDigitStr, 5);
     const tickSocketRef = useRef<WebSocket | null>(null);
@@ -927,6 +930,7 @@ const MeshPage = observer(() => {
                 const buy = await requestProposalThenBuy({
                     api,
                     currency,
+                    duration: Math.max(1, Math.min(10, Math.trunc(Number(numberOfTicksStr)))),
                     signal,
                     stake,
                     symbol: selectedMarketInfo.symbol,
@@ -990,94 +994,94 @@ const MeshPage = observer(() => {
         []
     );
 
+    const getButtonFrequency = (kind: string) => {
+        if (kind === 'matches') return model.frequencies[selectedDigit] || 0;
+        if (kind === 'differs') return 1 - (model.frequencies[selectedDigit] || 0);
+        if (kind === 'even') return model.frequencies.filter((_, i) => i % 2 === 0).reduce((a,b)=>a+b,0);
+        if (kind === 'odd') return 1 - model.frequencies.filter((_, i) => i % 2 === 0).reduce((a,b)=>a+b,0);
+        if (kind === 'over') return model.counts.slice(selectedDigit + 1).reduce((a,b)=>a+b,0) / Math.max(model.total, 1);
+        if (kind === 'under') return model.counts.slice(0, selectedDigit).reduce((a,b)=>a+b,0) / Math.max(model.total, 1);
+        return 0;
+    };
+
     return (
         <div className='mesh-page'>
             <div className='mesh-page__shell'>
                 <section className='mesh-page__topbar'>
-                    <label className='mesh-page__market-field mesh-page__market-field--market' htmlFor='mesh-market'>
-                        <div className='mesh-page__select-wrap'>
-                            <MarketIcon type={selectedMarketInfo?.symbol || selectedMarket || 'unknown'} size='sm' />
-                            <select
-                                disabled={(isLoadingMarkets && !markets.length) || !markets.length || isRunning}
-                                id='mesh-market'
-                                onChange={event => setSelectedMarket(event.target.value)}
-                                value={selectedMarket}
-                            >
-                                {markets.map(market => (
-                                    <option key={market.symbol} value={market.symbol}>
-                                        {market.display_name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </label>
-                    <label className='mesh-page__market-field' htmlFor='mesh-trade-type'>
-                        <div className='mesh-page__select-wrap mesh-page__select-wrap--inline'>
+                    <div className="mesh-page__topbar-row">
+                        <label className='mesh-page__market-field' htmlFor='mesh-market'>
+                            <span className='mesh-page__input-label'>Market</span>
+                            <div className='mesh-page__select-wrap'>
+                                <select
+                                    disabled={(isLoadingMarkets && !markets.length) || !markets.length || isRunning}
+                                    id='mesh-market'
+                                    onChange={event => setSelectedMarket(event.target.value)}
+                                    value={selectedMarket}
+                                >
+                                    {markets.map(market => (
+                                        <option key={market.symbol} value={market.symbol}>
+                                            {market.display_name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </label>
+                        <label className='mesh-page__market-field' htmlFor='mesh-trade-type'>
                             <span className='mesh-page__input-label'>Trade Type</span>
-                            <select
-                                disabled={isRunning}
-                                id='mesh-trade-type'
-                                onChange={event => setSelectedTradeCategory(event.target.value)}
-                                value={selectedTradeCategory}
-                            >
-                                {TRADE_CATEGORIES.map(category => (
-                                    <option key={category.value} value={category.value}>
-                                        {category.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </label>
-                    <label className='mesh-page__market-field' htmlFor='mesh-trades'>
-                        <div className='mesh-page__select-wrap mesh-page__select-wrap--inline'>
-                            <span className='mesh-page__input-label'>Trades</span>
-                            <input
-                                disabled={isRunning}
-                                id='mesh-trades'
-                                inputMode='numeric'
-                                max='100'
-                                min='1'
-                                onChange={event => {
-                                    const next = event.target.value;
-                                    if (next === '' || Number(next) <= 100) setNumberOfTradesStr(next);
-                                }}
-                                placeholder='1-100'
-                                type='number'
-                                value={numberOfTradesStr}
-                            />
-                        </div>
-                    </label>
-                    <label className='mesh-page__market-field' htmlFor='mesh-prediction'>
-                        <div className='mesh-page__select-wrap mesh-page__select-wrap--inline'>
+                            <div className='mesh-page__select-wrap'>
+                                <select
+                                    disabled={isRunning}
+                                    id='mesh-trade-type'
+                                    onChange={event => setSelectedTradeCategory(event.target.value)}
+                                    value={selectedTradeCategory}
+                                >
+                                    {TRADE_CATEGORIES.map(category => (
+                                        <option key={category.value} value={category.value}>
+                                            {category.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </label>
+                    </div>
+                    <div className="mesh-page__topbar-row">
+                        <label className='mesh-page__market-field' htmlFor='mesh-ticks'>
+                            <span className='mesh-page__input-label'>Number of Ticks</span>
+                            <div className='mesh-page__select-wrap'>
+                                <input
+                                    disabled={isRunning}
+                                    id='mesh-ticks'
+                                    inputMode='numeric'
+                                    max='10'
+                                    min='1'
+                                    onChange={event => {
+                                        const next = event.target.value;
+                                        if (next === '' || Number(next) <= 10) setNumberOfTicksStr(next);
+                                    }}
+                                    placeholder='1-10'
+                                    type='number'
+                                    value={numberOfTicksStr}
+                                />
+                            </div>
+                        </label>
+                        <label className='mesh-page__market-field' htmlFor='mesh-prediction'>
                             <span className='mesh-page__input-label'>Prediction</span>
-                            <select
-                                disabled={isRunning}
-                                id='mesh-prediction'
-                                onChange={event => setSelectedDigitStr(event.target.value)}
-                                value={selectedDigitStr}
-                            >
-                                {Array.from({ length: 10 }, (_, digit) => (
-                                    <option key={digit} value={digit}>
-                                        {digit}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </label>
-                    <label className='mesh-page__market-field' htmlFor='mesh-stake'>
-                        <div className='mesh-page__select-wrap mesh-page__select-wrap--inline'>
-                            <span className='mesh-page__input-label'>Stake</span>
-                            <input
-                                disabled={isRunning}
-                                id='mesh-stake'
-                                inputMode='decimal'
-                                onChange={event => setStakeValue(event.target.value)}
-                                placeholder='Stake'
-                                type='number'
-                                value={stakeValue}
-                            />
-                        </div>
-                    </label>
+                            <div className='mesh-page__select-wrap'>
+                                <select
+                                    disabled={isRunning}
+                                    id='mesh-prediction'
+                                    onChange={event => setSelectedDigitStr(event.target.value)}
+                                    value={selectedDigitStr}
+                                >
+                                    {Array.from({ length: 10 }, (_, digit) => (
+                                        <option key={digit} value={digit}>
+                                            {digit}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </label>
+                    </div>
                 </section>
 
                 {error && <div className='mesh-page__notice'>{error}</div>}
@@ -1085,39 +1089,80 @@ const MeshPage = observer(() => {
 
                 <MeshOrbit historyDigits={digits} lastHit={lastHit} model={model} />
 
-                <div className='mesh-page__action-bars'>
-                    {TRADE_CATEGORIES.find(c => c.value === selectedTradeCategory)?.buttons.map(button => (
-                        <button
-                            key={button.kind}
-                            className={`mesh-page__action-bar mesh-page__action-bar--${button.kind}`}
-                            disabled={isRunning || !markets.length}
-                            onClick={() => handleRun(button)}
-                            style={{ backgroundColor: button.color }}
-                            type='button'
-                        >
-                            {isRunning ? 'Running...' : button.label}
-                        </button>
-                    ))}
-                </div>
+                <div className='mesh-page__bottom-controls'>
+                    <div className='mesh-page__bottom-inputs'>
+                        <label className='mesh-page__market-field' htmlFor='mesh-bottom-ticks'>
+                            <span className='mesh-page__input-label'>Ticks</span>
+                            <div className='mesh-page__select-wrap'>
+                                <input
+                                    disabled={isRunning}
+                                    id='mesh-bottom-ticks'
+                                    inputMode='numeric'
+                                    max='10'
+                                    min='1'
+                                    onChange={event => {
+                                        const next = event.target.value;
+                                        if (next === '' || Number(next) <= 10) setNumberOfTicksStr(next);
+                                    }}
+                                    type='number'
+                                    value={numberOfTicksStr}
+                                />
+                            </div>
+                        </label>
+                        <label className='mesh-page__market-field' htmlFor='mesh-stake'>
+                            <span className='mesh-page__input-label'>Stake</span>
+                            <div className='mesh-page__select-wrap'>
+                                <input
+                                    disabled={isRunning}
+                                    id='mesh-stake'
+                                    inputMode='decimal'
+                                    onChange={event => setStakeValue(event.target.value)}
+                                    placeholder='Stake'
+                                    type='number'
+                                    value={stakeValue}
+                                />
+                            </div>
+                        </label>
+                        <label className='mesh-page__market-field' htmlFor='mesh-trades'>
+                            <span className='mesh-page__input-label'>No of Trades</span>
+                            <div className='mesh-page__select-wrap'>
+                                <input
+                                    disabled={isRunning}
+                                    id='mesh-trades'
+                                    inputMode='numeric'
+                                    max='100'
+                                    min='1'
+                                    onChange={event => {
+                                        const next = event.target.value;
+                                        if (next === '' || Number(next) <= 100) setNumberOfTradesStr(next);
+                                    }}
+                                    placeholder='1-100'
+                                    type='number'
+                                    value={numberOfTradesStr}
+                                />
+                            </div>
+                        </label>
+                    </div>
 
-                <section className='mesh-page__rings' aria-busy={isLoadingHistory}>
-                    <div className='mesh-page__section-label'>
-                        Digit frequency <span className="mesh-page__sample-size">(n={model.total})</span>
+                    <div className='mesh-page__action-bars'>
+                        {TRADE_CATEGORIES.find(c => c.value === selectedTradeCategory)?.buttons.map(button => {
+                            const frequency = getButtonFrequency(button.kind);
+                            return (
+                                <button
+                                    key={button.kind}
+                                    className={`mesh-page__action-bar mesh-page__action-bar--${button.kind}`}
+                                    disabled={isRunning || !markets.length}
+                                    onClick={() => handleRun(button)}
+                                    style={{ '--action-color': button.color } as React.CSSProperties}
+                                    type='button'
+                                >
+                                    <div className="mesh-page__action-label">{isRunning ? 'Running...' : button.label}</div>
+                                    <div className="mesh-page__action-percent">{formatPercent(frequency)}</div>
+                                </button>
+                            );
+                        })}
                     </div>
-                    <div className='mesh-page__ring-row'>
-                        {Array.from({ length: 10 }, (_, digit) => (
-                            <DigitRing
-                                digit={digit}
-                                frequency={model.frequencies[digit] || 0}
-                                gap={model.gap[digit] ?? model.total}
-                                isHit={lastHit?.digit === digit}
-                                key={`${digit}-${lastHit?.digit === digit ? lastHit.nonce : 0}`}
-                                rank={model.rank[digit] ?? 9}
-                                z={zScore(model.frequencies[digit] || 0, 0.1, model.total)}
-                            />
-                        ))}
-                    </div>
-                </section>
+                </div>
             </div>
             {Object.entries(flashByCard).map(([card, color]) =>
                 color ? <style key={card}>{`#mesh-card-${card}{border-color:${color}!important;box-shadow:0 0 12px ${color}44!important;}`}</style> : null
