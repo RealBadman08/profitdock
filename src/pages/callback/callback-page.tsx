@@ -424,8 +424,12 @@ const LegacyCallbackPage = () => {
 const PkceCallbackPage = () => {
     const [error_message, setErrorMessage] = React.useState('');
     const { is_tmb_enabled } = useTMB();
+    const has_initialized = React.useRef(false);
 
     React.useEffect(() => {
+        if (has_initialized.current) return;
+        has_initialized.current = true;
+
         let is_cancelled = false;
 
         const finishPkceLogin = async () => {
@@ -437,9 +441,16 @@ const PkceCallbackPage = () => {
             }
 
             if (!code || !state) {
+                if (localStorage.getItem('authToken')) {
+                    window.location.replace('/');
+                    return;
+                }
                 setErrorMessage(localize('Missing Deriv authorization code.'));
                 return;
             }
+
+            // Remove auth code from URL so that page refreshes or back navigation don't retry the same code
+            window.history.replaceState({}, document.title, window.location.pathname);
 
             try {
                 localStorage.setItem('profitdock_auth_stage', 'exchanging_code');
