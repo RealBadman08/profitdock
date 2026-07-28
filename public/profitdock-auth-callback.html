@@ -411,6 +411,31 @@
                         '';
                     const legacy_tokens = get_legacy_callback_tokens(params);
 
+                    // Remove code and state from URL immediately to prevent back-button/refresh issues
+                    if (code || state || direct_access_token) {
+                        const clean_url = new URL(window.location.href);
+                        ['code', 'state', 'session_state', 'access_token', 'token', 'token1', 'acct1', 'cur1'].forEach(p => clean_url.searchParams.delete(p));
+                        window.history.replaceState({}, document.title, clean_url.toString());
+                    }
+
+                    // Check if already logged in (e.g. from another tab that just finished)
+                    if (localStorage.getItem('authToken') && localStorage.getItem('active_loginid')) {
+                        const accounts = JSON.parse(localStorage.getItem('client.accounts') || '[]');
+                        if (accounts.length > 0) {
+                            window.location.replace(get_post_login_redirect(accounts.find(a => a.loginid === localStorage.getItem('active_loginid')) || accounts[0]));
+                            return;
+                        }
+                    }
+
+                    // Prevent duplicate fetch in the same session
+                    if (code && sessionStorage.getItem('processed_oauth_code') === code) {
+                        show_error('This sign-in link was already used. Please go back to ProfitDock and start again.');
+                        return;
+                    }
+                    if (code) {
+                        sessionStorage.setItem('processed_oauth_code', code);
+                    }
+
                     clear_auth_storage();
 
                     if (error) {
@@ -444,8 +469,21 @@
                     const payload = await response.json().catch(() => null);
 
                     if (!response.ok || !payload?.access_token) {
+                        // If another tab succeeded while this one failed, just redirect
+                        if (localStorage.getItem('authToken')) {
+                            window.location.replace('/');
+                            return;
+                        }
+                        
                         clear_logged_state_cookie();
-                        show_error(payload?.message || 'ProfitDock could not request Deriv trading tokens.');
+                        const err_msg = payload?.message || 'ProfitDock could not request Deriv trading tokens.';
+                        
+                        // User friendly message for the common "already used" error
+                        if (err_msg.toLowerCase().includes('already been used') || err_msg.toLowerCase().includes('already used')) {
+                            show_error('This sign-in link has already been used. Please return to ProfitDock and click Sign In again.');
+                        } else {
+                            show_error(err_msg);
+                        }
                         return;
                     }
 
@@ -466,6 +504,12 @@
                     window.location.replace(redirect_target);
                 } catch (error) {
                     console.error('[ProfitDock Callback] New API callback bootstrap failed:', error);
+                    
+                    if (localStorage.getItem('authToken')) {
+                        window.location.replace('/');
+                        return;
+                    }
+                    
                     clear_logged_state_cookie();
                     localStorage.setItem('profitdock_auth_stage', `new_oauth_callback_error:${error instanceof Error ? error.message : 'unknown'}`);
                     show_error(
