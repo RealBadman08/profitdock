@@ -666,7 +666,6 @@ const MeshPage = observer(() => {
     );
     const [stakeValue, setStakeValue] = useProfitdockPersistentState('profitdock.mesh.stake', '1');
     const [feedback, setFeedback] = useState<string | null>(null);
-    const [executingSignal, setExecutingSignal] = useState<SignalKind | null>(null);
     const [isRunning, setIsRunning] = useState(false);
     const [flashByCard, setFlashByCard] = useState<Partial<Record<SignalKind, string>>>({});
     const [selectedDigitStr, setSelectedDigitStr] = useProfitdockPersistentState('profitdock.mesh.digit', '5');
@@ -677,7 +676,6 @@ const MeshPage = observer(() => {
     const tickSocketRef = useRef<WebSocket | null>(null);
     const tickSubscriptionIdRef = useRef<string | null>(null);
     const runningRef = useRef(false);
-    const executeSignalRef = useRef<(signal: MeshSignal) => Promise<void>>(async () => undefined);
 
     const currency = authData?.currency || getStoredProfitdockActiveCurrency() || 'USD';
     const selectedMarketInfo = useMemo(
@@ -956,71 +954,6 @@ const MeshPage = observer(() => {
         }
     };
 
-    const executeSignal = async (signal: MeshSignal) => {
-        const stake = Number(stakeValue);
-        if (!Number.isFinite(stake) || stake <= 0) {
-            setFeedback('Enter a valid stake.');
-            return;
-        }
-        if (!selectedMarketInfo) {
-            setFeedback('Select a market first.');
-            return;
-        }
-
-        setExecutingSignal(signal.id);
-        setFeedback(null);
-
-        try {
-            const api = await ensureTradingApi();
-            const buy = await requestProposalThenBuy({
-                api,
-                currency,
-                signal,
-                stake,
-                symbol: selectedMarketInfo.symbol,
-            });
-            const contractId = Number(buy.contract_id);
-            const updateTransaction = (contract: ProposalOpenContract) => {
-                transactions.pushTransaction({
-                    ...contract,
-                    accountID: getActiveTransactionAccountId(),
-                    source: 'mesh',
-                } as ProposalOpenContract & { accountID?: string; source?: string });
-            };
-            const profit = await waitForSettlement(api, contractId, updateTransaction);
-            flashCard(signal.id, profit > 0 ? '#22c55e' : '#e8445a');
-            setFeedback(null);
-        } catch (caughtError) {
-            setFeedback(caughtError instanceof Error ? caughtError.message : 'Unable to place Mesh trade.');
-        } finally {
-            setExecutingSignal(null);
-        }
-    };
-
-    useEffect(() => {
-        executeSignalRef.current = executeSignal;
-    });
-
-    const runMeshTrade = useCallback(async () => {
-        if (runningRef.current) return;
-
-        const candidate = [...signals].sort((left, right) => Math.abs(right.z) - Math.abs(left.z))[0];
-        if (!candidate || Math.abs(candidate.z) < ENABLED_Z_SCORE) {
-            setFeedback('No confirmed Mesh signal is available yet.');
-            return;
-        }
-
-        runningRef.current = true;
-        setIsRunning(true);
-        setFeedback(null);
-
-        try {
-            await executeSignalRef.current(candidate);
-        } finally {
-            runningRef.current = false;
-            setIsRunning(false);
-        }
-    }, [signals]);
 
     useEffect(() => {
         emitProfitdockTradeStatus({
