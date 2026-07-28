@@ -640,13 +640,19 @@ const SignalCard = ({
     );
 };
 
-const TRADE_TYPES = [
-    { label: 'Matches', value: 'matches', contractType: 'DIGITMATCH' },
-    { label: 'Differs', value: 'differs', contractType: 'DIGITDIFF' },
-    { label: 'Even', value: 'even', contractType: 'DIGITEVEN' },
-    { label: 'Odd', value: 'odd', contractType: 'DIGITODD' },
-    { label: 'Over', value: 'over', contractType: 'DIGITOVER' },
-    { label: 'Under', value: 'under', contractType: 'DIGITUNDER' },
+const TRADE_CATEGORIES = [
+    { label: 'Matches / Differs', value: 'matches_differs', buttons: [
+        { label: 'Matches', contractType: 'DIGITMATCH', kind: 'matches', color: '#22c55e' },
+        { label: 'Differs', contractType: 'DIGITDIFF', kind: 'differs', color: '#e8445a' }
+    ]},
+    { label: 'Even / Odd', value: 'even_odd', buttons: [
+        { label: 'Even', contractType: 'DIGITEVEN', kind: 'even', color: '#22c55e' },
+        { label: 'Odd', contractType: 'DIGITODD', kind: 'odd', color: '#e8445a' }
+    ]},
+    { label: 'Over / Under', value: 'over_under', buttons: [
+        { label: 'Over', contractType: 'DIGITOVER', kind: 'over', color: '#22c55e' },
+        { label: 'Under', contractType: 'DIGITUNDER', kind: 'under', color: '#e8445a' }
+    ]}
 ];
 
 const MeshPage = observer(() => {
@@ -669,7 +675,7 @@ const MeshPage = observer(() => {
     const [isRunning, setIsRunning] = useState(false);
     const [flashByCard, setFlashByCard] = useState<Partial<Record<SignalKind, string>>>({});
     const [selectedDigitStr, setSelectedDigitStr] = useProfitdockPersistentState('profitdock.mesh.digit', '5');
-    const [selectedTradeType, setSelectedTradeType] = useProfitdockPersistentState('profitdock.mesh.tradeType', 'matches');
+    const [selectedTradeCategory, setSelectedTradeCategory] = useProfitdockPersistentState('profitdock.mesh.tradeCategory', 'matches_differs');
     const [numberOfTradesStr, setNumberOfTradesStr] = useProfitdockPersistentState('profitdock.mesh.numberOfTrades', '1');
     const windowSize = 1000;
     const selectedDigit = clampDigitValue(selectedDigitStr, 5);
@@ -881,13 +887,11 @@ const MeshPage = observer(() => {
         }, 600);
     };
 
-    const handleRun = async () => {
+    const handleRun = async (button: { contractType: string; kind: string; label: string }) => {
         if (isRunning) return;
         const count = Math.max(1, Math.min(100, Math.trunc(Number(numberOfTradesStr))));
         const stake = Number(stakeValue);
-        const tradeTypeObj = TRADE_TYPES.find(t => t.value === selectedTradeType);
 
-        if (!tradeTypeObj) return;
         if (!Number.isFinite(stake) || stake <= 0) {
             setFeedback('Enter a valid stake.');
             return;
@@ -907,8 +911,8 @@ const MeshPage = observer(() => {
                 if (!runningRef.current) break;
 
                 const signal: MeshSignal = {
-                    id: selectedTradeType as SignalKind,
-                    contractType: tradeTypeObj.contractType as MeshContractType,
+                    id: button.kind as SignalKind,
+                    contractType: button.contractType as MeshContractType,
                     barrier: selectedDigit,
                     recommendedDigit: selectedDigit,
                     accent: '#22c55e',
@@ -969,7 +973,7 @@ const MeshPage = observer(() => {
         () =>
             subscribeProfitdockTradeStart(request => {
                 if (request.feature !== 'mesh') return;
-                void handleRun();
+                // void handleRun(); - Auto-run needs to be updated if used remotely, ignoring for now since it requires specific button
             }),
         [handleRun]
     );
@@ -1013,12 +1017,12 @@ const MeshPage = observer(() => {
                             <select
                                 disabled={isRunning}
                                 id='mesh-trade-type'
-                                onChange={event => setSelectedTradeType(event.target.value)}
-                                value={selectedTradeType}
+                                onChange={event => setSelectedTradeCategory(event.target.value)}
+                                value={selectedTradeCategory}
                             >
-                                {TRADE_TYPES.map(type => (
-                                    <option key={type.value} value={type.value}>
-                                        {type.label}
+                                {TRADE_CATEGORIES.map(category => (
+                                    <option key={category.value} value={category.value}>
+                                        {category.label}
                                     </option>
                                 ))}
                             </select>
@@ -1074,16 +1078,27 @@ const MeshPage = observer(() => {
                             />
                         </div>
                     </label>
-                    
-                    <button className='mesh-page__run' disabled={isRunning || !markets.length} onClick={handleRun} type='button'>
-                        {isRunning ? 'Running' : 'Run'}
-                    </button>
                 </section>
 
                 {error && <div className='mesh-page__notice'>{error}</div>}
                 {feedback && <div className='mesh-page__notice mesh-page__notice--trade'>{feedback}</div>}
 
                 <MeshOrbit historyDigits={digits} lastHit={lastHit} model={model} />
+
+                <div className='mesh-page__action-bars'>
+                    {TRADE_CATEGORIES.find(c => c.value === selectedTradeCategory)?.buttons.map(button => (
+                        <button
+                            key={button.kind}
+                            className={`mesh-page__action-bar mesh-page__action-bar--${button.kind}`}
+                            disabled={isRunning || !markets.length}
+                            onClick={() => handleRun(button)}
+                            style={{ backgroundColor: button.color }}
+                            type='button'
+                        >
+                            {isRunning ? 'Running...' : button.label}
+                        </button>
+                    ))}
+                </div>
 
                 <section className='mesh-page__rings' aria-busy={isLoadingHistory}>
                     <div className='mesh-page__section-label'>
