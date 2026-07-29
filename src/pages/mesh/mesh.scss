@@ -266,6 +266,43 @@
         margin-top: 1rem;
     }
 
+    &__contract-tape {
+        align-items: center;
+        display: grid;
+        gap: 0.8rem;
+        grid-template-columns: repeat(8, minmax(3.8rem, 1fr));
+        margin-top: -0.2rem;
+        max-width: 62rem;
+        width: min(100%, 62rem);
+    }
+
+    &__contract-symbol {
+        align-items: center;
+        border-radius: 0.8rem;
+        color: #fff;
+        display: flex;
+        font-size: 1.7rem;
+        font-weight: 950;
+        justify-content: center;
+        min-height: 4.2rem;
+        transition: background 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+
+        &--primary {
+            background: #16a34a;
+            box-shadow: 0 0.9rem 1.8rem rgb(22 163 74 / 18%);
+        }
+
+        &--secondary {
+            background: #dc3444;
+            box-shadow: 0 0.9rem 1.8rem rgb(220 52 68 / 18%);
+        }
+
+        &--neutral {
+            background: #64748b;
+            box-shadow: 0 0.9rem 1.8rem rgb(100 116 139 / 16%);
+        }
+    }
+
     &__bottom-inputs {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -562,6 +599,20 @@ body.theme--dark .mesh-page {
         fill: #6f7a8d;
     }
 
+    .mesh-page__contract-symbol--primary {
+        background: #15803d;
+        box-shadow: 0 0.8rem 1.8rem rgb(21 128 61 / 28%);
+    }
+
+    .mesh-page__contract-symbol--secondary {
+        background: #be123c;
+        box-shadow: 0 0.8rem 1.8rem rgb(190 18 60 / 28%);
+    }
+
+    .mesh-page__contract-symbol--neutral {
+        background: #475569;
+    }
+
     .mesh-page__signal-card {
         background: #111722;
         border-color: color-mix(in srgb, var(--mesh-accent) 38%, #1e1e1e);
@@ -717,6 +768,17 @@ body.theme--dark .mesh-page {
         &__orbit-svg {
             height: 32rem;
             width: 100%;
+        }
+
+        &__contract-tape {
+            gap: 0.45rem;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+        }
+
+        &__contract-symbol {
+            border-radius: 0.7rem;
+            font-size: 1.35rem;
+            min-height: 3.5rem;
         }
 
         &__ring-row {

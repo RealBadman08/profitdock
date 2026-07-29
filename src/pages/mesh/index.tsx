@@ -456,10 +456,12 @@ const DigitRing = ({
 };
 
 const MeshOrbit = ({
+    children,
     historyDigits,
     lastHit,
     model,
 }: {
+    children?: React.ReactNode;
     historyDigits: number[];
     lastHit: { digit: number; nonce: number } | null;
     model: DigitModel;
@@ -551,6 +553,7 @@ const MeshOrbit = ({
                     </g>
                 ))}
             </svg>
+            {children}
         </section>
     );
 };
@@ -651,6 +654,67 @@ const TRADE_CATEGORIES = [
         { label: 'Under', contractType: 'DIGITUNDER', kind: 'under', color: '#dd3a3c' }
     ]}
 ];
+
+type MeshTapeEntry = {
+    digit: number;
+    key: string;
+    symbol: string;
+    tone: 'primary' | 'secondary' | 'neutral';
+};
+
+const buildMeshTape = (digits: number[], selectedTradeCategory: string, selectedDigit: number): MeshTapeEntry[] =>
+    digits.slice(-8).map((digit, index) => {
+        if (selectedTradeCategory === 'even_odd') {
+            return {
+                digit,
+                key: `${index}-${digit}`,
+                symbol: digit % 2 === 0 ? 'E' : 'O',
+                tone: digit % 2 === 0 ? 'primary' : 'secondary',
+            };
+        }
+
+        if (selectedTradeCategory === 'over_under') {
+            return {
+                digit,
+                key: `${index}-${digit}`,
+                symbol: digit > selectedDigit ? 'O' : digit < selectedDigit ? 'U' : '=',
+                tone: digit > selectedDigit ? 'primary' : digit < selectedDigit ? 'secondary' : 'neutral',
+            };
+        }
+
+        return {
+            digit,
+            key: `${index}-${digit}`,
+            symbol: digit === selectedDigit ? 'M' : 'D',
+            tone: digit === selectedDigit ? 'primary' : 'secondary',
+        };
+    });
+
+const MeshContractTape = ({
+    digits,
+    selectedDigit,
+    selectedTradeCategory,
+}: {
+    digits: number[];
+    selectedDigit: number;
+    selectedTradeCategory: string;
+}) => {
+    const entries = buildMeshTape(digits, selectedTradeCategory, selectedDigit);
+
+    return (
+        <div className='mesh-page__contract-tape' aria-label='Mesh contract symbols'>
+            {entries.map(entry => (
+                <span
+                    className={`mesh-page__contract-symbol mesh-page__contract-symbol--${entry.tone}`}
+                    key={entry.key}
+                    title={`Digit ${entry.digit}`}
+                >
+                    {entry.symbol}
+                </span>
+            ))}
+        </div>
+    );
+};
 
 const MeshPage = observer(() => {
     const { accountList, activeLoginid, authData, connectionStatus } = useApiBase();
@@ -1080,7 +1144,13 @@ const MeshPage = observer(() => {
                 {error && <div className='mesh-page__notice'>{error}</div>}
                 {feedback && <div className='mesh-page__notice mesh-page__notice--trade'>{feedback}</div>}
 
-                <MeshOrbit historyDigits={digits} lastHit={lastHit} model={model} />
+                <MeshOrbit historyDigits={digits} lastHit={lastHit} model={model}>
+                    <MeshContractTape
+                        digits={digits}
+                        selectedDigit={selectedDigit}
+                        selectedTradeCategory={selectedTradeCategory}
+                    />
+                </MeshOrbit>
 
                 <div className='mesh-page__bottom-controls'>
                     <div className='mesh-page__bottom-inputs'>

@@ -230,20 +230,22 @@ const toPositiveInteger = (value: string | number, fallback = 1) => {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const RUN_CONTRACT_TYPES = new Set(['RUNHIGH', 'RUNLOW']);
-
-const getDurationForLeg = (leg: StrategyLeg, requestedDuration: number) => {
-    if (!RUN_CONTRACT_TYPES.has(leg.contractType)) {
-        return requestedDuration;
-    }
-
-    return Math.max(2, Math.min(5, requestedDuration));
-};
+const DIGIT_ENTRY_CONTRACT_TYPES = new Set([
+    'DIGITEVEN',
+    'DIGITODD',
+    'DIGITMATCH',
+    'DIGITDIFF',
+    'DIGITOVER',
+    'DIGITUNDER',
+]);
+const isDigitEntryContract = (leg: StrategyLeg | null | undefined) =>
+    Boolean(leg && DIGIT_ENTRY_CONTRACT_TYPES.has(leg.contractType));
 
 const roundStakeValue = (value: number) => Number(value.toFixed(2)).toString();
 
-const getLastDigit = (quote: number) => {
-    const digits = String(quote).replace(/\D/g, '');
+const getLastDigit = (quote: number, pipSize = 2) => {
+    const formattedQuote = Number(quote).toFixed(Math.max(0, Math.trunc(pipSize)));
+    const digits = formattedQuote.replace(/\D/g, '');
     return Number(digits.charAt(digits.length - 1)) || 0;
 };
 
@@ -269,23 +271,17 @@ const createProposalPayload = ({
     predictionMode?: 'barrier' | 'selected_tick' | 'none';
     symbol: string;
 }) => {
-    let apiContractType = contractType;
     let finalDurationUnit = 't';
     let finalDuration = duration;
 
-    if (contractType === 'HIGHER') {
-        finalDuration = Math.max(5, duration); // minimum 5 ticks for Higher/Lower
-    } else if (contractType === 'LOWER') {
-        finalDuration = Math.max(5, duration);
-    } else if (contractType === 'ONETOUCH' || contractType === 'NOTOUCH') {
-        finalDurationUnit = 'm';
-        finalDuration = Math.max(1, duration); // minimum 1 minute for Touch/No Touch
+    if (!Number.isFinite(finalDuration) || finalDuration <= 0) {
+        finalDuration = 1;
     }
 
     const payload: Record<string, unknown> = {
         amount,
         basis: 'stake',
-        contract_type: apiContractType,
+        contract_type: contractType,
         currency,
         duration: finalDuration,
         duration_unit: finalDurationUnit,
@@ -320,7 +316,18 @@ const requestQuote = async (api: ApiLike, payload: Record<string, unknown>) => {
     const response = normalizeApiMessage<ProposalResponse>(await api.send(payload));
 
     if (response?.error) {
-        throw new Error(getDerivErrorMessage(response.error, 'Unable to fetch a live quote.'));
+        const message = getDerivErrorMessage(response.error, 'Unable to fetch a quote.');
+        const durationValue = payload.duration;
+        const durationUnit = payload.duration_unit;
+        if (
+            String(message).toLowerCase().includes('duration') ||
+            String(message).toLowerCase().includes('tick')
+        ) {
+            throw new Error(
+                `Invalid ticks for ${String(payload.contract_type || 'contract')}: ${durationValue}${durationUnit}. ${message}`
+            );
+        }
+        throw new Error(message);
     }
 
     if (!response?.proposal?.id || typeof response.proposal.ask_price !== 'number') {
@@ -581,8 +588,6 @@ const FlipperSwitcherPage = observer(() => {
                 const currentStake = toPositiveNumber(stake, 0);
                 if (currentStake <= 0) return null;
                 
-                const legDuration = getDurationForLeg(leg, duration);
-                
                 let val = pred;
                 if (!val) {
                     val = leg.predictionMode === 'barrier' ? '+0.25' : (entryPoint || '0');
@@ -595,7 +600,7 @@ const FlipperSwitcherPage = observer(() => {
                         amount: currentStake,
                         contractType: leg.contractType,
                         currency,
-                        duration: legDuration,
+                        duration,
                         prediction: parsedPred,
                         predictionMode: leg.predictionMode,
                         symbol: selectedMarketInfoRef.current.symbol
@@ -747,9 +752,10 @@ const FlipperSwitcherPage = observer(() => {
                 });
             };
 
-            const waitForEntryTrigger = async (marketSymbol: string, api: ApiLike) => {
+            const waitForEntryTrigger = async (marketSymbol: string, api: ApiLike, activeLegs: [StrategyLeg, StrategyLeg]) => {
                 const hasEntryDigit = entryPointRef.current !== '';
-                if (!hasEntryDigit) {
+                const shouldWaitForDigitEntry = activeLegs.some(isDigitEntryContract);
+                if (!hasEntryDigit || !shouldWaitForDigitEntry) {
                     if (!turboRef.current) await new Promise(r => setTimeout(r, 500));
                     return;
                 }
@@ -759,7 +765,7 @@ const FlipperSwitcherPage = observer(() => {
                     sub = api.onMessage().subscribe((message) => {
                         const data = normalizeApiMessage(message);
                         if (data.msg_type === 'tick' && data.tick?.symbol === marketSymbol) {
-                            const digit = getLastDigit(data.tick.quote);
+                            const digit = getLastDigit(Number(data.tick.quote), Number(data.tick.pip_size || 2));
                             const target = Math.max(0, Math.min(9, Math.trunc(Number(entryPointRef.current || 0))));
                             if (digit === target) {
                                 sub.unsubscribe();
@@ -795,12 +801,10 @@ const FlipperSwitcherPage = observer(() => {
                     ...marketCandidates.slice(0, Math.max(currentMarketIndex, 0)),
                 ];
 
-                await waitForEntryTrigger(orderedCandidates[0].symbol, api);
+                await waitForEntryTrigger(orderedCandidates[0].symbol, api, activeLegs);
                 if (!runningRef.current) break;
 
                 const duration = turboRef.current ? 1 : toPositiveInteger(durationTicksRef.current, 1);
-                const firstDuration = getDurationForLeg(activeLegs[0], duration);
-                const secondDuration = getDurationForLeg(activeLegs[1], duration);
 
                 const getPredictionValue = (refValue: string, leg: StrategyLeg) => {
                     let val = refValue;
@@ -820,8 +824,8 @@ const FlipperSwitcherPage = observer(() => {
                 for (const marketInfo of orderedCandidates) {
                     try {
                         const [firstQuote, secondQuote] = await Promise.all([
-                            requestQuote(api, createProposalPayload({ amount: currentStakeOne, contractType: activeLegs[0].contractType, currency, duration: firstDuration, prediction: predOne, predictionMode: activeLegs[0].predictionMode, symbol: marketInfo.symbol })),
-                            requestQuote(api, createProposalPayload({ amount: currentStakeTwo, contractType: activeLegs[1].contractType, currency, duration: secondDuration, prediction: predTwo, predictionMode: activeLegs[1].predictionMode, symbol: marketInfo.symbol }))
+                            requestQuote(api, createProposalPayload({ amount: currentStakeOne, contractType: activeLegs[0].contractType, currency, duration, prediction: predOne, predictionMode: activeLegs[0].predictionMode, symbol: marketInfo.symbol })),
+                            requestQuote(api, createProposalPayload({ amount: currentStakeTwo, contractType: activeLegs[1].contractType, currency, duration, prediction: predTwo, predictionMode: activeLegs[1].predictionMode, symbol: marketInfo.symbol }))
                         ]);
                         quoteBundle = { firstQuote, marketInfo, secondQuote };
                         break;
@@ -971,6 +975,20 @@ const FlipperSwitcherPage = observer(() => {
             return;
         }
 
+        if (entryPoint !== '') {
+            const targetDigit = Number(entryPoint);
+            if (!Number.isInteger(targetDigit) || targetDigit < 0 || targetDigit > 9) {
+                setFeedback(localize('Entry point must be a digit from 0 to 9.'));
+                return;
+            }
+        }
+
+        const quoteError = quoteOne?.error || quoteTwo?.error;
+        if (quoteError) {
+            setFeedback(quoteError);
+            return;
+        }
+
         currentRoundRef.current = 0;
         currentRunIdRef.current = 0;
         processedRunIdsRef.current = new Set();
@@ -999,7 +1017,7 @@ const FlipperSwitcherPage = observer(() => {
         emitProfitdockTradeStatus({
             canStop: isRunning,
             feature: 'flipper',
-            label: isRunning ? localize('Market Flipper running') : localize('Market Flipper stopped'),
+            label: isRunning ? localize('Flipper running') : localize('Flipper stopped'),
             running: isRunning,
         });
     }, [isRunning]);
@@ -1051,14 +1069,6 @@ const FlipperSwitcherPage = observer(() => {
 
     return (
         <div className='flipper-page'>
-            <div className='flipper-page__header'>
-                <div className='flipper-page__title-card'>
-                    <MarketIcon type={selectedMarketInfo?.symbol || selectedMarket} size='md' />
-                    <strong>{localize('Market Flipper')}</strong>
-                    <MarketIcon type={selectedMarketInfo?.symbol || selectedMarket} size='md' />
-                </div>
-            </div>
-
             <div className='flipper-page__strategy-grid'>
                 {BUTTONS.map(button => (
                     <button
@@ -1077,8 +1087,7 @@ const FlipperSwitcherPage = observer(() => {
                 ))}
             </div>
 
-            <section className='flipper-page__active-card'>
-                <h2>{localize('Active strategies (switch-on-loss - {{ losses }} loss)', { losses: lossesToSwitch || '1' })}</h2>
+            <section className='flipper-page__active-card' aria-label={localize('Selected Flipper strategies')}>
                 {selectedPair.legs.map((leg, index) => {
                     const quote = index === 0 ? quoteOne : quoteTwo;
                     return (
@@ -1092,6 +1101,18 @@ const FlipperSwitcherPage = observer(() => {
                                         onChange={event => (index === 0 ? setStakeOne(event.target.value) : setStakeTwo(event.target.value))}
                                         inputMode='decimal'
                                     />
+                                    {quote && (
+                                        <div className='flipper-page__quote-display'>
+                                            {quote.error ? (
+                                                <span className='flipper-page__quote-error'>{quote.error}</span>
+                                            ) : (
+                                                <span className='flipper-page__quote-payout'>
+                                                    {localize('Payout')}: {formatMoney(quote.payout, currency)}
+                                                    <span>{formatMoney(quote.payout - quote.askPrice, currency)}</span>
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </label>
                             <label>
@@ -1111,17 +1132,6 @@ const FlipperSwitcherPage = observer(() => {
                                         inputMode='text'
                                     />
                                 </label>
-                            )}
-                            {quote && (
-                                <div className='flipper-page__quote-display'>
-                                    {quote.error ? (
-                                        <span className='flipper-page__quote-error'>{quote.error}</span>
-                                    ) : (
-                                        <span className='flipper-page__quote-payout'>
-                                            Payout: {formatMoney(quote.payout, currency)} (+{formatMoney(quote.payout - quote.askPrice, currency)})
-                                        </span>
-                                    )}
-                                </div>
                             )}
                         </div>
                     );
