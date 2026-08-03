@@ -59,10 +59,6 @@ type CorsaPosition = {
     status: 'live' | 'closed' | 'error';
     symbol: string;
 };
-type ProposalResponse = {
-    error?: { code?: string; message?: string };
-    proposal?: { ask_price?: number; id?: string; longcode?: string; spot?: number };
-};
 type BuyResponse = {
     buy?: { buy_price?: number; contract_id?: number; longcode?: string; transaction_id?: number };
     error?: { code?: string; message?: string };
@@ -71,7 +67,7 @@ type TickResponse = {
     error?: { message?: string };
     msg_type?: string;
     subscription?: { id?: string };
-    tick?: { epoch: number; quote: number; symbol: string };
+    tick?: { epoch: number; pip_size?: number; quote: number; symbol: string };
 };
 type OpenContractResponse = {
     error?: { message?: string };
@@ -119,11 +115,9 @@ const toPositiveInteger = (value: string | number, fallback = 1) => {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 const clampDigit = (value: string | number, fallback = 0) => Math.max(0, Math.min(9, Math.trunc(Number(value) || fallback)));
-const roundStake = (value: number) => Number(value.toFixed(2));
-const formatMoney = (value: number, currency: string) => `${value >= 0 ? '+' : '-'}${Math.abs(value).toFixed(2)} ${currency}`;
-const formatStakeAmount = (value: number, currency: string) => `${Math.max(value, 0).toFixed(2)} ${currency}`;
-const getLastDigit = (quote: number) => {
-    const digits = String(quote).replace(/\D/g, '');
+const getLastDigit = (quote: number, pipSize = 2) => {
+    const formattedQuote = Number(quote).toFixed(Math.max(0, Math.trunc(pipSize)));
+    const digits = formattedQuote.replace(/\D/g, '');
     return Number(digits.charAt(digits.length - 1)) || 0;
 };
 
@@ -152,21 +146,9 @@ const isOppositePriceSignal = (contractType: CorsaDirection, current: number, pr
     return false;
 };
 
-const isRecoverableAuthError = (error: unknown) => {
-    const code = String((error as { code?: string })?.code || '').toLowerCase();
-    const message = String((error as Error)?.message || '').toLowerCase();
-    return (
-        ['authorizationrequired', 'unauthorized', 'unauthorizedaccess', 'invalidtoken', 'accessdenied'].includes(code) ||
-        message.includes('please log in') ||
-        message.includes('authorize') ||
-        message.includes('authorization') ||
-        message.includes('invalid token') ||
-        message.includes('session')
-    );
-};
-
-const createProposalPayload = ({
+const buyDirectContract = async ({
     amount,
+    api,
     contractType,
     currency,
     duration,
@@ -174,47 +156,36 @@ const createProposalPayload = ({
     symbol,
 }: {
     amount: number;
+    api: ApiLike;
     contractType: CorsaDirection;
     currency: string;
     duration: number;
     prediction: number;
     symbol: string;
 }) => {
-    const payload: Record<string, unknown> = {
+    const parameters: Record<string, unknown> = {
         amount,
         basis: 'stake',
         contract_type: contractType,
         currency,
         duration,
         duration_unit: 't',
-        proposal: 1,
-        underlying_symbol: symbol,
     };
+
+    parameters[isCustomLegacyOAuthDomain() ? 'underlying_symbol' : 'symbol'] = symbol;
+
     if (['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'].includes(contractType)) {
-        payload.barrier = String(prediction);
+        parameters.barrier = String(prediction);
     }
-    return payload;
-};
 
-const requestQuote = async (api: ApiLike, payload: Record<string, unknown>) => {
-    const response = normalizeApiMessage<ProposalResponse>(await api.send(payload));
-    if (response.error || !response.proposal?.id || typeof response.proposal.ask_price !== 'number') {
-        throw new Error(
-            [response.error?.code, response.error?.message || 'Unable to request a Corsa proposal.']
-                .filter(Boolean)
-                .join(': ')
-        );
-    }
-    return {
-        askPrice: response.proposal.ask_price,
-        longcode: response.proposal.longcode,
-        proposalId: response.proposal.id,
-        spot: response.proposal.spot,
-    };
-};
+    const response = normalizeApiMessage<BuyResponse>(
+        await api.send({
+            buy: 1,
+            parameters,
+            price: String(amount),
+        })
+    );
 
-const buyQuote = async (api: ApiLike, proposalId: string, price: number) => {
-    const response = normalizeApiMessage<BuyResponse>(await api.send({ buy: proposalId, price }));
     if (response.error || !response.buy?.contract_id) {
         throw new Error(
             [response.error?.code, response.error?.message || 'Unable to buy the Corsa contract.']
@@ -222,6 +193,7 @@ const buyQuote = async (api: ApiLike, proposalId: string, price: number) => {
                 .join(': ')
         );
     }
+
     return response.buy;
 };
 
@@ -260,29 +232,6 @@ const subscribeToContract = async (
         messageSubscription.unsubscribe();
         if (subscriptionId) void api.send({ forget: subscriptionId }).catch(() => undefined);
     };
-};
-
-const getSignalDescription = (contractType: CorsaDirection, prediction: number) => {
-    switch (contractType) {
-        case 'DIGITEVEN':
-            return 'odd digits';
-        case 'DIGITODD':
-            return 'even digits';
-        case 'DIGITOVER':
-            return `digits above ${prediction}`;
-        case 'DIGITUNDER':
-            return `digits below ${prediction}`;
-        case 'DIGITMATCH':
-            return `digits different from ${prediction}`;
-        case 'DIGITDIFF':
-            return `digits matching ${prediction}`;
-        case 'CALL':
-            return 'falling ticks';
-        case 'PUT':
-            return 'rising ticks';
-        default:
-            return 'matching ticks';
-    }
 };
 
 const getCorsaSignalStreak = ({
@@ -421,24 +370,16 @@ const CorsaPage = observer(() => {
     const [isRunning, setIsRunning] = useState(false);
     const [detectors, setDetectors] = useState<Record<string, DetectorState>>({});
     const [, setPositions] = useState<CorsaPosition[]>([]);
-    const [stats, setStats] = useState({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
-    const cleanupContractsRef = useRef<Map<number, () => void>>(new Map());
-    const contractMarketRef = useRef<Record<number, string>>({});
-    const contractStakeRef = useRef<Record<number, number>>({});
     const isRunningRef = useRef(false);
     const activeByMarketRef = useRef<Record<string, boolean>>({});
     const baseStakeRef = useRef(0);
-    const stakeByMarketRef = useRef<Record<string, number>>({});
-    const sessionPnlRef = useRef(0);
     const processedSignalRef = useRef<Record<string, string>>({});
-    const signalActiveRef = useRef<Record<string, boolean>>({});
     const martingaleRef = useRef(martingale);
-    const placeTradeRef = useRef<((market: MarketSymbol) => void) | null>(null);
     const contractTypeRef = useRef<CorsaDirection>(contractType);
     const signalStreakRef = useRef(signalStreak);
     const predictionRef = useRef(prediction);
     const marketsRef = useRef(markets);
-    const processedContractsRef = useRef<Set<number>>(new Set());
+    const tickCleanupRef = useRef<Map<string, () => void>>(new Map());
 
     const selectedMarketInfo = useMemo(
         () => markets.find(market => market.symbol === selectedMarket) || markets[0],
@@ -525,17 +466,13 @@ const CorsaPage = observer(() => {
                         setDetectors(prev => {
                             const current = prev[symbol] || { history: [], priceHistory: [], streak: 0, lastQuote: null };
                             const tick = data.tick;
-                            
+
                             if (!tick || current.lastQuote === tick.quote) return prev;
 
-                            const digit = getLastDigit(tick.quote);
-                            // Filter out recurring duplicate digits (2+ consecutive same digit)
-                            if (current.history.length >= 2 && current.history[0] === digit && current.history[1] === digit) {
-                                return { ...prev, [symbol]: { ...current, lastQuote: tick.quote } };
-                            }
+                            const digit = getLastDigit(tick.quote, tick.pip_size || 2);
                             const history = [digit, ...current.history].slice(0, 50);
                             const priceHistory = [tick.quote, ...current.priceHistory].slice(0, 50);
-                            
+
                             return {
                                 ...prev,
                                 [symbol]: { ...current, history, priceHistory, lastQuote: tick.quote }
@@ -617,11 +554,9 @@ const CorsaPage = observer(() => {
         baseStakeRef.current = currentStake;
         // Preserve existing detector state instead of resetting
         const existingDetector = detectors[symbol];
-        let detector = existingDetector
+        const detector = existingDetector
             ? { history: [...existingDetector.history], priceHistory: [...existingDetector.priceHistory], streak: existingDetector.streak }
             : { history: [], priceHistory: [], streak: 0 };
-        const handlerId = `corsa-tick-${symbol}`;
-        
         const registerListener = async () => {
             const api = await ensureTradingApi();
             if (!api) {
@@ -631,31 +566,29 @@ const CorsaPage = observer(() => {
                 return;
             }
 
-            let messageSub;
-            messageSub = api.onMessage().subscribe(async (message) => {
+            tickCleanupRef.current.get(symbol)?.();
+            tickCleanupRef.current.delete(symbol);
+
+            const messageSub = api.onMessage().subscribe(async (message) => {
                 const data = normalizeApiMessage(message);
                 if (data.msg_type !== 'tick' || data.tick?.symbol !== symbol) return;
-                
+
                 if (!isRunningRef.current) {
                     messageSub.unsubscribe();
+                    tickCleanupRef.current.delete(symbol);
                     return;
                 }
 
                 const tick = data.tick;
-                const digit = getLastDigit(tick.quote);
-                
-                // Filter out recurring duplicate digits (2+ consecutive same digit)
-                if (detector.history.length >= 2 && detector.history[0] === digit && detector.history[1] === digit) {
-                    return;
-                }
-                
+                const digit = getLastDigit(tick.quote, tick.pip_size || 2);
+
                 const liveContractType = contractTypeRef.current;
                 const targetStreak = toPositiveInteger(signalStreakRef.current, 1);
                 const targetDigit = clampDigit(predictionRef.current, 0);
-                
+
                 detector.history = [digit, ...detector.history].slice(0, 50);
                 detector.priceHistory = [tick.quote, ...detector.priceHistory].slice(0, 50);
-                
+
                 const nextStreak = getCorsaSignalStreak({
                     contractType: liveContractType,
                     digitHistory: detector.history,
@@ -663,95 +596,95 @@ const CorsaPage = observer(() => {
                     priceHistory: detector.priceHistory,
                 });
                 detector.streak = nextStreak;
-                
+
                 setDetectors(prev => ({
                     ...prev,
                     [symbol]: { ...detector, lastQuote: tick.quote }
                 }));
 
-                if (nextStreak >= targetStreak) {
-                    messageSub.unsubscribe();
-                    
+                if (nextStreak >= targetStreak && !activeByMarketRef.current[symbol]) {
+                    const signalKey = `${symbol}:${tick.epoch}:${tick.quote}:${liveContractType}:${targetDigit}:${targetStreak}`;
+                    if (processedSignalRef.current[symbol] === signalKey) return;
+                    processedSignalRef.current[symbol] = signalKey;
+                    activeByMarketRef.current[symbol] = true;
+
                     const market = marketsRef.current.find(m => m.symbol === symbol);
                     if (!market) {
-                        if (isRunningRef.current) registerListener();
+                        activeByMarketRef.current[symbol] = false;
                         return;
                     }
 
-                    try {
-                        const quote = await requestQuote(
-                            api,
-                            createProposalPayload({
+                    void (async () => {
+                        try {
+                            const buyRes = await buyDirectContract({
                                 amount: currentStake,
+                                api,
                                 contractType: liveContractType,
                                 currency,
                                 duration: toPositiveInteger(durationTicksRef.current, 1),
                                 prediction: targetDigit,
                                 symbol: market.symbol,
-                            })
-                        );
-                        
-                        const buyRes = await buyQuote(api, quote.proposalId, quote.askPrice);
-                        console.info('[CORSA BUY RESPONSE SUCCESS]', symbol, JSON.stringify(buyRes));
-                        
-                        const contractId = buyRes.contract_id;
-                        
-                        const updateUi = (contract) => {
-                            const liveContract = contract;
-                            transactions.pushTransaction({
-                                ...contract,
-                                accountID: getActiveTransactionAccountId(),
                             });
-                            const status = contract.status;
-                            const isSettled = status === 'won' || status === 'lost';
-                            setPositions(prev => {
-                                const existing = prev.find(p => p.contractId === contract.contract_id);
-                                if (existing) {
-                                    return prev.map(p => p.contractId === contract.contract_id ? {
-                                        ...p,
-                                        entrySpot: contract.entry_tick_display_value || contract.entry_tick || p.entrySpot,
-                                        exitSpot: contract.exit_tick_display_value || contract.exit_tick || (isSettled ? liveContract.current_spot_display_value || liveContract.current_spot : p.exitSpot),
-                                        profit: contract.profit != null ? Number(contract.profit) : p.profit,
-                                        status: isSettled ? 'closed' : 'live'
-                                    } : p);
-                                } else {
-                                    return [...prev, {
-                                        buyPrice: contract.buy_price,
-                                        contractId: contract.contract_id,
-                                        contractType: contract.contract_type,
-                                        entrySpot: contract.entry_tick_display_value || contract.entry_tick,
-                                        exitSpot: contract.exit_tick_display_value || contract.exit_tick || liveContract.current_spot_display_value || liveContract.current_spot,
-                                        label: market.display_name || market.symbol,
-                                        market: contract.underlying,
-                                        profit: Number(contract.profit || 0),
-                                        stake: contract.buy_price,
-                                        status: isSettled ? 'closed' : 'live',
-                                        symbol
-                                    }];
-                                }
-                            });
-                        };
+                            console.info('[CORSA BUY RESPONSE SUCCESS]', symbol, JSON.stringify(buyRes));
 
-                        const profit = await waitForSettlement(api, contractId, updateUi);
-                        console.log('[CORSA]', symbol, 'stakeUsed=', currentStake, 'profit=', profit);
-                        
-                        if (profit > 0) {
-                            currentStake = baseStakeRef.current;
-                        } else {
-                            const multiplier = toPositiveNumber(martingaleRef.current, 1);
-                            const normMult = normalizeMartingaleMultiplier(multiplier, 1);
-                            currentStake = roundMartingaleStake(currentStake * normMult);
+                            const contractId = Number(buyRes.contract_id);
+
+                            const updateUi = (contract) => {
+                                const liveContract = contract;
+                                transactions.pushTransaction({
+                                    ...contract,
+                                    accountID: getActiveTransactionAccountId(),
+                                });
+                                const status = contract.status;
+                                const isSettled = status === 'won' || status === 'lost';
+                                setPositions(prev => {
+                                    const existing = prev.find(p => p.contractId === contract.contract_id);
+                                    if (existing) {
+                                        return prev.map(p => p.contractId === contract.contract_id ? {
+                                            ...p,
+                                            entrySpot: contract.entry_tick_display_value || contract.entry_tick || p.entrySpot,
+                                            exitSpot: contract.exit_tick_display_value || contract.exit_tick || (isSettled ? liveContract.current_spot_display_value || liveContract.current_spot : p.exitSpot),
+                                            profit: contract.profit != null ? Number(contract.profit) : p.profit,
+                                            status: isSettled ? 'closed' : 'live'
+                                        } : p);
+                                    } else {
+                                        return [...prev, {
+                                            buyPrice: contract.buy_price,
+                                            contractId: contract.contract_id,
+                                            contractType: contract.contract_type,
+                                            entrySpot: contract.entry_tick_display_value || contract.entry_tick,
+                                            exitSpot: contract.exit_tick_display_value || contract.exit_tick || liveContract.current_spot_display_value || liveContract.current_spot,
+                                            label: market.display_name || market.symbol,
+                                            market: contract.underlying,
+                                            profit: Number(contract.profit || 0),
+                                            stake: contract.buy_price,
+                                            status: isSettled ? 'closed' : 'live',
+                                            symbol
+                                        }];
+                                    }
+                                });
+                            };
+
+                            const profit = await waitForSettlement(api, contractId, updateUi);
+                            console.log('[CORSA]', symbol, 'stakeUsed=', currentStake, 'profit=', profit);
+
+                            if (profit > 0) {
+                                currentStake = baseStakeRef.current;
+                            } else {
+                                const multiplier = toPositiveNumber(martingaleRef.current, 1);
+                                const normMult = normalizeMartingaleMultiplier(multiplier, 1);
+                                currentStake = roundMartingaleStake(currentStake * normMult);
+                            }
+                        } catch (error) {
+                            const errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+                            console.error('[CORSA BUY REJECTED]', symbol, errorMessage);
+                        } finally {
+                            activeByMarketRef.current[symbol] = false;
                         }
-                    } catch (err) {
-                        console.error('[CORSA BUY REJECTED]', symbol, err?.error?.code, err?.error?.message, JSON.stringify(err));
-                    }
-
-                    if (isRunningRef.current) {
-                        // Don't reset detector - let digits continue progressing
-                        registerListener();
-                    }
+                    })();
                 }
             });
+            tickCleanupRef.current.set(symbol, () => messageSub.unsubscribe());
             api.send({ subscribe: 1, ticks: symbol }).catch(() => {});
         };
 
@@ -763,6 +696,9 @@ const CorsaPage = observer(() => {
         if (isRunningRef.current) {
             isRunningRef.current = false;
             setIsRunning(false);
+            tickCleanupRef.current.forEach(cleanup => cleanup());
+            tickCleanupRef.current.clear();
+            activeByMarketRef.current = {};
             return;
         }
         const baseStake = toPositiveNumber(stake, 0);
@@ -770,17 +706,10 @@ const CorsaPage = observer(() => {
             return;
         }
         baseStakeRef.current = baseStake;
-        stakeByMarketRef.current = Object.fromEntries(watchedMarketSymbols.map(symbol => [symbol, baseStake]));
         activeByMarketRef.current = {};
-        contractMarketRef.current = {};
-        contractStakeRef.current = {};
         processedSignalRef.current = {};
-        signalActiveRef.current = {};
-        sessionPnlRef.current = 0;
         isRunningRef.current = true;
-        processedContractsRef.current = new Set();
         setPositions([]);
-        setStats({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
         // Do NOT reset detectors - preserve existing digit history
         setIsRunning(true);
 
@@ -803,7 +732,18 @@ const CorsaPage = observer(() => {
 
                 isRunningRef.current = false;
                 setIsRunning(false);
+                tickCleanupRef.current.forEach(cleanup => cleanup());
+                tickCleanupRef.current.clear();
+                activeByMarketRef.current = {};
             }),
+        []
+    );
+
+    useEffect(
+        () => () => {
+            tickCleanupRef.current.forEach(cleanup => cleanup());
+            tickCleanupRef.current.clear();
+        },
         []
     );
 
