@@ -348,8 +348,8 @@ const MeshOrbit = ({
     const startInertia = () => {
         stopInertia();
         const step = () => {
-            dragRef.current.velocity *= 0.94;
-            if (Math.abs(dragRef.current.velocity) < 0.015) {
+            dragRef.current.velocity *= 0.96; // slightly less decay for smoother, longer spin
+            if (Math.abs(dragRef.current.velocity) < 0.01) {
                 animationRef.current = null;
                 return;
             }
@@ -403,7 +403,8 @@ const MeshOrbit = ({
         const frequency = model.frequencies[digit] || 0;
         const count = model.counts[digit] || 0;
         const isCurrent = digit === currentDigit;
-        const isExtreme = model.total > 0 && (model.rank[digit] === 0 || model.rank[digit] === 9);
+        const isExtremeHigh = model.total > 0 && model.rank[digit] === 0;
+        const isExtremeLow = model.total > 0 && model.rank[digit] === 9;
         const tone = digit % 2 === 0 ? 'cool' : 'warm';
 
         return {
@@ -411,7 +412,8 @@ const MeshOrbit = ({
             digit,
             frequency,
             isCurrent,
-            isExtreme,
+            isExtremeHigh,
+            isExtremeLow,
             radius: Math.max(18, Math.min(42, 19 + frequency * 108)),
             tone,
             x: centerX + Math.cos(angle) * orbitRadius,
@@ -463,7 +465,7 @@ const MeshOrbit = ({
                         <g
                             className={`mesh-page__orbit-node ${
                                 point.isCurrent ? 'mesh-page__orbit-node--hit' : ''
-                            } ${point.isExtreme ? 'mesh-page__orbit-node--extreme' : ''}`}
+                            } ${point.isExtremeHigh ? 'mesh-page__orbit-node--extreme-high' : ''} ${point.isExtremeLow ? 'mesh-page__orbit-node--extreme-low' : ''}`}
                             key={`${point.digit}-${point.isCurrent ? lastHit?.nonce || 0 : point.count}`}
                             style={
                                 {

@@ -161,7 +161,7 @@
         border-color: #d8e2ee;
         display: grid;
         justify-items: center;
-        min-height: clamp(48rem, 76vh, 78rem);
+        min-height: clamp(57rem, 90vh, 93rem);
         overflow: hidden;
         padding: 0.6rem;
     }
@@ -173,7 +173,7 @@
         touch-action: none;
         transform-origin: 50% 50%;
         user-select: none;
-        width: min(95%, 118rem);
+        width: min(95%, 142rem);
 
         &--dragging {
             cursor: grabbing;
@@ -183,7 +183,7 @@
     &__orbit-svg {
         display: block;
         height: auto;
-        max-width: 118rem;
+        max-width: 142rem;
         overflow: visible;
         width: 100%;
     }
@@ -267,7 +267,15 @@
         opacity: 0.9;
     }
 
-    &__orbit-node--extreme &__orbit-bubble {
+    &__orbit-node--extreme-high &__orbit-bubble {
+        filter:
+            drop-shadow(0 0 0.8rem rgba(34, 197, 94, 0.66))
+            drop-shadow(0 0.9rem 1.4rem rgba(15, 23, 42, 0.2));
+        stroke: #22c55e;
+        stroke-width: 2.4;
+    }
+
+    &__orbit-node--extreme-low &__orbit-bubble {
         filter:
             drop-shadow(0 0 0.8rem rgba(220, 52, 68, 0.66))
             drop-shadow(0 0.9rem 1.4rem rgba(15, 23, 42, 0.2));
@@ -508,6 +516,7 @@
         flex-direction: column;
         overflow: hidden;
         padding: 0;
+        background: var(--action-color);
 
         &:hover:not(:disabled) {
             transform: translateY(-2px);
@@ -523,7 +532,7 @@
     }
 
     &__action-label {
-        background: var(--action-color);
+        background: transparent;
         padding: 1.2rem;
         font-size: 1.8rem;
         font-weight: 700;
@@ -535,7 +544,7 @@
     }
 
     &__action-percent {
-        background: color-mix(in srgb, var(--action-color) 85%, #000);
+        background: transparent;
         padding: 1.2rem;
         font-size: 1.6rem;
         font-weight: 700;
@@ -611,6 +620,20 @@ body.theme--dark .mesh-page {
     .mesh-page__orbit-bubble {
         filter: drop-shadow(0 0.7rem 1.1rem rgba(0, 0, 0, 0.34));
         stroke: rgba(255, 255, 255, 0.22);
+    }
+
+    .mesh-page__orbit-node--extreme-high .mesh-page__orbit-bubble {
+        filter:
+            drop-shadow(0 0 0.8rem rgba(34, 197, 94, 0.66))
+            drop-shadow(0 0.7rem 1.1rem rgba(0, 0, 0, 0.34));
+        stroke: #22c55e;
+    }
+
+    .mesh-page__orbit-node--extreme-low .mesh-page__orbit-bubble {
+        filter:
+            drop-shadow(0 0 0.8rem rgba(220, 52, 68, 0.66))
+            drop-shadow(0 0.7rem 1.1rem rgba(0, 0, 0, 0.34));
+        stroke: #dc3444;
     }
 
     .mesh-page__contract-symbol--primary {

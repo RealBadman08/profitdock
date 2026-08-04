@@ -40,7 +40,7 @@ type CorsaDirection =
     | 'CALL'
     | 'PUT';
 type MarketMode = 'single' | 'all';
-type DetectorState = { history: number[]; lastQuote: number | null; priceHistory: number[]; streak: number };
+type DetectorState = { history: number[]; lastEpoch?: number | null; lastQuote: number | null; priceHistory: number[]; streak: number };
 type CorsaDisplayItem = { label: string; tone: 'empty' | 'negative' | 'positive' };
 type TicksHistoryResponse = {
     error?: { message?: string };
@@ -464,10 +464,10 @@ const CorsaPage = observer(() => {
                     const symbol = data.tick.symbol;
                     if (watchedMarketSymbols.includes(symbol)) {
                         setDetectors(prev => {
-                            const current = prev[symbol] || { history: [], priceHistory: [], streak: 0, lastQuote: null };
+                            const current = prev[symbol] || { history: [], priceHistory: [], streak: 0, lastEpoch: null, lastQuote: null };
                             const tick = data.tick;
 
-                            if (!tick || current.lastQuote === tick.quote) return prev;
+                            if (!tick || current.lastQuote === tick.quote || current.lastEpoch === tick.epoch) return prev;
 
                             const digit = getLastDigit(tick.quote, tick.pip_size || 2);
                             const history = [digit, ...current.history].slice(0, 50);
@@ -475,7 +475,7 @@ const CorsaPage = observer(() => {
 
                             return {
                                 ...prev,
-                                [symbol]: { ...current, history, priceHistory, lastQuote: tick.quote }
+                                [symbol]: { ...current, history, priceHistory, lastEpoch: tick.epoch, lastQuote: tick.quote }
                             };
                         });
                     }
@@ -552,11 +552,10 @@ const CorsaPage = observer(() => {
     const runCorsaLoopForMarket = (symbol: string) => {
         let currentStake = toPositiveNumber(stake, 0);
         baseStakeRef.current = currentStake;
-        // Preserve existing detector state instead of resetting
         const existingDetector = detectors[symbol];
         const detector = existingDetector
-            ? { history: [...existingDetector.history], priceHistory: [...existingDetector.priceHistory], streak: existingDetector.streak }
-            : { history: [], priceHistory: [], streak: 0 };
+            ? { history: [...existingDetector.history], priceHistory: [...existingDetector.priceHistory], streak: existingDetector.streak, lastEpoch: existingDetector.lastEpoch, lastQuote: existingDetector.lastQuote }
+            : { history: [], priceHistory: [], streak: 0, lastEpoch: null, lastQuote: null };
         const registerListener = async () => {
             const api = await ensureTradingApi();
             if (!api) {
@@ -580,6 +579,11 @@ const CorsaPage = observer(() => {
                 }
 
                 const tick = data.tick;
+                if (!tick || detector.lastQuote === tick.quote || detector.lastEpoch === tick.epoch) return;
+
+                detector.lastEpoch = tick.epoch;
+                detector.lastQuote = tick.quote;
+
                 const digit = getLastDigit(tick.quote, tick.pip_size || 2);
 
                 const liveContractType = contractTypeRef.current;
@@ -599,7 +603,7 @@ const CorsaPage = observer(() => {
 
                 setDetectors(prev => ({
                     ...prev,
-                    [symbol]: { ...detector, lastQuote: tick.quote }
+                    [symbol]: { history: [...detector.history], priceHistory: [...detector.priceHistory], streak: detector.streak, lastEpoch: detector.lastEpoch, lastQuote: detector.lastQuote }
                 }));
 
                 if (nextStreak >= targetStreak && !activeByMarketRef.current[symbol]) {

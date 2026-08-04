@@ -3542,7 +3542,9 @@ const AccumulatorsPage = observer(() => {
                                 <aside className='accumulators-page__manual-order-card'>
                                     <div className='accumulators-page__form-grid'>
                                         <label className='accumulators-page__field'>
-                                            <span>{localize('Stake')}</span>
+                                            <div className='accumulators-page__field-label-group'>
+                                                <span>{localize('Stake')}</span>
+                                            </div>
                                             <div className='accumulators-page__input-wrap'>
                                                 <input
                                                     value={resolvedManualConfig.stake}
@@ -3559,7 +3561,9 @@ const AccumulatorsPage = observer(() => {
                                             </div>
                                         </label>
                                         <label className='accumulators-page__field'>
-                                            <span>{localize('Take profit')}</span>
+                                            <div className='accumulators-page__field-label-group'>
+                                                <span>{localize('Take profit')}</span>
+                                            </div>
                                             <div className='accumulators-page__input-wrap'>
                                                 <input
                                                     value={resolvedManualConfig.takeProfit}
@@ -3571,153 +3575,85 @@ const AccumulatorsPage = observer(() => {
                                                         )
                                                     }
                                                     inputMode='decimal'
+                                                    placeholder='-'
                                                 />
                                                 <span>{currency}</span>
                                             </div>
                                         </label>
                                     </div>
 
-                                    <div className='accumulators-page__metrics'>
-                                        <div>
-                                            <span>{localize('Current stat')}</span>
-                                            <strong>{manualCurrentStat ?? '--'}</strong>
-                                        </div>
-                                        <div>
-                                            <span>{localize('Barrier %')}</span>
-                                            <strong>{manualBarrierPercentValue}</strong>
-                                        </div>
-                                        <div>
-                                            <span>{localize('Max ticks')}</span>
-                                            <strong>{manualMaxTicksValue ?? '--'}</strong>
-                                        </div>
-                                        <div>
-                                            <span>{localize('Ask price')}</span>
-                                            <strong>{manualAskPriceValue !== null ? formatMoney(manualAskPriceValue, currency) : '--'}</strong>
-                                        </div>
-                                        <div>
-                                            <span>{localize('Max payout')}</span>
-                                            <strong>{manualMaxPayoutValue !== null ? formatMoney(manualMaxPayoutValue, currency) : '--'}</strong>
-                                        </div>
-                                        <div>
-                                            <span>{localize('Profit')}</span>
-                                            <strong className={`accumulators-page__metric-value accumulators-page__metric-value--${manualProfitTone}`}>
-                                                {formatMoney(manualTradeState.profit, currency)}
-                                            </strong>
-                                        </div>
-                                    </div>
-
-                                    {manualTradeState.contractId && manualTradeState.status !== 'closed' ? (
-                                        <div className='accumulators-page__active-position'>
-                                            <div>
-                                                <span>{localize('Contract')}</span>
-                                                <strong>{manualTradeState.contractId}</strong>
+                                    {!manualTradeState.contractId || manualTradeState.status === 'closed' ? (
+                                        <div className='accumulators-page__summary-block'>
+                                            <div className='accumulators-page__summary-row'>
+                                                <span>{localize('Max. payout')}</span>
+                                                <strong>{manualMaxPayoutValue !== null ? formatMoney(manualMaxPayoutValue, currency) : '--'}</strong>
                                             </div>
-                                            <div>
-                                                <span>{localize('Ticks')}</span>
-                                                <strong>{manualTradeState.tickPassed || 0}</strong>
+                                            <div className='accumulators-page__summary-row'>
+                                                <span>{localize('Barrier')}</span>
+                                                <strong>{manualBarrierPercentValue}</strong>
                                             </div>
-                                            <div>
+                                            <div className='accumulators-page__summary-row'>
+                                                <span>{localize('Max. duration')}</span>
+                                                <strong>{manualMaxTicksValue ? `${manualMaxTicksValue} ticks` : '--'}</strong>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className='accumulators-page__summary-block accumulators-page__summary-block--active'>
+                                            <div className='accumulators-page__summary-row'>
                                                 <span>{localize('Stake')}</span>
                                                 <strong>{formatMoney(manualTradeState.buyPrice, currency)}</strong>
                                             </div>
-                                            <div>
-                                                <span>{localize('Sell value')}</span>
-                                                <strong>
-                                                    {manualTradeState.bidPrice
-                                                        ? formatMoney(Number(manualTradeState.bidPrice), currency)
-                                                        : '--'}
+                                            <div className='accumulators-page__summary-row'>
+                                                <span>{localize('Current P&L')}</span>
+                                                <strong className={`accumulators-page__metric-value accumulators-page__metric-value--${manualProfitTone}`}>
+                                                    {manualTradeState.profit >= 0 ? '+' : ''}{formatMoney(manualTradeState.profit, currency)}
                                                 </strong>
                                             </div>
-                                            <div>
-                                                <span>{localize('P/L')}</span>
-                                                <strong
-                                                    className={`accumulators-page__metric-value accumulators-page__metric-value--${manualProfitTone}`}
-                                                >
-                                                    {formatMoney(manualTradeState.profit, currency)}
+                                            <div className='accumulators-page__summary-row accumulators-page__summary-row--total'>
+                                                <span>{localize('Total return')}</span>
+                                                <strong>
+                                                    {formatMoney((manualTradeState.buyPrice || 0) + (manualTradeState.profit || 0), currency)}
                                                 </strong>
                                             </div>
                                         </div>
-                                    ) : null}
+                                    )}
 
                                     <div className='accumulators-page__trade-actions'>
-                                        <button
-                                            type='button'
-                                            className='accumulators-page__trade-button accumulators-page__trade-button--manual'
-                                            onClick={() => void handleManualBuy(resolvedManualMarket)}
-                                            disabled={manualTradeState.status === 'opening' || manualTradeState.status === 'live' || manualTradeState.status === 'selling'}
-                                        >
-                                            <span>
-                                                {manualTradeState.status === 'opening'
-                                                    ? localize('Buying...')
-                                                    : localize('Buy')}
-                                            </span>
-                                        </button>
-                                        <button
-                                            type='button'
-                                            className='accumulators-page__trade-button accumulators-page__trade-button--sell'
-                                            onClick={() => void handleManualSell(resolvedManualMarket)}
-                                            disabled={manualSellDisabled}
-                                        >
-                                            <span>
-                                                {manualTradeState.status === 'selling'
-                                                    ? localize('Selling...')
-                                                    : localize('Sell')}
-                                            </span>
-                                        </button>
-                                    </div>
-
-                                    <div className='accumulators-page__card-note accumulators-page__card-note--manual-explainer'>
-                                        {localize(
-                                            'After the entry spot tick, your stake will grow continuously by {{ growth }}% for every tick that the spot price remains within the ± {{ barrier }} from the previous spot price.',
-                                            {
-                                                barrier: manualBarrierPercentValue,
-                                                growth: String(growthRatePercent),
-                                            }
+                                        {!manualTradeState.contractId || manualTradeState.status === 'closed' ? (
+                                            <button
+                                                type='button'
+                                                className='accumulators-page__trade-button accumulators-page__trade-button--buy'
+                                                onClick={() => void handleManualBuy(resolvedManualMarket)}
+                                                disabled={manualTradeState.status === 'opening' || manualTradeState.status === 'live' || manualTradeState.status === 'selling'}
+                                            >
+                                                <span>
+                                                    {manualTradeState.status === 'opening' ? localize('Purchasing...') : localize('Buy')}
+                                                </span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                type='button'
+                                                className='accumulators-page__trade-button accumulators-page__trade-button--close'
+                                                onClick={() => void handleManualSell(resolvedManualMarket)}
+                                                disabled={manualSellDisabled || manualTradeState.status === 'selling'}
+                                            >
+                                                {manualTradeState.status === 'selling' ? (
+                                                    <span>{localize('Closing...')}</span>
+                                                ) : (
+                                                    <span className='accumulators-page__close-button-content'>
+                                                        <span>{localize('Close')}</span>
+                                                        <small>{formatMoney((manualTradeState.buyPrice || 0) + (manualTradeState.profit || 0), currency)}</small>
+                                                    </span>
+                                                )}
+                                            </button>
                                         )}
                                     </div>
-
-                                    <div className='accumulators-page__card-note'>
-                                        {manualTradeState.feedback}
-                                        {manualTradeState.tickPassed > 0 && manualTradeState.status === 'live'
-                                            ? ` ${localize('Tick')} ${manualTradeState.tickPassed}.`
-                                            : ''}
-                                    </div>
-                                </aside>
-                            </div>
-                            <div className='accumulators-page__positions-table'>
-                                <div className='accumulators-page__positions-head'>
-                                    <strong>{localize('Report')}</strong>
-                                    <span>{localize('{{ count }} manual position(s)', { count: String(manualPositionRows.length) })}</span>
-                                </div>
-                                <div className='accumulators-page__positions-grid accumulators-page__positions-grid--header'>
-                                    <span>{localize('Type / Market')}</span>
-                                    <span>{localize('Ticks / Contract')}</span>
-                                    <span>{localize('Buy price / P&L')}</span>
-                                </div>
-                                {manualPositionRows.length ? (
-                                    manualPositionRows.map(position => (
-                                        <div className='accumulators-page__positions-grid' key={`${position.symbol}-${position.contractId}`}>
-                                            <span>
-                                                <strong>{position.status === 'closed' ? localize('Closed') : localize('Accumulator')}</strong>
-                                                <small>{position.marketLabel}</small>
-                                            </span>
-                                            <span>
-                                                <strong>{position.tickPassed || 0}</strong>
-                                                <small>{position.contractId}</small>
-                                            </span>
-                                            <span>
-                                                <strong>{formatMoney(position.buyPrice, currency)}</strong>
-                                                <small className={`accumulators-page__metric-value accumulators-page__metric-value--${
-                                                    position.profit > 0 ? 'good' : position.profit < 0 ? 'bad' : 'neutral'
-                                                }`}>
-                                                    {formatMoney(position.profit, currency)}
-                                                </small>
-                                            </span>
+                                    {manualTradeState.feedback && manualTradeState.status !== 'closed' && (
+                                        <div className='accumulators-page__card-note'>
+                                            {manualTradeState.feedback}
                                         </div>
-                                    ))
-                                ) : (
-                                    <div className='accumulators-page__positions-empty'>{localize('No positions')}</div>
-                                )}
+                                    )}
+                                </aside>
                             </div>
                             </>
                         ) : (
