@@ -3391,18 +3391,7 @@ const AccumulatorsPage = observer(() => {
                 </section>
 
                 <section className='accumulators-page__toolbar'>
-                    <div className='accumulators-page__growth-switch'>
-                        {GROWTH_RATE_OPTIONS.map(option => (
-                            <button
-                                key={option}
-                                type='button'
-                                className={`accumulators-page__growth-chip ${growthRatePercent === option ? 'accumulators-page__growth-chip--active' : ''}`}
-                                onClick={() => setGrowthRatePercent(option)}
-                            >
-                                {option}%
-                            </button>
-                        ))}
-                    </div>
+                    {/* Growth rate selector moved to manual panel to match reference UI */}
                 </section>
 
                 {activeTab === 'manual' ? (
@@ -3507,40 +3496,29 @@ const AccumulatorsPage = observer(() => {
                                             </div>
                                         )}
                                     </div>
-
-                                    <div className='accumulators-page__manual-barriers'>
-                                        <div>
-                                            <span>{localize('Upper barrier')}</span>
-                                            <strong>{formatQuote(manualHighBarrierValue, manualPipSize)}</strong>
-                                            <small>{manualUpperDistance}</small>
-                                        </div>
-                                        <div>
-                                            <span>{localize('Current spot')}</span>
-                                            <strong>{manualSpotDisplay}</strong>
-                                            <small>{manualBarrierDistance}</small>
-                                        </div>
-                                        <div>
-                                            <span>{localize('Lower barrier')}</span>
-                                            <strong>{formatQuote(manualLowBarrierValue, manualPipSize)}</strong>
-                                            <small>{manualLowerDistance}</small>
-                                        </div>
-                                    </div>
-
-                                    <div className='accumulators-page__manual-stats-ribbon'>
-                                        <span className='accumulators-page__manual-stats-label'>{localize('Stats')}</span>
-                                        {manualStats.slice(0, 10).map((stat, index) => (
-                                            <span
-                                                key={`${resolvedManualMarket.symbol}-manual-stat-${index}`}
-                                                className={`accumulators-page__stat-pill ${index === 0 ? 'accumulators-page__stat-pill--current' : ''}`}
-                                            >
-                                                {stat}
-                                            </span>
-                                        ))}
-                                    </div>
                                 </article>
 
                                 <aside className='accumulators-page__manual-order-card'>
-                                    <div className='accumulators-page__form-grid'>
+                                    <div className='accumulators-page__form-stack'>
+                                        <label className='accumulators-page__field'>
+                                            <div className='accumulators-page__field-label-group'>
+                                                <span>{localize('Growth rate')}</span>
+                                                <span className='accumulators-page__info-icon' title={localize('Your stake grows by the selected percentage for each tick that stays within the barrier range.')}>i</span>
+                                            </div>
+                                            <div className='accumulators-page__input-wrap accumulators-page__input-wrap--select'>
+                                                <select
+                                                    value={growthRatePercent}
+                                                    onChange={event => setGrowthRatePercent(Number(event.target.value))}
+                                                    disabled={manualTradeState.status !== 'closed' && manualTradeState.status !== 'idle'}
+                                                >
+                                                    {GROWTH_RATE_OPTIONS.map(option => (
+                                                        <option key={option} value={option}>
+                                                            {option}%
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </label>
                                         <label className='accumulators-page__field'>
                                             <div className='accumulators-page__field-label-group'>
                                                 <span>{localize('Stake')}</span>
@@ -3563,6 +3541,7 @@ const AccumulatorsPage = observer(() => {
                                         <label className='accumulators-page__field'>
                                             <div className='accumulators-page__field-label-group'>
                                                 <span>{localize('Take profit')}</span>
+                                                <span className='accumulators-page__info-icon' title={localize('The contract closes automatically when your profit reaches this amount. Leave empty for no limit.')}>i</span>
                                             </div>
                                             <div className='accumulators-page__input-wrap'>
                                                 <input
