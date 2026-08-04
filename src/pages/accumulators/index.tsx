@@ -3498,102 +3498,64 @@ const AccumulatorsPage = observer(() => {
                                     </div>
                                 </article>
 
-                                <aside className='accumulators-page__manual-order-card'>
-                                    <div className='accumulators-page__form-stack'>
-                                        <label className='accumulators-page__field'>
-                                            <div className='accumulators-page__field-label-group'>
-                                                <span>{localize('Growth rate')}</span>
-                                                <span className='accumulators-page__info-icon' title={localize('Your stake grows by the selected percentage for each tick that stays within the barrier range.')}>i</span>
-                                            </div>
-                                            <div className='accumulators-page__input-wrap accumulators-page__input-wrap--select'>
+                                <aside className='accumulators-page__manual-order-card accumulators-page__manual-order-card--mobile-mimic'>
+                                    <div className='accumulators-page__drawer-handle'>
+                                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                                    </div>
+
+                                    <div className='accumulators-page__trade-params'>
+                                        <div className='accumulators-page__param-box'>
+                                            <span className='accumulators-page__param-label'>{localize('Growth rate')}</span>
+                                            <div className='accumulators-page__param-value'>
                                                 <select
                                                     value={growthRatePercent}
                                                     onChange={event => setGrowthRatePercent(Number(event.target.value))}
                                                     disabled={manualTradeState.status !== 'closed' && manualTradeState.status !== 'idle'}
                                                 >
                                                     {GROWTH_RATE_OPTIONS.map(option => (
-                                                        <option key={option} value={option}>
-                                                            {option}%
-                                                        </option>
+                                                        <option key={option} value={option}>{option}%</option>
                                                     ))}
                                                 </select>
                                             </div>
-                                        </label>
-                                        <label className='accumulators-page__field'>
-                                            <div className='accumulators-page__field-label-group'>
-                                                <span>{localize('Stake')}</span>
-                                            </div>
-                                            <div className='accumulators-page__input-wrap'>
+                                        </div>
+
+                                        <div className='accumulators-page__param-box'>
+                                            <span className='accumulators-page__param-label'>{localize('Stake')}</span>
+                                            <div className='accumulators-page__param-value'>
                                                 <input
                                                     value={resolvedManualConfig.stake}
-                                                    onChange={event =>
-                                                        handleManualConfigChange(
-                                                            resolvedManualMarket.symbol,
-                                                            'stake',
-                                                            event.target.value
-                                                        )
-                                                    }
+                                                    onChange={event => handleManualConfigChange(resolvedManualMarket.symbol, 'stake', event.target.value)}
                                                     inputMode='decimal'
                                                 />
-                                                <span>{currency}</span>
+                                                <span className='accumulators-page__param-currency'>{currency}</span>
                                             </div>
-                                        </label>
-                                        <label className='accumulators-page__field'>
-                                            <div className='accumulators-page__field-label-group'>
-                                                <span>{localize('Take profit')}</span>
-                                                <span className='accumulators-page__info-icon' title={localize('The contract closes automatically when your profit reaches this amount. Leave empty for no limit.')}>i</span>
-                                            </div>
-                                            <div className='accumulators-page__input-wrap'>
+                                        </div>
+
+                                        <div className='accumulators-page__param-box'>
+                                            <span className='accumulators-page__param-label'>{localize('Take profit')}</span>
+                                            <div className='accumulators-page__param-value'>
                                                 <input
                                                     value={resolvedManualConfig.takeProfit}
-                                                    onChange={event =>
-                                                        handleManualConfigChange(
-                                                            resolvedManualMarket.symbol,
-                                                            'takeProfit',
-                                                            event.target.value
-                                                        )
-                                                    }
+                                                    onChange={event => handleManualConfigChange(resolvedManualMarket.symbol, 'takeProfit', event.target.value)}
                                                     inputMode='decimal'
                                                     placeholder='-'
                                                 />
-                                                <span>{currency}</span>
+                                                <span className='accumulators-page__param-currency'>{currency}</span>
                                             </div>
-                                        </label>
+                                        </div>
                                     </div>
 
                                     {!manualTradeState.contractId || manualTradeState.status === 'closed' ? (
-                                        <div className='accumulators-page__summary-block'>
-                                            <div className='accumulators-page__summary-row'>
-                                                <span>{localize('Max. payout')}</span>
-                                                <strong>{manualMaxPayoutValue !== null ? formatMoney(manualMaxPayoutValue, currency) : '--'}</strong>
-                                            </div>
-                                            <div className='accumulators-page__summary-row'>
-                                                <span>{localize('Barrier')}</span>
-                                                <strong>{manualBarrierPercentValue}</strong>
-                                            </div>
-                                            <div className='accumulators-page__summary-row'>
-                                                <span>{localize('Max. duration')}</span>
-                                                <strong>{manualMaxTicksValue ? `${manualMaxTicksValue} ticks` : '--'}</strong>
-                                            </div>
+                                        <div className='accumulators-page__payout-row'>
+                                            <span className='accumulators-page__payout-label'>{localize('Max. payout')}</span>
+                                            <strong className='accumulators-page__payout-value'>{manualMaxPayoutValue !== null ? formatMoney(manualMaxPayoutValue, currency) : '--'}</strong>
                                         </div>
                                     ) : (
-                                        <div className='accumulators-page__summary-block accumulators-page__summary-block--active'>
-                                            <div className='accumulators-page__summary-row'>
-                                                <span>{localize('Stake')}</span>
-                                                <strong>{formatMoney(manualTradeState.buyPrice, currency)}</strong>
-                                            </div>
-                                            <div className='accumulators-page__summary-row'>
-                                                <span>{localize('Current P&L')}</span>
-                                                <strong className={`accumulators-page__metric-value accumulators-page__metric-value--${manualProfitTone}`}>
-                                                    {manualTradeState.profit >= 0 ? '+' : ''}{formatMoney(manualTradeState.profit, currency)}
-                                                </strong>
-                                            </div>
-                                            <div className='accumulators-page__summary-row accumulators-page__summary-row--total'>
-                                                <span>{localize('Total return')}</span>
-                                                <strong>
-                                                    {formatMoney((manualTradeState.buyPrice || 0) + (manualTradeState.profit || 0), currency)}
-                                                </strong>
-                                            </div>
+                                        <div className='accumulators-page__payout-row accumulators-page__payout-row--active'>
+                                            <span className='accumulators-page__payout-label'>{localize('Total return')}</span>
+                                            <strong className='accumulators-page__payout-value'>
+                                                {formatMoney((manualTradeState.buyPrice || 0) + (manualTradeState.profit || 0), currency)}
+                                            </strong>
                                         </div>
                                     )}
 
@@ -3601,28 +3563,21 @@ const AccumulatorsPage = observer(() => {
                                         {!manualTradeState.contractId || manualTradeState.status === 'closed' ? (
                                             <button
                                                 type='button'
-                                                className='accumulators-page__trade-button accumulators-page__trade-button--buy'
+                                                className='accumulators-page__trade-button accumulators-page__trade-button--buy-mimic'
                                                 onClick={() => void handleManualBuy(resolvedManualMarket)}
                                                 disabled={manualTradeState.status === 'opening' || manualTradeState.status === 'live' || manualTradeState.status === 'selling'}
                                             >
-                                                <span>
-                                                    {manualTradeState.status === 'opening' ? localize('Purchasing...') : localize('Buy')}
-                                                </span>
+                                                {manualTradeState.status === 'opening' ? localize('Purchasing...') : localize('Buy')}
                                             </button>
                                         ) : (
                                             <button
                                                 type='button'
-                                                className='accumulators-page__trade-button accumulators-page__trade-button--close'
+                                                className='accumulators-page__trade-button accumulators-page__trade-button--close-mimic'
                                                 onClick={() => void handleManualSell(resolvedManualMarket)}
                                                 disabled={manualSellDisabled || manualTradeState.status === 'selling'}
                                             >
-                                                {manualTradeState.status === 'selling' ? (
-                                                    <span>{localize('Closing...')}</span>
-                                                ) : (
-                                                    <span className='accumulators-page__close-button-content'>
-                                                        <span>{localize('Close')}</span>
-                                                        <small>{formatMoney((manualTradeState.buyPrice || 0) + (manualTradeState.profit || 0), currency)}</small>
-                                                    </span>
+                                                {manualTradeState.status === 'selling' ? localize('Closing...') : (
+                                                    <span>{localize('Close')} {formatMoney((manualTradeState.buyPrice || 0) + (manualTradeState.profit || 0), currency)}</span>
                                                 )}
                                             </button>
                                         )}

@@ -197,6 +197,133 @@
     box-shadow: var(--acc-shadow);
 }
 
+/* Mobile mimic order card styles (exactly like video) */
+.accumulators-page__manual-order-card--mobile-mimic {
+    background: #ffffff;
+    border-radius: 12px 12px 0 0;
+    padding: 1rem 1rem;
+    border: none;
+    border-top: 1px solid var(--acc-border);
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
+}
+[data-theme='dark'] .accumulators-page__manual-order-card--mobile-mimic {
+    background: var(--acc-surface);
+}
+
+.accumulators-page__drawer-handle {
+    display: flex;
+    justify-content: center;
+    color: #999999;
+    margin-top: -0.5rem;
+    margin-bottom: -0.8rem;
+}
+
+.accumulators-page__trade-params {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+}
+
+.accumulators-page__param-box {
+    border: 1px solid var(--acc-border);
+    border-radius: 6px;
+    padding: 0.6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    background: transparent;
+}
+
+.accumulators-page__param-label {
+    font-size: 1.05rem;
+    color: var(--acc-muted);
+}
+
+.accumulators-page__param-value {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.accumulators-page__param-value input,
+.accumulators-page__param-value select {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--acc-text);
+    padding: 0;
+    margin: 0;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+.accumulators-page__param-currency {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--acc-text);
+}
+
+.accumulators-page__payout-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px dashed var(--acc-border);
+    padding-bottom: 0.8rem;
+}
+.accumulators-page__payout-row--active {
+    border-bottom: none;
+}
+
+.accumulators-page__payout-label {
+    font-size: 1.25rem;
+    color: var(--acc-muted);
+}
+
+.accumulators-page__payout-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: var(--acc-text);
+}
+
+.accumulators-page__trade-button--buy-mimic {
+    background-color: #00a79e;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    width: 100%;
+    padding: 1.4rem;
+    font-size: 1.6rem;
+    font-weight: 700;
+    text-transform: capitalize;
+    transition: opacity 0.2s;
+}
+.accumulators-page__trade-button--buy-mimic:hover {
+    opacity: 0.9;
+}
+
+.accumulators-page__trade-button--close-mimic {
+    background-color: #f2f3f4;
+    color: #333333;
+    border: none;
+    border-radius: 8px;
+    width: 100%;
+    padding: 1.4rem;
+    font-size: 1.6rem;
+    font-weight: 700;
+    transition: opacity 0.2s;
+}
+[data-theme='dark'] .accumulators-page__trade-button--close-mimic {
+    background-color: #2a3042;
+    color: #ffffff;
+}
+
 .accumulators-page__manual-chart-header {
     display: flex;
     align-items: end;
