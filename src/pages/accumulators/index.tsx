@@ -262,7 +262,7 @@ const getAccumulatorSupportedMarkets = (markets: MarketSymbol[]) =>
 const MANUAL_CHART_BUFFER = 140;
 const MANUAL_CHART_VIEW = 80;
 const AUTO_PROPOSAL_STALE_MS = 1400;
-const MANUAL_PROPOSAL_BUY_MAX_AGE_MS = 900;
+const MANUAL_PROPOSAL_BUY_MAX_AGE_MS = 2500;
 const SELL_RETRY_ATTEMPTS = 6;
 const SELL_RETRY_DELAY_MS = 220;
 const MANUAL_DEFAULTS: ManualCardConfig = {
@@ -368,6 +368,20 @@ const formatSignedDistance = (value: number | null, pipSize: number) => {
 
     const absolute = Math.abs(value).toFixed(pipSize);
     return `${value >= 0 ? '+' : '-'}${absolute}`;
+};
+
+const formatManualChartTime = (epoch: number) => {
+    if (!Number.isFinite(epoch)) {
+        return '--:--:--';
+    }
+
+    return new Date(epoch * 1000).toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        hour12: false,
+        minute: '2-digit',
+        second: '2-digit',
+        timeZone: 'UTC',
+    });
 };
 
 const getDerivApi = () => api_base.api as ApiLike | undefined;
@@ -3250,10 +3264,12 @@ const AccumulatorsPage = observer(() => {
             return null;
         }
 
-        const left = 18;
-        const right = 982;
-        const top = 18;
-        const bottom = 286;
+        const left = 0;
+        const currentX = 448;
+        const right = 820;
+        const axisLabelX = 880;
+        const top = 20;
+        const bottom = 316;
         const values = visibleTicks.map(tick => tick.quote);
 
         if (manualHighBarrierValue !== null) {
@@ -3273,8 +3289,9 @@ const AccumulatorsPage = observer(() => {
         const rawRange = Math.max(maxValue - minValue, Number.EPSILON);
         const padding = Math.max(rawRange * 0.18, Math.pow(10, -manualPipSize));
         const domainMax = maxValue + padding;
-        const domainRange = Math.max(domainMax - (minValue - padding), Number.EPSILON);
-        const xSpan = right - left;
+        const domainMin = minValue - padding;
+        const domainRange = Math.max(domainMax - domainMin, Number.EPSILON);
+        const xSpan = currentX - left;
         const ySpan = bottom - top;
         const toX = (index: number) => left + (index / Math.max(visibleTicks.length - 1, 1)) * xSpan;
         const toY = (value: number) => top + ((domainMax - value) / domainRange) * ySpan;
@@ -3290,10 +3307,36 @@ const AccumulatorsPage = observer(() => {
         const lowY = manualLowBarrierValue !== null ? toY(manualLowBarrierValue) : null;
         const spotY = manualLiveQuote !== null ? toY(manualLiveQuote) : points[points.length - 1].y;
         const gridLines = Array.from({ length: 5 }, (_, index) => top + (index / 4) * ySpan);
+        const verticalGridLines = [142, 410, 675];
+        const axisLabels = [1, 2, 3].map(index => ({
+            value: domainMax - (index / 4) * domainRange,
+            y: top + (index / 4) * ySpan,
+        }));
+        const firstEpoch = visibleTicks[0]?.epoch ?? 0;
+        const currentEpoch = visibleTicks[visibleTicks.length - 1]?.epoch ?? firstEpoch;
+        const middleTick = visibleTicks[Math.max(0, Math.floor(visibleTicks.length * 0.55))];
+        const firstLabelTick = visibleTicks[Math.max(0, Math.floor(visibleTicks.length * 0.28))];
+        const timeLabels = [
+            {
+                text: formatManualChartTime(firstLabelTick?.epoch ?? firstEpoch),
+                x: 140,
+            },
+            {
+                text: formatManualChartTime(middleTick?.epoch ?? currentEpoch),
+                x: 410,
+            },
+            {
+                text: formatManualChartTime(currentEpoch + 5),
+                x: 675,
+            },
+        ];
 
         return {
+            axisLabelX,
+            axisLabels,
             areaPath,
             bottom,
+            currentX,
             gridLines,
             highY,
             left,
@@ -3302,7 +3345,9 @@ const AccumulatorsPage = observer(() => {
             points,
             right,
             spotY,
+            timeLabels,
             top,
+            verticalGridLines,
         };
     }, [manualChartTicks, manualHighBarrierValue, manualLiveQuote, manualLowBarrierValue, manualPipSize]);
 
@@ -3359,6 +3404,7 @@ const AccumulatorsPage = observer(() => {
         !manualTradeState?.contractId ||
         manualTradeState.status === 'selling' ||
         manualTradeState.status === 'closed';
+    const manualIsTradeOpen = manualTradeState?.status === 'live' || manualTradeState?.status === 'selling';
     const manualPositionRows = useMemo(
         () =>
             Object.entries(manualTrades)
@@ -3406,27 +3452,43 @@ const AccumulatorsPage = observer(() => {
                             <>
                             <div className='accumulators-page__manual-layout'>
                                 <article className='accumulators-page__manual-chart-card'>
-                                    <header className='accumulators-page__manual-chart-header'>
-                                        <label className='accumulators-page__field'>
-                                            <span>{localize('Manual market')}</span>
-                                            <div className='accumulators-page__input-wrap accumulators-page__input-wrap--select'>
-                                                <select
-                                                    value={manualMarketSymbol}
-                                                    onChange={event => setManualMarketSymbol(event.target.value)}
-                                                >
-                                                    {selectableMarkets.map(market => (
-                                                        <option key={market.symbol} value={market.symbol}>
-                                                            {market.displayName}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                    <header className='accumulators-page__manual-header-row'>
+                                        <div className='accumulators-page__manual-header-left'>
+                                            <div className='accumulators-page__manual-custom-icon'>
+                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2b313b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="candlestick-icon">
+                                                    <line x1="8" y1="4" x2="8" y2="12"></line><line x1="16" y1="12" x2="16" y2="20"></line><rect x="6" y="6" width="4" height="4"></rect><rect x="14" y="14" width="4" height="4"></rect><line x1="12" y1="8" x2="12" y2="20"></line><rect x="10" y="10" width="4" height="8"></rect>
+                                                </svg>
+                                                <div className='accumulators-page__manual-icon-badges'>
+                                                    <span className='accumulators-page__manual-icon-badge accumulators-page__manual-icon-badge--dark'>25</span>
+                                                    <span className='accumulators-page__manual-icon-badge accumulators-page__manual-icon-badge--red'>1s</span>
+                                                </div>
                                             </div>
-                                        </label>
-                                        <div className='accumulators-page__manual-price'>
-                                            <span>{localize('Spot')}</span>
-                                            <strong>{manualSpotDisplay}</strong>
-                                            <small>{localize('Growth {{ growth }}%', { growth: String(growthRatePercent) })}</small>
+                                            <div className='accumulators-page__manual-header-text'>
+                                                <label className='accumulators-page__manual-market-select'>
+                                                    <select
+                                                        aria-label={localize('Manual market')}
+                                                        value={manualMarketSymbol}
+                                                        onChange={event => setManualMarketSymbol(event.target.value)}
+                                                    >
+                                                        {selectableMarkets.map(market => (
+                                                            <option key={market.symbol} value={market.symbol}>
+                                                                {market.displayName}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <span className='accumulators-page__manual-market-title'>
+                                                        {resolvedManualMarket.displayName}
+                                                    </span>
+                                                    <svg className='accumulators-page__manual-market-chevron' viewBox='0 0 24 24' aria-hidden='true'>
+                                                        <path d='M6 9l6 6 6-6' fill='none' stroke='currentColor' strokeLinecap='round' strokeLinejoin='round' strokeWidth='2.5' />
+                                                    </svg>
+                                                </label>
+                                                <div className='accumulators-page__manual-market-price'>{manualSpotDisplay}</div>
+                                            </div>
                                         </div>
+                                        <button className='accumulators-page__manual-menu-button' type='button' aria-label={localize('Accumulator chart menu')}>
+                                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
+                                        </button>
                                     </header>
 
                                     <div
@@ -3435,23 +3497,44 @@ const AccumulatorsPage = observer(() => {
                                         } ${manualBarrierFlash ? 'accumulators-page__manual-chart-stage--flash' : ''}`.trim()}
                                     >
                                         {manualChartModel ? (
-                                            <svg viewBox='0 0 1000 304' preserveAspectRatio='none' aria-label='Manual accumulator chart'>
+                                            <>
+                                            <svg viewBox='0 0 1000 430' preserveAspectRatio='none' aria-label='Manual accumulator chart'>
+                                                {manualChartModel.verticalGridLines.map((xValue, index) => (
+                                                    <line
+                                                        key={`vertical-grid-${index}`}
+                                                        className='accumulators-page__chart-grid accumulators-page__chart-grid--vertical'
+                                                        x1={xValue}
+                                                        y1={manualChartModel.top}
+                                                        x2={xValue}
+                                                        y2={386}
+                                                    />
+                                                ))}
                                                 {manualChartModel.gridLines.map((yValue, index) => (
                                                     <line
                                                         key={`grid-${index}`}
                                                         className='accumulators-page__chart-grid'
                                                         x1={manualChartModel.left}
                                                         y1={yValue}
-                                                        x2={manualChartModel.right}
+                                                        x2={manualChartModel.axisLabelX - 34}
                                                         y2={yValue}
                                                     />
+                                                ))}
+                                                {manualChartModel.axisLabels.map(axisLabel => (
+                                                    <text
+                                                        key={`axis-${axisLabel.y}`}
+                                                        className='accumulators-page__chart-axis-label'
+                                                        x={manualChartModel.axisLabelX}
+                                                        y={axisLabel.y + 7}
+                                                    >
+                                                        {formatQuote(axisLabel.value, manualPipSize)}
+                                                    </text>
                                                 ))}
                                                 {manualChartModel.highY !== null && manualChartModel.lowY !== null && (
                                                     <rect
                                                         className='accumulators-page__chart-barrier-zone'
-                                                        x={manualChartModel.left}
+                                                        x={manualChartModel.currentX}
                                                         y={Math.min(manualChartModel.highY, manualChartModel.lowY)}
-                                                        width={manualChartModel.right - manualChartModel.left}
+                                                        width={manualChartModel.right - manualChartModel.currentX}
                                                         height={Math.max(
                                                             2,
                                                             Math.abs(manualChartModel.highY - manualChartModel.lowY)
@@ -3461,7 +3544,7 @@ const AccumulatorsPage = observer(() => {
                                                 {manualChartModel.highY !== null && (
                                                     <line
                                                         className='accumulators-page__chart-barrier-line accumulators-page__chart-barrier-line--high'
-                                                        x1={manualChartModel.left}
+                                                        x1={manualChartModel.currentX}
                                                         y1={manualChartModel.highY}
                                                         x2={manualChartModel.right}
                                                         y2={manualChartModel.highY}
@@ -3470,9 +3553,9 @@ const AccumulatorsPage = observer(() => {
                                                 {manualChartModel.highY !== null && manualUpperDistance !== '--' && (
                                                     <text
                                                         className='accumulators-page__chart-barrier-label accumulators-page__chart-barrier-label--high'
-                                                        x={manualChartModel.right - 12}
+                                                        x={manualChartModel.right - 6}
                                                         y={Math.max(manualChartModel.top + 18, manualChartModel.highY - 8)}
-                                                        textAnchor='end'
+                                                        textAnchor='middle'
                                                     >
                                                         {manualUpperDistance}
                                                     </text>
@@ -3480,7 +3563,7 @@ const AccumulatorsPage = observer(() => {
                                                 {manualChartModel.lowY !== null && (
                                                     <line
                                                         className='accumulators-page__chart-barrier-line accumulators-page__chart-barrier-line--low'
-                                                        x1={manualChartModel.left}
+                                                        x1={manualChartModel.currentX}
                                                         y1={manualChartModel.lowY}
                                                         x2={manualChartModel.right}
                                                         y2={manualChartModel.lowY}
@@ -3489,9 +3572,9 @@ const AccumulatorsPage = observer(() => {
                                                 {manualChartModel.lowY !== null && manualLowerDistance !== '--' && (
                                                     <text
                                                         className='accumulators-page__chart-barrier-label accumulators-page__chart-barrier-label--low'
-                                                        x={manualChartModel.right - 12}
+                                                        x={manualChartModel.right - 6}
                                                         y={Math.min(manualChartModel.bottom - 6, manualChartModel.lowY + 20)}
-                                                        textAnchor='end'
+                                                        textAnchor='middle'
                                                     >
                                                         {manualLowerDistance}
                                                     </text>
@@ -3500,9 +3583,9 @@ const AccumulatorsPage = observer(() => {
                                                 <path className='accumulators-page__chart-line' d={manualChartModel.linePath} />
                                                 <line
                                                     className='accumulators-page__chart-spot-line'
-                                                    x1={manualChartModel.left}
+                                                    x1={manualChartModel.currentX}
                                                     y1={manualChartModel.spotY}
-                                                    x2={manualChartModel.right}
+                                                    x2={manualChartModel.axisLabelX - 42}
                                                     y2={manualChartModel.spotY}
                                                 />
                                                 <circle
@@ -3514,22 +3597,40 @@ const AccumulatorsPage = observer(() => {
                                                 {manualSpotDisplay !== '--' && (
                                                     <g className='accumulators-page__chart-price-marker'>
                                                         <rect
-                                                            x={manualChartModel.right - 118}
-                                                            y={manualChartModel.spotY - 17}
-                                                            width={112}
-                                                            height={34}
-                                                            rx={8}
+                                                            x={manualChartModel.axisLabelX - 66}
+                                                            y={manualChartModel.spotY - 24}
+                                                            width={174}
+                                                            height={48}
+                                                            rx={10}
                                                         />
                                                         <text
-                                                            x={manualChartModel.right - 62}
-                                                            y={manualChartModel.spotY + 6}
+                                                            x={manualChartModel.axisLabelX + 21}
+                                                            y={manualChartModel.spotY + 8}
                                                             textAnchor='middle'
                                                         >
                                                             {manualSpotDisplay}
                                                         </text>
                                                     </g>
                                                 )}
+                                                {manualChartModel.timeLabels.map(timeLabel => (
+                                                    <text
+                                                        key={`${timeLabel.x}-${timeLabel.text}`}
+                                                        className='accumulators-page__chart-time-label'
+                                                        x={timeLabel.x}
+                                                        y={388}
+                                                        textAnchor='middle'
+                                                    >
+                                                        {timeLabel.text}
+                                                    </text>
+                                                ))}
                                             </svg>
+                                            <div className='accumulators-page__manual-chart-tools' aria-hidden='true'>
+                                                <span className='accumulators-page__manual-chart-tool accumulators-page__manual-chart-tool--interval accumulators-page__manual-chart-tool--active'>1t</span>
+                                                <span className='accumulators-page__manual-chart-tool accumulators-page__manual-chart-tool--drawing'>
+                                                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                                                </span>
+                                            </div>
+                                            </>
                                         ) : (
                                             <div className='accumulators-page__manual-chart-empty'>
                                                 {isManualTickLoading
@@ -3541,17 +3642,22 @@ const AccumulatorsPage = observer(() => {
 
                                     <div className='accumulators-page__manual-stats-ribbon' aria-label={localize('Accumulator stats')}>
                                         <span className='accumulators-page__manual-stats-label'>{localize('Stats')}</span>
-                                        {(manualStats.length ? manualStats : manualCurrentStat !== null ? [manualCurrentStat] : []).slice(0, 8).map((stat, index) => (
-                                            <strong
-                                                key={`${resolvedManualMarket.symbol}-manual-stat-${index}-${stat}`}
-                                                className={index === 0 ? 'accumulators-page__manual-stat accumulators-page__manual-stat--current' : 'accumulators-page__manual-stat'}
-                                            >
-                                                {stat}
-                                            </strong>
-                                        ))}
-                                        {!manualStats.length && manualCurrentStat === null && (
-                                            <small className='accumulators-page__manual-stats-empty'>{localize('Waiting for stats')}</small>
-                                        )}
+                                        <div className='accumulators-page__manual-stats-scroll'>
+                                            {(manualStats.length ? manualStats : manualCurrentStat !== null ? [manualCurrentStat] : []).slice(0, 8).map((stat, index) => (
+                                                <span
+                                                    key={`${resolvedManualMarket.symbol}-manual-stat-${index}-${stat}`}
+                                                    className={index === 0 ? 'accumulators-page__manual-stat accumulators-page__manual-stat--current' : 'accumulators-page__manual-stat'}
+                                                >
+                                                    {stat}
+                                                </span>
+                                            ))}
+                                            {!manualStats.length && manualCurrentStat === null && (
+                                                <small className='accumulators-page__manual-stats-empty'>{localize('Waiting for stats')}</small>
+                                            )}
+                                        </div>
+                                        <span className='accumulators-page__manual-stats-chevron' aria-hidden='true'>
+                                            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                                        </span>
                                     </div>
                                 </article>
 
@@ -3609,30 +3715,42 @@ const AccumulatorsPage = observer(() => {
                                         </strong>
                                     </div>
 
-                                    <div className='accumulators-page__trade-actions accumulators-page__trade-actions--manual-sheet'>
-                                        <button
-                                            type='button'
-                                            className='accumulators-page__trade-button accumulators-page__trade-button--buy-mimic'
-                                            onClick={() => void handleManualBuy(resolvedManualMarket)}
-                                            disabled={
-                                                manualTradeState.status === 'opening' ||
-                                                manualTradeState.status === 'live' ||
-                                                manualTradeState.status === 'selling'
-                                            }
-                                        >
-                                            {manualTradeState.status === 'opening' ? localize('Purchasing...') : localize('Buy')}
-                                        </button>
-                                        <button
-                                            type='button'
-                                            className='accumulators-page__trade-button accumulators-page__trade-button--sell-mimic'
-                                            onClick={() => void handleManualSell(resolvedManualMarket)}
-                                            disabled={manualSellDisabled || manualTradeState.status === 'selling'}
-                                        >
-                                            {manualTradeState.status === 'selling' ? localize('Selling...') : localize('Sell')}
-                                        </button>
+                                    <div
+                                        className={`accumulators-page__trade-actions accumulators-page__trade-actions--manual-sheet ${
+                                            manualIsTradeOpen ? 'accumulators-page__trade-actions--manual-open' : ''
+                                        }`.trim()}
+                                    >
+                                        {manualIsTradeOpen ? (
+                                            <>
+                                                <button
+                                                    type='button'
+                                                    className='accumulators-page__trade-button accumulators-page__trade-button--buy-mimic'
+                                                    disabled
+                                                >
+                                                    {localize('Buy')}
+                                                </button>
+                                                <button
+                                                    type='button'
+                                                    className='accumulators-page__trade-button accumulators-page__trade-button--sell-mimic'
+                                                    onClick={() => void handleManualSell(resolvedManualMarket)}
+                                                    disabled={manualSellDisabled || manualTradeState.status === 'selling'}
+                                                >
+                                                    {manualTradeState.status === 'selling' ? localize('Selling...') : localize('Sell')}
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <button
+                                                type='button'
+                                                className='accumulators-page__trade-button accumulators-page__trade-button--buy-mimic'
+                                                onClick={() => void handleManualBuy(resolvedManualMarket)}
+                                                disabled={manualTradeState.status === 'opening'}
+                                            >
+                                                {manualTradeState.status === 'opening' ? localize('Purchasing...') : localize('Buy')}
+                                            </button>
+                                        )}
                                     </div>
 
-                                    <div className='accumulators-page__card-note accumulators-page__card-note--manual-explainer'>
+                                    <div hidden className='accumulators-page__card-note accumulators-page__card-note--manual-explainer'>
                                         {localize(
                                             'After the entry spot tick, your stake will grow continuously by {{ growth }}% for every tick that the spot price remains within the ± {{ barrier }} from the previous spot price.',
                                             {
@@ -3642,7 +3760,10 @@ const AccumulatorsPage = observer(() => {
                                         )}
                                     </div>
 
-                                    <div className='accumulators-page__positions-table accumulators-page__positions-table--manual-mimic'>
+                                    <div
+                                        hidden={!manualPositionRows.length}
+                                        className='accumulators-page__positions-table accumulators-page__positions-table--manual-mimic'
+                                    >
                                         <div className='accumulators-page__positions-head'>
                                             <strong>{localize('Report')}</strong>
                                             <span>
