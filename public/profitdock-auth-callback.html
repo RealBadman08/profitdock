@@ -54,41 +54,49 @@
                 height: clamp(5.8rem, 10vw, 9.6rem);
                 display: grid;
                 place-items: center;
-                border-radius: 2.4rem;
-                background: rgba(255, 255, 255, 0.92);
-                box-shadow: 0 2.2rem 5rem rgba(16, 35, 63, 0.12);
+                background: transparent;
+                box-shadow: none;
                 opacity: 0;
                 transform: translate(var(--start-x), var(--start-y)) scale(0);
                 animation: auth-icon-converge 1.4s cubic-bezier(0.32, 0.72, 0.2, 1) forwards;
             }
 
             .auth-callback__trade-icon svg {
-                width: 62%;
-                height: 62%;
+                width: 100%;
+                height: 100%;
+                filter: drop-shadow(0 1.4rem 2.4rem rgba(16, 35, 63, 0.16));
             }
 
             .auth-callback__trade-icon--matches {
                 --start-x: min(-31rem, -34vw);
                 --start-y: min(-18rem, -26vh);
+                z-index: 4;
             }
 
             .auth-callback__trade-icon--even {
                 --start-x: max(31rem, 34vw);
                 --start-y: min(-18rem, -26vh);
+                z-index: 2;
             }
 
             .auth-callback__trade-icon--over {
                 --start-x: min(-31rem, -34vw);
                 --start-y: max(18rem, 26vh);
+                z-index: 1;
             }
 
             .auth-callback__trade-icon--rise {
                 --start-x: max(31rem, 34vw);
                 --start-y: max(18rem, 26vh);
+                z-index: 3;
             }
 
             .auth-callback--success .auth-callback__icon-cloud {
-                animation: auth-icon-cover-fade 0.5s ease-out 0.5s forwards;
+                animation: auth-icon-cover-fade 0.48s ease-out 0.52s forwards;
+            }
+
+            .auth-callback--success .auth-callback__trade-icon--matches {
+                animation: auth-match-impact-spin 0.52s cubic-bezier(0.24, 0.82, 0.2, 1) forwards;
             }
 
             .auth-callback--error .auth-callback__trade-icon {
@@ -117,7 +125,7 @@
             }
 
             .auth-callback--success .auth-callback__red-spread {
-                animation: auth-red-spread 0.5s ease-out 0.5s forwards;
+                animation: auth-red-spread 0.5s ease-out 0.52s forwards;
             }
 
             .auth-callback--success.auth-callback--exiting .auth-callback__red-spread {
@@ -141,7 +149,7 @@
             }
 
             .auth-callback--success .auth-callback__brand-stack {
-                animation: auth-brand-in 0.56s cubic-bezier(0.2, 1.26, 0.36, 1) 1.1s forwards;
+                animation: auth-brand-in 0.56s cubic-bezier(0.2, 1.26, 0.36, 1) 1.12s forwards;
             }
 
             .auth-callback--success.auth-callback--exiting .auth-callback__brand-stack {
@@ -163,7 +171,7 @@
                 border-radius: 999px;
                 background: rgba(255, 255, 255, 0.18);
                 opacity: 0;
-                animation: auth-logo-glow 1.2s ease-out 1.38s forwards;
+                animation: auth-logo-glow 1.2s ease-out 1.42s forwards;
             }
 
             .auth-callback__brand-mark svg {
@@ -198,11 +206,11 @@
             }
 
             .auth-callback--success .auth-callback__title {
-                animation: auth-status-line 0.38s ease-out 1.62s forwards;
+                animation: auth-status-line 0.38s ease-out 1.68s forwards;
             }
 
             .auth-callback--success .auth-callback__message {
-                animation: auth-status-line 0.38s ease-out 2.02s forwards;
+                animation: auth-status-line 0.38s ease-out 2.08s forwards;
             }
 
             .auth-callback__three-dot-loader {
@@ -213,7 +221,7 @@
             }
 
             .auth-callback--success .auth-callback__three-dot-loader {
-                animation: auth-loader-in 0.28s ease-out 2.32s forwards;
+                animation: auth-loader-in 0.28s ease-out 2.38s forwards;
             }
 
             .auth-callback__three-dot-loader span {
@@ -316,6 +324,23 @@
             @keyframes auth-icon-cover-fade {
                 to {
                     opacity: 0;
+                }
+            }
+
+            @keyframes auth-match-impact-spin {
+                0% {
+                    opacity: 1;
+                    transform: translate(-50%, -50%) scale(0.6) rotate(0deg);
+                }
+
+                72% {
+                    opacity: 1;
+                    transform: translate(-50%, -50%) scale(0.7) rotate(900deg);
+                }
+
+                100% {
+                    opacity: 1;
+                    transform: translate(-50%, -50%) scale(0.6) rotate(1080deg);
                 }
             }
 
@@ -460,7 +485,7 @@
                         </svg>
                     </div>
                     <div class="auth-callback__status-stack">
-                        <h1 id="callback-title" class="auth-callback__title">Requesting your token...</h1>
+                        <h1 id="callback-title" class="auth-callback__title">Requesting Deriv token...</h1>
                         <p id="callback-message" class="auth-callback__message">Finalizing your ProfitDock login...</p>
                         <div class="auth-callback__three-dot-loader" aria-hidden="true">
                             <span></span>
@@ -518,7 +543,7 @@
                         return;
                     }
 
-                    if (title_node) title_node.textContent = 'Requesting your token...';
+                    if (title_node) title_node.textContent = 'Requesting Deriv token...';
                     set_message('Finalizing your ProfitDock login...');
                     await wait_for_loader_stage(1400);
                     callback_node.classList.add('auth-callback--success');
@@ -860,8 +885,8 @@
                         return;
                     }
 
-                    if (title_node) title_node.textContent = 'Requesting your token...';
-                    set_message(direct_access_token ? 'Validating your Deriv trading token...' : 'Requesting your token...');
+                    if (title_node) title_node.textContent = 'Requesting Deriv token...';
+                    set_message(direct_access_token ? 'Validating your Deriv trading token...' : 'Requesting Deriv token...');
                     const controller = new AbortController();
                     const timeout = window.setTimeout(() => controller.abort(), 45000);
                     const response = await fetch('/api/deriv/oauth/exchange', {
