@@ -169,6 +169,12 @@
 .accumulators-page__manual-panel {
     margin: 0 auto;
     width: min(100%, 86rem);
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 1.4rem !important;
+    overflow: hidden !important;
+    box-shadow: var(--acc-shadow) !important;
+    background: #ffffff !important;
 }
 
 .accumulators-page__manual-panel::before,
@@ -203,23 +209,26 @@
 
 .accumulators-page__manual-chart-card {
     border-radius: 0;
-    border-color: transparent;
-    background: #f4f5f7;
-    padding: 1.8rem 2rem 2.2rem;
+    border: none;
+    background: #ffffff;
+    padding: 1.6rem 1.6rem 0;
     box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
 }
 
-/* Mobile mimic order card styles (exactly like video) */
+/* Mobile mimic order card styles (exactly like screenshot) */
 .accumulators-page__manual-order-card--mobile-mimic {
     background: #ffffff;
-    border-radius: 1.6rem 1.6rem 0 0;
+    border-radius: 0;
     margin-top: 0;
     padding: 0.8rem 1.6rem 2.4rem;
     border: 0;
     display: flex;
     flex-direction: column;
     gap: 1.2rem;
-    box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.04);
+    box-shadow: none;
 }
 
 [data-theme='dark'] .accumulators-page__manual-order-card--mobile-mimic {
@@ -282,17 +291,20 @@
     font-size: 1.2rem;
     color: #9e9e9e;
     font-weight: 400;
-    line-height: 1;
+    line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     width: 100%;
+    display: block;
+    margin-bottom: 0.4rem;
 }
 
 .accumulators-page__param-value {
     display: flex;
-    align-items: center;
-    gap: 0.4rem;
+    align-items: baseline;
+    gap: 0.3rem;
+    line-height: 1;
 }
 
 .accumulators-page__param-value input,
@@ -330,7 +342,7 @@
 
 .accumulators-page__payout-row--manual-sheet {
     border-bottom: 0;
-    padding: 0.4rem 0.4rem 0.8rem;
+    padding: 1.2rem 1.6rem;
     margin: 0;
 }
 
@@ -344,9 +356,9 @@
 }
 
 .accumulators-page__payout-value {
-    color: #374151;
+    color: #000000;
     font-size: 1.4rem;
-    font-weight: 400;
+    font-weight: 700;
 }
 
 .accumulators-page__trade-button--buy-mimic {
@@ -418,14 +430,14 @@
 
 .accumulators-page__manual-header-row {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     justify-content: space-between;
     gap: 1.5rem;
-    margin-bottom: 2.2rem;
+    margin-bottom: 0;
+    padding: 1.2rem 1.6rem 1.2rem;
     min-width: 0;
     background: #ffffff;
-    border-bottom: 1px solid rgba(0,0,0,0.05);
-    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
 }
 
 .accumulators-page__manual-header-left {
@@ -572,9 +584,11 @@
 
 .accumulators-page__manual-chart-stage {
     border: 0;
-    border-radius: 1.8rem 1.8rem 0 0;
-    background: #ffffff;
-    min-height: clamp(54rem, 66vh, 78rem);
+    border-radius: 0;
+    background: #f8f8f8;
+    height: 45vw;
+    max-height: 320px;
+    min-height: 200px;
     overflow: hidden;
     padding: 0;
     position: relative;
@@ -583,7 +597,7 @@
 
 .accumulators-page__manual-chart-stage svg {
     width: 100%;
-    height: clamp(54rem, 66vh, 78rem);
+    height: 100%;
     display: block;
 }
 
@@ -696,35 +710,35 @@
 }
 
 .accumulators-page__manual-chart-tools {
-    bottom: clamp(11rem, 12vh, 14rem);
+    bottom: 1.6rem;
     display: flex;
-    gap: 1.8rem;
-    left: 3.2rem;
+    gap: 1rem;
+    left: 1.6rem;
     position: absolute;
 }
 
 .accumulators-page__manual-chart-tool {
     align-items: center;
-    background: #f2f3f4;
+    background: rgba(230,230,230,0.9);
     border-radius: 999rem;
     color: #222222;
     display: inline-flex;
-    font-size: 2.7rem;
+    font-size: 1.4rem;
     font-weight: 400;
-    height: 8.6rem;
+    height: 36px;
     justify-content: center;
-    width: 8.6rem;
+    width: 36px;
 }
 
 .accumulators-page__manual-chart-tool--active {
     background: #ffffff;
     font-weight: 700;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
 }
 
 .accumulators-page__manual-chart-tool svg {
-    height: 4.4rem;
-    width: 4.4rem;
+    height: 18px;
+    width: 18px;
 }
 
 .accumulators-page__manual-chart-stage--breached .accumulators-page__chart-barrier-zone {
@@ -785,21 +799,21 @@
 .accumulators-page__manual-barriers small {
     color: var(--acc-muted);
     font-size: 1.4rem;
+    font-size: 1.2rem;
     font-weight: 600;
 }
 
 .accumulators-page__manual-stats-ribbon {
     border: 0;
-    border-radius: 0 0 1.8rem 1.8rem;
+    border-radius: 0;
     background: #f0f0f0;
     margin-top: 0;
-    min-height: 56px;
-    padding: 1.2rem 2.4rem;
+    min-height: 52px;
+    padding: 1rem 1.6rem;
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 1.6rem;
+    gap: 1.2rem;
     overflow: hidden;
 }
 
