@@ -3315,6 +3315,18 @@ const AccumulatorsPage = observer(() => {
         manualBarrierDistanceValue !== null
             ? formatSignedDistance(-Math.abs(manualBarrierDistanceValue), manualPipSize)
             : '--';
+    const manualBarrierPercentSource =
+        activeManualProposal.barrierPercent !== '--'
+            ? activeManualProposal.barrierPercent
+            : activeManualDedicatedFeed.barrierPercent !== '--'
+              ? activeManualDedicatedFeed.barrierPercent
+              : '--';
+    const manualBarrierPercentText =
+        manualBarrierPercentSource !== '--'
+            ? `${manualBarrierPercentSource}${manualBarrierPercentSource.includes('%') ? '' : '%'}`
+            : manualBarrierDistance !== '--'
+              ? manualBarrierDistance
+              : '--';
     const manualSpotDisplay =
         manualLiveQuote !== null
             ? formatQuote(manualLiveQuote, manualPipSize)
@@ -3455,6 +3467,16 @@ const AccumulatorsPage = observer(() => {
                                                         y2={manualChartModel.highY}
                                                     />
                                                 )}
+                                                {manualChartModel.highY !== null && manualUpperDistance !== '--' && (
+                                                    <text
+                                                        className='accumulators-page__chart-barrier-label accumulators-page__chart-barrier-label--high'
+                                                        x={manualChartModel.right - 12}
+                                                        y={Math.max(manualChartModel.top + 18, manualChartModel.highY - 8)}
+                                                        textAnchor='end'
+                                                    >
+                                                        {manualUpperDistance}
+                                                    </text>
+                                                )}
                                                 {manualChartModel.lowY !== null && (
                                                     <line
                                                         className='accumulators-page__chart-barrier-line accumulators-page__chart-barrier-line--low'
@@ -3463,6 +3485,16 @@ const AccumulatorsPage = observer(() => {
                                                         x2={manualChartModel.right}
                                                         y2={manualChartModel.lowY}
                                                     />
+                                                )}
+                                                {manualChartModel.lowY !== null && manualLowerDistance !== '--' && (
+                                                    <text
+                                                        className='accumulators-page__chart-barrier-label accumulators-page__chart-barrier-label--low'
+                                                        x={manualChartModel.right - 12}
+                                                        y={Math.min(manualChartModel.bottom - 6, manualChartModel.lowY + 20)}
+                                                        textAnchor='end'
+                                                    >
+                                                        {manualLowerDistance}
+                                                    </text>
                                                 )}
                                                 <path className='accumulators-page__chart-area' d={manualChartModel.areaPath} />
                                                 <path className='accumulators-page__chart-line' d={manualChartModel.linePath} />
@@ -3479,6 +3511,24 @@ const AccumulatorsPage = observer(() => {
                                                     cy={manualChartModel.points[manualChartModel.points.length - 1].y}
                                                     r={5}
                                                 />
+                                                {manualSpotDisplay !== '--' && (
+                                                    <g className='accumulators-page__chart-price-marker'>
+                                                        <rect
+                                                            x={manualChartModel.right - 118}
+                                                            y={manualChartModel.spotY - 17}
+                                                            width={112}
+                                                            height={34}
+                                                            rx={8}
+                                                        />
+                                                        <text
+                                                            x={manualChartModel.right - 62}
+                                                            y={manualChartModel.spotY + 6}
+                                                            textAnchor='middle'
+                                                        >
+                                                            {manualSpotDisplay}
+                                                        </text>
+                                                    </g>
+                                                )}
                                             </svg>
                                         ) : (
                                             <div className='accumulators-page__manual-chart-empty'>
@@ -3560,39 +3610,36 @@ const AccumulatorsPage = observer(() => {
                                     </div>
 
                                     <div className='accumulators-page__trade-actions accumulators-page__trade-actions--manual-sheet'>
-                                        {manualTradeState.status === 'live' || manualTradeState.status === 'selling' ? (
-                                            <button
-                                                type='button'
-                                                className='accumulators-page__trade-button accumulators-page__trade-button--close-mimic'
-                                                onClick={() => void handleManualSell(resolvedManualMarket)}
-                                                disabled={manualSellDisabled || manualTradeState.status === 'selling'}
-                                            >
-                                                {manualTradeState.status === 'selling'
-                                                    ? localize('Closing...')
-                                                    : localize('Close {{ amount }}', {
-                                                          amount: manualTradeState.bidPrice
-                                                              ? formatMoney(toPositiveNumber(manualTradeState.bidPrice) || 0, currency)
-                                                              : formatMoney(manualTradeState.buyPrice + (manualTradeState.profit || 0), currency),
-                                                      })}
-                                            </button>
-                                        ) : (
-                                            <button
-                                                type='button'
-                                                className='accumulators-page__trade-button accumulators-page__trade-button--buy-mimic'
-                                                onClick={() => void handleManualBuy(resolvedManualMarket)}
-                                                disabled={manualTradeState.status === 'opening'}
-                                            >
-                                                {manualTradeState.status === 'opening' ? localize('Purchasing...') : localize('Buy')}
-                                            </button>
-                                        )}
+                                        <button
+                                            type='button'
+                                            className='accumulators-page__trade-button accumulators-page__trade-button--buy-mimic'
+                                            onClick={() => void handleManualBuy(resolvedManualMarket)}
+                                            disabled={
+                                                manualTradeState.status === 'opening' ||
+                                                manualTradeState.status === 'live' ||
+                                                manualTradeState.status === 'selling'
+                                            }
+                                        >
+                                            {manualTradeState.status === 'opening' ? localize('Purchasing...') : localize('Buy')}
+                                        </button>
+                                        <button
+                                            type='button'
+                                            className='accumulators-page__trade-button accumulators-page__trade-button--sell-mimic'
+                                            onClick={() => void handleManualSell(resolvedManualMarket)}
+                                            disabled={manualSellDisabled || manualTradeState.status === 'selling'}
+                                        >
+                                            {manualTradeState.status === 'selling' ? localize('Selling...') : localize('Sell')}
+                                        </button>
                                     </div>
 
                                     <div className='accumulators-page__card-note accumulators-page__card-note--manual-explainer'>
-                                        {manualLongcodeValue ||
-                                            localize(
-                                                'After the entry spot tick, your stake will grow continuously by {{ growth }}% for every tick that the spot price remains within the barrier from the previous spot price.',
-                                                { growth: String(growthRatePercent) }
-                                            )}
+                                        {localize(
+                                            'After the entry spot tick, your stake will grow continuously by {{ growth }}% for every tick that the spot price remains within the ± {{ barrier }} from the previous spot price.',
+                                            {
+                                                barrier: manualBarrierPercentText,
+                                                growth: String(growthRatePercent),
+                                            }
+                                        )}
                                     </div>
 
                                     <div className='accumulators-page__positions-table accumulators-page__positions-table--manual-mimic'>

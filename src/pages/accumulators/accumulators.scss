@@ -166,6 +166,11 @@
     overflow: hidden;
 }
 
+.accumulators-page__manual-panel {
+    margin: 0 auto;
+    width: min(100%, 86rem);
+}
+
 .accumulators-page__manual-panel::before,
 .accumulators-page__auto-panel::before {
     content: '';
@@ -328,7 +333,25 @@
     box-shadow: 0 1.2rem 2.4rem rgba(67, 197, 196, 0.18);
 }
 
+.accumulators-page__trade-button--sell-mimic {
+    background: linear-gradient(135deg, #ff858a, #ec5961);
+    color: #ffffff;
+    border: none;
+    border-radius: 1.4rem;
+    width: 100%;
+    padding: 1.4rem;
+    font-size: 2rem;
+    font-weight: 700;
+    text-transform: capitalize;
+    transition: opacity 0.2s, transform 0.2s;
+    box-shadow: 0 1.2rem 2.4rem rgba(255, 68, 79, 0.18);
+}
+
 .accumulators-page__trade-button--buy-mimic:hover {
+    opacity: 0.9;
+}
+
+.accumulators-page__trade-button--sell-mimic:hover {
     opacity: 0.9;
 }
 
@@ -354,8 +377,8 @@
 }
 
 .accumulators-page__trade-actions--manual-sheet {
-    grid-template-columns: 1fr;
-    gap: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
 }
 
 .accumulators-page__manual-chart-header .accumulators-page__field > span {
@@ -509,6 +532,26 @@
     transition: fill 0.18s ease, stroke 0.18s ease, filter 0.18s ease;
 }
 
+.accumulators-page__chart-barrier-label {
+    fill: #1e88ff;
+    font-size: 22px;
+    font-weight: 800;
+    paint-order: stroke;
+    stroke: rgba(255, 255, 255, 0.92);
+    stroke-width: 5px;
+}
+
+.accumulators-page__chart-price-marker rect {
+    fill: #101820;
+    filter: drop-shadow(0 8px 14px rgba(15, 23, 42, 0.22));
+}
+
+.accumulators-page__chart-price-marker text {
+    fill: #ffffff;
+    font-size: 22px;
+    font-weight: 800;
+}
+
 .accumulators-page__manual-chart-stage--breached .accumulators-page__chart-barrier-zone {
     fill: rgba(239, 68, 68, 0.18);
 }
@@ -516,6 +559,10 @@
 .accumulators-page__manual-chart-stage--breached .accumulators-page__chart-barrier-line--high,
 .accumulators-page__manual-chart-stage--breached .accumulators-page__chart-barrier-line--low {
     stroke: #ef4444;
+}
+
+.accumulators-page__manual-chart-stage--breached .accumulators-page__chart-barrier-label {
+    fill: #ef4444;
 }
 
 .accumulators-page__manual-chart-stage--breached .accumulators-page__chart-spot-line {
@@ -1142,7 +1189,7 @@
 }
 
 .accumulators-page__card-note--manual-explainer {
-    font-size: clamp(1.8rem, 1.4rem + 1.1vw, 2.7rem);
+    font-size: clamp(1.65rem, 1.3rem + 0.85vw, 2.35rem);
     font-weight: 500;
     line-height: 1.38;
 }

@@ -44,6 +44,10 @@
                 inset: 0;
             }
 
+            .auth-callback__icon-cloud {
+                z-index: 1;
+            }
+
             .auth-callback__trade-icon {
                 --start-x: 0vw;
                 --start-y: 0vh;
@@ -92,11 +96,15 @@
             }
 
             .auth-callback--success .auth-callback__icon-cloud {
-                animation: auth-icon-cover-fade 0.48s ease-out 0.52s forwards;
+                animation: auth-icon-cover-fade 0.24s ease-out 0.72s forwards;
+            }
+
+            .auth-callback--success .auth-callback__trade-icon:not(.auth-callback__trade-icon--matches) {
+                animation: auth-icon-collision-dismiss 0.16s ease-out forwards;
             }
 
             .auth-callback--success .auth-callback__trade-icon--matches {
-                animation: auth-match-impact-spin 0.52s cubic-bezier(0.24, 0.82, 0.2, 1) forwards;
+                animation: auth-match-impact-spin 0.72s cubic-bezier(0.24, 0.82, 0.2, 1) forwards;
             }
 
             .auth-callback--error .auth-callback__trade-icon {
@@ -118,6 +126,7 @@
             }
 
             .auth-callback__red-spread {
+                z-index: 2;
                 background: #ff444f;
                 clip-path: circle(0% at 50% 50%);
                 opacity: 0;
@@ -125,7 +134,7 @@
             }
 
             .auth-callback--success .auth-callback__red-spread {
-                animation: auth-red-spread 0.5s ease-out 0.52s forwards;
+                animation: auth-red-spread 0.56s ease-out 0.68s forwards;
             }
 
             .auth-callback--success.auth-callback--exiting .auth-callback__red-spread {
@@ -133,23 +142,26 @@
             }
 
             .auth-callback__content {
-                z-index: 2;
-                display: grid;
-                place-items: center;
+                z-index: 3;
                 padding: 2.4rem;
                 pointer-events: none;
             }
 
             .auth-callback__brand-stack {
+                position: absolute;
+                left: 50%;
+                top: 50%;
+                width: min(52rem, calc(100vw - 3.2rem));
                 display: grid;
                 justify-items: center;
                 gap: 1.4rem;
                 color: #ffffff;
                 opacity: 0;
+                transform: translate(-50%, -50%) scale(0.3);
             }
 
             .auth-callback--success .auth-callback__brand-stack {
-                animation: auth-brand-in 0.56s cubic-bezier(0.2, 1.26, 0.36, 1) 1.12s forwards;
+                animation: auth-brand-in 0.58s cubic-bezier(0.2, 1.26, 0.36, 1) 1.3s forwards;
             }
 
             .auth-callback--success.auth-callback--exiting .auth-callback__brand-stack {
@@ -171,7 +183,7 @@
                 border-radius: 999px;
                 background: rgba(255, 255, 255, 0.18);
                 opacity: 0;
-                animation: auth-logo-glow 1.2s ease-out 1.42s forwards;
+                animation: auth-logo-glow 1.2s ease-out 1.58s forwards;
             }
 
             .auth-callback__brand-mark svg {
@@ -206,11 +218,11 @@
             }
 
             .auth-callback--success .auth-callback__title {
-                animation: auth-status-line 0.38s ease-out 1.68s forwards;
+                animation: auth-status-line 0.38s ease-out 1.94s forwards;
             }
 
             .auth-callback--success .auth-callback__message {
-                animation: auth-status-line 0.38s ease-out 2.08s forwards;
+                animation: auth-status-line 0.38s ease-out 2.26s forwards;
             }
 
             .auth-callback__three-dot-loader {
@@ -221,7 +233,7 @@
             }
 
             .auth-callback--success .auth-callback__three-dot-loader {
-                animation: auth-loader-in 0.28s ease-out 2.38s forwards;
+                animation: auth-loader-in 0.28s ease-out 2.54s forwards;
             }
 
             .auth-callback__three-dot-loader span {
@@ -327,6 +339,18 @@
                 }
             }
 
+            @keyframes auth-icon-collision-dismiss {
+                from {
+                    opacity: 1;
+                    transform: translate(-50%, -50%) scale(0.6);
+                }
+
+                to {
+                    opacity: 0;
+                    transform: translate(-50%, -50%) scale(0.2);
+                }
+            }
+
             @keyframes auth-match-impact-spin {
                 0% {
                     opacity: 1;
@@ -381,24 +405,24 @@
             @keyframes auth-brand-in {
                 0% {
                     opacity: 0;
-                    transform: scale(0.3);
+                    transform: translate(-50%, -50%) scale(0.3);
                 }
 
                 72% {
                     opacity: 1;
-                    transform: scale(1.08);
+                    transform: translate(-50%, -50%) scale(1.08);
                 }
 
                 100% {
                     opacity: 1;
-                    transform: scale(1);
+                    transform: translate(-50%, -50%) scale(1);
                 }
             }
 
             @keyframes auth-brand-out {
                 to {
                     opacity: 0;
-                    transform: scale(1.12);
+                    transform: translate(-50%, -50%) scale(1.12);
                 }
             }
 
