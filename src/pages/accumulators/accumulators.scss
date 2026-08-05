@@ -200,15 +200,15 @@
 /* Mobile mimic order card styles (exactly like video) */
 .accumulators-page__manual-order-card--mobile-mimic {
     background: #ffffff;
-    border-radius: 12px 12px 0 0;
-    padding: 1rem 1rem;
-    border: none;
-    border-top: 1px solid var(--acc-border);
+    border-radius: 1.8rem;
+    padding: 1.2rem;
+    border: 1px solid var(--acc-border);
     display: flex;
     flex-direction: column;
     gap: 1.2rem;
-    box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
+    box-shadow: 0 1.8rem 4rem rgba(16, 35, 63, 0.08);
 }
+
 [data-theme='dark'] .accumulators-page__manual-order-card--mobile-mimic {
     background: var(--acc-surface);
 }
@@ -225,6 +225,14 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 0.5rem;
+}
+
+.accumulators-page__trade-params--manual {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+
+    @media (max-width: 560px) {
+        grid-template-columns: 1fr;
+    }
 }
 
 .accumulators-page__param-box {
@@ -293,18 +301,38 @@
 }
 
 .accumulators-page__trade-button--buy-mimic {
-    background-color: #00a79e;
+    background: linear-gradient(135deg, #64cfd0, #43c5c4);
     color: #ffffff;
     border: none;
-    border-radius: 8px;
+    border-radius: 1.4rem;
     width: 100%;
     padding: 1.4rem;
-    font-size: 1.6rem;
+    font-size: 2rem;
     font-weight: 700;
     text-transform: capitalize;
     transition: opacity 0.2s;
+    box-shadow: 0 1.2rem 2.4rem rgba(67, 197, 196, 0.18);
 }
+
 .accumulators-page__trade-button--buy-mimic:hover {
+    opacity: 0.9;
+}
+
+.accumulators-page__trade-button--sell-mimic {
+    background: linear-gradient(135deg, #f7767b, #e95c63);
+    color: #ffffff;
+    border: none;
+    border-radius: 1.4rem;
+    width: 100%;
+    padding: 1.4rem;
+    font-size: 2rem;
+    font-weight: 700;
+    text-transform: capitalize;
+    transition: opacity 0.2s;
+    box-shadow: 0 1.2rem 2.4rem rgba(233, 92, 99, 0.18);
+}
+
+.accumulators-page__trade-button--sell-mimic:hover {
     opacity: 0.9;
 }
 
@@ -515,11 +543,12 @@
     border: 1px solid var(--acc-border);
     border-radius: 1rem;
     background: var(--acc-surface);
-    padding: 0.75rem;
+    padding: 0.75rem 1rem;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
-    gap: 0.5rem;
+    gap: clamp(0.8rem, 1.2vw, 1.6rem);
+    overflow: hidden;
 }
 
 .accumulators-page__manual-stats-label {
@@ -527,6 +556,28 @@
     font-size: 1.7rem;
     font-weight: 700;
     padding-inline-end: 0.4rem;
+    border-bottom: 1px dashed currentColor;
+    flex: 0 0 auto;
+}
+
+.accumulators-page__manual-stat {
+    color: var(--acc-muted);
+    flex: 0 0 auto;
+    font-size: clamp(1.5rem, 1.2rem + 0.8vw, 2rem);
+    line-height: 1;
+    min-width: 2.2rem;
+    text-align: center;
+    transition: color 0.18s ease, transform 0.18s ease;
+}
+
+.accumulators-page__manual-stat--current {
+    color: var(--acc-text);
+    transform: scale(1.12);
+}
+
+.accumulators-page__manual-stats-empty {
+    color: var(--acc-muted);
+    font-size: 1.35rem;
 }
 
 .accumulators-page__manual-controls {
@@ -783,12 +834,16 @@
     gap: 0.85rem;
 }
 
+.accumulators-page__metrics--manual-mimic {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .accumulators-page__metrics > div,
 .accumulators-page__engine-metrics > div {
     border: 1px solid var(--acc-border);
     background: var(--acc-surface-soft);
-    border-radius: 1.05rem;
-    padding: 0.92rem 1rem;
+    border-radius: 1.2rem;
+    padding: 1.05rem 1.15rem;
     display: grid;
     gap: 0.2rem;
 }
@@ -803,6 +858,7 @@
 .accumulators-page__engine-metrics strong {
     font-size: 2.1rem;
     line-height: 1;
+    overflow-wrap: anywhere;
 }
 
 .accumulators-page__active-position {
@@ -970,6 +1026,11 @@
     padding: 0.9rem;
 }
 
+.accumulators-page__positions-table--manual-mimic {
+    border-radius: 1.6rem;
+    padding: 1.2rem;
+}
+
 .accumulators-page__positions-head {
     align-items: center;
     display: flex;
@@ -1037,9 +1098,9 @@
 
 .accumulators-page__positions-empty {
     border: 1px dashed var(--acc-border);
-    border-radius: 0.9rem;
+    border-radius: 1.25rem;
     background: var(--acc-surface);
-    padding: 1rem;
+    padding: 1.35rem;
     text-align: center;
 }
 
