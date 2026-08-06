@@ -314,6 +314,8 @@
     appearance: none;
     -webkit-appearance: none;
     -moz-appearance: none;
+    text-align: center;
+    text-align-last: center;
 }
 
 .accumulators-page__param-currency {
@@ -437,6 +439,7 @@
     margin-left: -1.6rem;
     margin-right: -1.6rem;
     margin-bottom: -2.4rem;
+    width: calc(100% + 3.2rem);
 }
 
 .accumulators-page__manual-header-row {
