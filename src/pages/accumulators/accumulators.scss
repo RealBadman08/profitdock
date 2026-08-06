@@ -256,21 +256,10 @@
 }
 
 .accumulators-page__trade-params--manual {
-    display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 0.8rem;
-    padding-bottom: 0.4rem;
-    scrollbar-width: none;
-}
-
-.accumulators-page__trade-params--manual::-webkit-scrollbar {
-    display: none;
-}
-
-.accumulators-page__trade-params--manual .accumulators-page__param-box {
-    flex: 0 0 calc(40%);
-    min-width: 120px;
+    width: 100%;
 }
 
 .accumulators-page__param-box {
@@ -310,9 +299,10 @@
 .accumulators-page__param-value input,
 .accumulators-page__param-value select {
     width: 100%;
+    min-width: 0;
     border: none;
     background: transparent;
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     font-weight: 700;
     color: #000000;
     padding: 0;
@@ -341,8 +331,11 @@
 }
 
 .accumulators-page__payout-row--manual-sheet {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     border-bottom: 0;
-    padding: 1.2rem 1.6rem;
+    padding: 0.8rem 0;
     margin: 0;
 }
 
@@ -365,15 +358,31 @@
     background: #00c853;
     color: #ffffff;
     border: none;
-    border-radius: 28px;
+    border-radius: 12px;
     width: 100%;
-    height: 56px;
+    height: 52px;
     padding: 1.4rem;
     font-size: 1.6rem;
     font-weight: 700;
     text-transform: capitalize;
-    transition: opacity 0.2s;
+    transition: background 0.25s ease, color 0.25s ease;
     box-shadow: none;
+    cursor: pointer;
+}
+
+.accumulators-page__trade-button--close-mimic {
+    background: #e0e0e0;
+    color: #333333;
+    border: none;
+    border-radius: 12px;
+    width: 100%;
+    height: 52px;
+    padding: 1.4rem;
+    font-size: 1.6rem;
+    font-weight: 700;
+    transition: background 0.25s ease;
+    box-shadow: none;
+    cursor: pointer;
 }
 
 .accumulators-page__trade-button--sell-mimic {
@@ -421,20 +430,15 @@
 
 .accumulators-page__trade-actions--manual-sheet {
     grid-template-columns: 1fr;
-    gap: 1rem;
-}
-
-.accumulators-page__trade-actions--manual-open {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
 }
 
 .accumulators-page__manual-header-row {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1.5rem;
-    margin-bottom: 0;
-    padding: 1.2rem 1.6rem 1.2rem;
+    gap: 1.2rem;
+    padding: 1.2rem 1.6rem;
     min-width: 0;
     background: #ffffff;
     border-bottom: 1px solid rgba(0,0,0,0.06);
@@ -586,9 +590,8 @@
     border: 0;
     border-radius: 0;
     background: #f8f8f8;
-    height: 45vw;
-    max-height: 320px;
-    min-height: 200px;
+    width: 100%;
+    aspect-ratio: 16 / 7;
     overflow: hidden;
     padding: 0;
     position: relative;

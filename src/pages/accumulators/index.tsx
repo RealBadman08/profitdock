@@ -1230,6 +1230,7 @@ const AccumulatorsPage = observer(() => {
     const autoProcessedStateKeyRef = useRef('');
     const manualBarrierFlashTimeoutRef = useRef<number | null>(null);
     const manualBarrierWasBreachedRef = useRef(false);
+    const stableManualMaxPayoutRef = useRef<number | null>(null);
 
     const ensureAccumulatorTradeSession = useCallback(async (forceReconnect = false) => {
         if (!forceReconnect && hasAccumulatorTradeSession()) {
@@ -1693,6 +1694,7 @@ const AccumulatorsPage = observer(() => {
             setManualChartTicks([]);
             setIsManualTickLoading(true);
             setManualTickError(null);
+            stableManualMaxPayoutRef.current = null;
             return;
         }
 
@@ -3227,7 +3229,11 @@ const AccumulatorsPage = observer(() => {
         primaryManualFeed.barrierDistance ?? secondaryManualFeed.barrierDistance;
     const manualHighBarrierValue = primaryManualFeed.highBarrier ?? secondaryManualFeed.highBarrier;
     const manualLowBarrierValue = primaryManualFeed.lowBarrier ?? secondaryManualFeed.lowBarrier;
-    const manualMaxPayoutValue = activeManualProposal.maxPayout ?? activeManualDedicatedFeed.maxPayout;
+    const manualMaxPayoutRaw = activeManualProposal.maxPayout ?? activeManualDedicatedFeed.maxPayout;
+    if (manualMaxPayoutRaw !== null) {
+        stableManualMaxPayoutRef.current = manualMaxPayoutRaw;
+    }
+    const manualMaxPayoutValue = stableManualMaxPayoutRef.current;
     const manualLongcodeValue = activeManualProposal.longcode || activeManualDedicatedFeed.longcode;
     const manualLiveQuote =
         manualChartTicks[manualChartTicks.length - 1]?.quote ?? primaryManualFeed.spot ?? secondaryManualFeed.spot;
@@ -3467,42 +3473,26 @@ const AccumulatorsPage = observer(() => {
                             <div className='accumulators-page__manual-layout'>
                                 <article className='accumulators-page__manual-chart-card'>
                                     <header className='accumulators-page__manual-header-row'>
-                                        <div className='accumulators-page__manual-header-left'>
-                                            <div className='accumulators-page__manual-custom-icon'>
-                                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2b313b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="candlestick-icon">
-                                                    <line x1="8" y1="4" x2="8" y2="12"></line><line x1="16" y1="12" x2="16" y2="20"></line><rect x="6" y="6" width="4" height="4"></rect><rect x="14" y="14" width="4" height="4"></rect><line x1="12" y1="8" x2="12" y2="20"></line><rect x="10" y="10" width="4" height="8"></rect>
-                                                </svg>
-                                                <div className='accumulators-page__manual-icon-badges'>
-                                                    <span className='accumulators-page__manual-icon-badge accumulators-page__manual-icon-badge--dark'>25</span>
-                                                    <span className='accumulators-page__manual-icon-badge accumulators-page__manual-icon-badge--red'>1s</span>
-                                                </div>
-                                            </div>
-                                            <div className='accumulators-page__manual-header-text'>
-                                                <label className='accumulators-page__manual-market-select'>
-                                                    <select
-                                                        aria-label={localize('Manual market')}
-                                                        value={manualMarketSymbol}
-                                                        onChange={event => setManualMarketSymbol(event.target.value)}
-                                                    >
-                                                        {selectableMarkets.map(market => (
-                                                            <option key={market.symbol} value={market.symbol}>
-                                                                {market.displayName}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    <span className='accumulators-page__manual-market-title'>
-                                                        {resolvedManualMarket.displayName}
-                                                    </span>
-                                                    <svg className='accumulators-page__manual-market-chevron' viewBox='0 0 24 24' aria-hidden='true'>
-                                                        <path d='M6 9l6 6 6-6' fill='none' stroke='currentColor' strokeLinecap='round' strokeLinejoin='round' strokeWidth='2.5' />
-                                                    </svg>
-                                                </label>
-                                                <div className='accumulators-page__manual-market-price'>{manualSpotDisplay}</div>
-                                            </div>
-                                        </div>
-                                        <button className='accumulators-page__manual-menu-button' type='button' aria-label={localize('Accumulator chart menu')}>
-                                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg>
-                                        </button>
+                                        <label className='accumulators-page__manual-market-select'>
+                                            <select
+                                                aria-label={localize('Manual market')}
+                                                value={manualMarketSymbol}
+                                                onChange={event => setManualMarketSymbol(event.target.value)}
+                                            >
+                                                {selectableMarkets.map(market => (
+                                                    <option key={market.symbol} value={market.symbol}>
+                                                        {market.displayName}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <span className='accumulators-page__manual-market-title'>
+                                                {resolvedManualMarket.displayName}
+                                            </span>
+                                            <svg className='accumulators-page__manual-market-chevron' viewBox='0 0 24 24' aria-hidden='true'>
+                                                <path d='M6 9l6 6 6-6' fill='none' stroke='currentColor' strokeLinecap='round' strokeLinejoin='round' strokeWidth='2.5' />
+                                            </svg>
+                                        </label>
+                                        <div className='accumulators-page__manual-market-price'>{manualSpotDisplay}</div>
                                     </header>
 
                                     <div
@@ -3663,9 +3653,6 @@ const AccumulatorsPage = observer(() => {
                                                 <small className='accumulators-page__manual-stats-empty'>{localize('Waiting for stats')}</small>
                                             )}
                                         </div>
-                                        <span className='accumulators-page__manual-stats-chevron' aria-hidden='true'>
-                                            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
-                                        </span>
                                     </div>
                                 </article>
 
@@ -3720,29 +3707,18 @@ const AccumulatorsPage = observer(() => {
                                         </strong>
                                     </div>
 
-                                    <div
-                                        className={`accumulators-page__trade-actions accumulators-page__trade-actions--manual-sheet ${
-                                            manualIsTradeOpen ? 'accumulators-page__trade-actions--manual-open' : ''
-                                        }`.trim()}
-                                    >
+                                    <div className='accumulators-page__trade-actions accumulators-page__trade-actions--manual-sheet'>
                                         {manualIsTradeOpen ? (
-                                            <>
-                                                <button
-                                                    type='button'
-                                                    className='accumulators-page__trade-button accumulators-page__trade-button--buy-mimic'
-                                                    disabled
-                                                >
-                                                    {localize('Buy')}
-                                                </button>
-                                                <button
-                                                    type='button'
-                                                    className='accumulators-page__trade-button accumulators-page__trade-button--sell-mimic'
-                                                    onClick={() => void handleManualSell(resolvedManualMarket)}
-                                                    disabled={manualSellDisabled || manualTradeState.status === 'selling'}
-                                                >
-                                                    {manualTradeState.status === 'selling' ? localize('Selling...') : localize('Sell')}
-                                                </button>
-                                            </>
+                                            <button
+                                                type='button'
+                                                className='accumulators-page__trade-button accumulators-page__trade-button--close-mimic'
+                                                onClick={() => void handleManualSell(resolvedManualMarket)}
+                                                disabled={manualSellDisabled}
+                                            >
+                                                {manualTradeState.status === 'selling'
+                                                    ? localize('Closing...')
+                                                    : `${localize('Close')}${manualTradeState.bidPrice ? ` · ${Number(manualTradeState.bidPrice).toFixed(2)} ${currency}` : ''}`}
+                                            </button>
                                         ) : (
                                             <button
                                                 type='button'
