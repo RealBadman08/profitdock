@@ -634,6 +634,7 @@
 
 .accumulators-page__chart-area {
     fill: rgba(0, 0, 0, 0.05);
+    transition: d 0.3s ease;
 }
 
 .accumulators-page__chart-line {
@@ -642,6 +643,7 @@
     stroke-width: 2.2;
     stroke-linecap: round;
     stroke-linejoin: round;
+    transition: d 0.3s ease;
 }
 
 .accumulators-page__chart-barrier-zone {
@@ -667,14 +669,14 @@
     stroke: rgba(17, 17, 17, 0.78);
     stroke-width: 1.5;
     stroke-dasharray: 6 5;
-    transition: stroke 0.18s ease;
+    transition: y1 0.25s ease, y2 0.25s ease;
 }
 
 .accumulators-page__chart-spot-dot {
     fill: #000000;
     stroke: #000000;
     stroke-width: 1;
-    transition: fill 0.18s ease, stroke 0.18s ease, filter 0.18s ease;
+    transition: cy 0.25s ease, fill 0.18s ease, stroke 0.18s ease;
 }
 
 .accumulators-page__chart-barrier-label {

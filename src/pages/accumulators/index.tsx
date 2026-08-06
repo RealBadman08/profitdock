@@ -3301,7 +3301,21 @@ const AccumulatorsPage = observer(() => {
             y: toY(tick.quote),
             ...tick,
         }));
-        const linePath = points.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`).join(' ');
+        // Smooth cubic bezier path
+        const smoothLinePath = (() => {
+            if (points.length < 2) {
+                return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+            }
+            let d = `M ${points[0].x} ${points[0].y}`;
+            for (let i = 1; i < points.length; i++) {
+                const prev = points[i - 1];
+                const curr = points[i];
+                const cpx = (prev.x + curr.x) / 2;
+                d += ` C ${cpx} ${prev.y}, ${cpx} ${curr.y}, ${curr.x} ${curr.y}`;
+            }
+            return d;
+        })();
+        const linePath = smoothLinePath;
         const areaPath = `${linePath} L ${points[points.length - 1].x} ${bottom} L ${points[0].x} ${bottom} Z`;
         const highY = manualHighBarrierValue !== null ? toY(manualHighBarrierValue) : null;
         const lowY = manualLowBarrierValue !== null ? toY(manualLowBarrierValue) : null;
@@ -3590,8 +3604,8 @@ const AccumulatorsPage = observer(() => {
                                                 />
                                                 <circle
                                                     className='accumulators-page__chart-spot-dot'
-                                                    cx={manualChartModel.points[manualChartModel.points.length - 1].x}
-                                                    cy={manualChartModel.points[manualChartModel.points.length - 1].y}
+                                                    cx={manualChartModel.currentX}
+                                                    cy={manualChartModel.spotY}
                                                     r={5}
                                                 />
                                                 {manualSpotDisplay !== '--' && (
@@ -3624,12 +3638,6 @@ const AccumulatorsPage = observer(() => {
                                                     </text>
                                                 ))}
                                             </svg>
-                                            <div className='accumulators-page__manual-chart-tools' aria-hidden='true'>
-                                                <span className='accumulators-page__manual-chart-tool accumulators-page__manual-chart-tool--interval accumulators-page__manual-chart-tool--active'>1t</span>
-                                                <span className='accumulators-page__manual-chart-tool accumulators-page__manual-chart-tool--drawing'>
-                                                    <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                                                </span>
-                                            </div>
                                             </>
                                         ) : (
                                             <div className='accumulators-page__manual-chart-empty'>
@@ -3662,9 +3670,6 @@ const AccumulatorsPage = observer(() => {
                                 </article>
 
                                 <aside className='accumulators-page__manual-order-card accumulators-page__manual-order-card--mobile-mimic'>
-                                    <div className='accumulators-page__drawer-handle'>
-                                        <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg>
-                                    </div>
 
                                     <div className='accumulators-page__trade-params accumulators-page__trade-params--manual'>
                                         <div className='accumulators-page__param-box'>
