@@ -3444,6 +3444,10 @@ const AccumulatorsPage = observer(() => {
         <div className='accumulators-page'>
             <div className='accumulators-page__stack'>
                 <section className='accumulators-page__mode-switch'>
+                    <div
+                        className='accumulators-page__mode-slider'
+                        style={{ transform: `translateX(${activeTab === 'manual' ? '0' : '100%'})` }}
+                    />
                     <button
                         type='button'
                         className={`accumulators-page__mode-button ${activeTab === 'manual' ? 'accumulators-page__mode-button--active' : ''}`}
@@ -3458,10 +3462,6 @@ const AccumulatorsPage = observer(() => {
                     >
                         {localize('Auto Trader')}
                     </button>
-                </section>
-
-                <section className='accumulators-page__toolbar'>
-                    {/* Growth rate selector moved to manual panel to match reference UI */}
                 </section>
 
                 {activeTab === 'manual' ? (
@@ -3503,16 +3503,18 @@ const AccumulatorsPage = observer(() => {
                                         {manualChartModel ? (
                                             <>
                                             <svg viewBox='0 0 1000 430' preserveAspectRatio='none' aria-label='Manual accumulator chart'>
-                                                {manualChartModel.verticalGridLines.map((xValue, index) => (
-                                                    <line
-                                                        key={`vertical-grid-${index}`}
-                                                        className='accumulators-page__chart-grid accumulators-page__chart-grid--vertical'
-                                                        x1={xValue}
-                                                        y1={manualChartModel.top}
-                                                        x2={xValue}
-                                                        y2={386}
-                                                    />
-                                                ))}
+                                                <g className='accumulators-page__chart-grid-animated-group'>
+                                                    {manualChartModel.verticalGridLines.map((xValue, index) => (
+                                                        <line
+                                                            key={`vertical-grid-${index}`}
+                                                            className='accumulators-page__chart-grid accumulators-page__chart-grid--vertical'
+                                                            x1={xValue}
+                                                            y1={manualChartModel.top}
+                                                            x2={xValue}
+                                                            y2={386}
+                                                        />
+                                                    ))}
+                                                </g>
                                                 {manualChartModel.gridLines.map((yValue, index) => (
                                                     <line
                                                         key={`grid-${index}`}
@@ -3666,6 +3668,7 @@ const AccumulatorsPage = observer(() => {
                                                     value={growthRatePercent}
                                                     onChange={event => setGrowthRatePercent(Number(event.target.value))}
                                                     disabled={manualTradeState.status !== 'closed' && manualTradeState.status !== 'idle'}
+                                                    className='accumulators-page__param-input--centered'
                                                 >
                                                     {GROWTH_RATE_OPTIONS.map(option => (
                                                         <option key={option} value={option}>{option}%</option>
@@ -3681,8 +3684,8 @@ const AccumulatorsPage = observer(() => {
                                                     value={resolvedManualConfig.stake}
                                                     onChange={event => handleManualConfigChange(resolvedManualMarket.symbol, 'stake', event.target.value)}
                                                     inputMode='decimal'
+                                                    className='accumulators-page__param-input--centered'
                                                 />
-                                                <span className='accumulators-page__param-currency'>{currency}</span>
                                             </div>
                                         </div>
 
@@ -3694,8 +3697,8 @@ const AccumulatorsPage = observer(() => {
                                                     onChange={event => handleManualConfigChange(resolvedManualMarket.symbol, 'takeProfit', event.target.value)}
                                                     inputMode='decimal'
                                                     placeholder='-'
+                                                    className='accumulators-page__param-input--centered'
                                                 />
-                                                <span className='accumulators-page__param-currency'>{currency}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -3741,46 +3744,7 @@ const AccumulatorsPage = observer(() => {
                                         )}
                                     </div>
 
-                                    <div
-                                        hidden={!manualPositionRows.length}
-                                        className='accumulators-page__positions-table accumulators-page__positions-table--manual-mimic'
-                                    >
-                                        <div className='accumulators-page__positions-head'>
-                                            <strong>{localize('Report')}</strong>
-                                            <span>
-                                                {localize('{{ count }} manual position(s)', {
-                                                    count: String(manualPositionRows.length),
-                                                })}
-                                            </span>
-                                        </div>
-                                        <div className='accumulators-page__positions-grid accumulators-page__positions-grid--header'>
-                                            <span>{localize('Type / Market')}</span>
-                                            <span>{localize('Ticks / Contract')}</span>
-                                            <span>{localize('Buy price / P&L')}</span>
-                                        </div>
-                                        {manualPositionRows.length ? (
-                                            manualPositionRows.map(row => (
-                                                <div className='accumulators-page__positions-grid' key={`${row.symbol}-${row.contractId}`}>
-                                                    <span>
-                                                        <strong>{localize('Accumulator')}</strong>
-                                                        <small>{row.marketLabel}</small>
-                                                    </span>
-                                                    <span>
-                                                        <strong>{row.tickPassed || 0}</strong>
-                                                        <small>{row.contractId}</small>
-                                                    </span>
-                                                    <span>
-                                                        <strong>{formatMoney(row.buyPrice || 0, currency)}</strong>
-                                                        <small className={`accumulators-page__metric-value--${row.profit > 0 ? 'good' : row.profit < 0 ? 'bad' : 'neutral'}`}>
-                                                            {formatMoney(row.profit || 0, currency)}
-                                                        </small>
-                                                    </span>
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className='accumulators-page__positions-empty'>{localize('No positions')}</div>
-                                        )}
-                                    </div>
+                                
                                 </aside>
                             </div>
                             </>
