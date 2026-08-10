@@ -6,7 +6,7 @@ export const DEFAULT_ANALYSIS_DIGIT = 5;
 export const DEFAULT_TRADE_DURATION = 5;
 export const DEFAULT_STAKE = '10';
 export const MAX_TICK_BUFFER = 1000;
-export const MAX_SEQUENCE_ITEMS = 12;
+export const MAX_SEQUENCE_ITEMS = 10;
 
 export const REQUIRED_MARKET_ORDER = [
     'Volatility 100 Index',

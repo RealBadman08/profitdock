@@ -197,8 +197,8 @@ export const ModuleCard = ({
             />
         </div>
         <div className='deriv-live__sequence'>
-            {summary.sequence.map(tile => (
-                <span key={tile.id} className={clsx('deriv-live__sequence-tile', toneClassName(tile.tone))}>
+            {summary.sequence.map((tile, index) => (
+                <span key={tile.id} className={clsx('deriv-live__sequence-tile', toneClassName(tile.tone), index === summary.sequence.length - 1 && 'deriv-live__sequence-tile--latest')}>
                     {tile.label}
                 </span>
             ))}

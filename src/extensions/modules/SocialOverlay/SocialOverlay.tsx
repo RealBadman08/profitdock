@@ -34,15 +34,20 @@ const SocialOverlay = () => {
 
     useEffect(() => {
         const hasSeenOverlay = sessionStorage.getItem('hasSeenSocialOverlay');
+        const shouldShowAfterLogin = sessionStorage.getItem('profitdock.show_social_after_login') === 'true';
 
-        if (hasSeenOverlay) {
+        if (!shouldShowAfterLogin && hasSeenOverlay) {
             return undefined;
+        }
+
+        if (shouldShowAfterLogin) {
+            sessionStorage.removeItem('profitdock.show_social_after_login');
         }
 
         const timer = window.setTimeout(() => {
             setIsVisible(true);
             sessionStorage.setItem('hasSeenSocialOverlay', 'true');
-        }, 900);
+        }, shouldShowAfterLogin ? 1250 : 900);
 
         return () => window.clearTimeout(timer);
     }, []);

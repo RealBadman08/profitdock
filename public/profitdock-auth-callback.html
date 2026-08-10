@@ -6,7 +6,7 @@
         <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
         <meta http-equiv="Pragma" content="no-cache" />
         <meta http-equiv="Expires" content="0" />
-        <title>Finalizing your ProfitDock sign-in...</title>
+        <title>Requesting Deriv token...</title>
         <style>
             :root {
                 color-scheme: light;
@@ -215,6 +215,10 @@
                 font-size: clamp(1.45rem, 2.8vw, 1.8rem);
                 font-weight: 600;
                 line-height: 1.45;
+            }
+
+            .auth-callback__message:empty {
+                display: none;
             }
 
             .auth-callback--success .auth-callback__title {
@@ -510,7 +514,7 @@
                     </div>
                     <div class="auth-callback__status-stack">
                         <h1 id="callback-title" class="auth-callback__title">Requesting Deriv token...</h1>
-                        <p id="callback-message" class="auth-callback__message">Finalizing your ProfitDock login...</p>
+                        <p id="callback-message" class="auth-callback__message"></p>
                         <div class="auth-callback__three-dot-loader" aria-hidden="true">
                             <span></span>
                             <span></span>
@@ -549,6 +553,14 @@
                     if (message_node) message_node.textContent = message;
                 };
 
+                const request_social_overlay_after_login = () => {
+                    try {
+                        sessionStorage.setItem('profitdock.show_social_after_login', 'true');
+                    } catch (error) {
+                        console.warn('[ProfitDock Callback] Could not schedule social overlay:', error);
+                    }
+                };
+
                 const show_error = message => {
                     if (callback_node) callback_node.classList.add('auth-callback--error');
                     if (error_title_node) error_title_node.textContent = 'Sign-in could not be completed';
@@ -563,17 +575,19 @@
 
                 const redirect_after_success_animation = async redirect_target => {
                     if (!callback_node) {
+                        request_social_overlay_after_login();
                         window.location.replace(redirect_target);
                         return;
                     }
 
                     if (title_node) title_node.textContent = 'Requesting Deriv token...';
-                    set_message('Finalizing your ProfitDock login...');
+                    set_message('');
                     await wait_for_loader_stage(1400);
                     callback_node.classList.add('auth-callback--success');
                     await new Promise(resolve => window.setTimeout(resolve, 2600));
                     callback_node.classList.add('auth-callback--exiting');
                     await new Promise(resolve => window.setTimeout(resolve, 420));
+                    request_social_overlay_after_login();
                     window.location.replace(redirect_target);
                 };
 
@@ -910,7 +924,7 @@
                     }
 
                     if (title_node) title_node.textContent = 'Requesting Deriv token...';
-                    set_message(direct_access_token ? 'Validating your Deriv trading token...' : 'Requesting Deriv token...');
+                    set_message('');
                     const controller = new AbortController();
                     const timeout = window.setTimeout(() => controller.abort(), 45000);
                     const response = await fetch('/api/deriv/oauth/exchange', {
@@ -947,13 +961,13 @@
                         return;
                     }
 
-                    set_message('Finalizing your ProfitDock login...');
+                    set_message('');
                     const redirect_target = store_oauth_session({
                         access_token: payload.access_token,
                         accounts: payload.accounts,
                     });
 
-                    set_message('Finalizing your ProfitDock login...');
+                    set_message('');
                     cleanup_caches().catch(error => console.warn('[ProfitDock Callback] Cache cleanup failed:', error));
                     await redirect_after_success_animation(redirect_target);
                 } catch (error) {

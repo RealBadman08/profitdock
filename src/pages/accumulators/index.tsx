@@ -3726,7 +3726,7 @@ const AccumulatorsPage = observer(() => {
                                             <button
                                                 type='button'
                                                 className='accumulators-page__trade-button accumulators-page__trade-button--buy-mimic'
-                                                onClick={() => void handleManualBuy(resolvedManualMarket)}
+                                                onPointerDown={(e) => { e.preventDefault(); void handleManualBuy(resolvedManualMarket); }}
                                                 disabled={manualTradeState.status === 'opening'}
                                             >
                                                 {manualTradeState.status === 'opening' ? localize('Purchasing...') : localize('Buy')}

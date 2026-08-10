@@ -100,6 +100,14 @@ const getPostLoginRedirectUrl = (selected_currency: string) => {
     return redirect_url.toString();
 };
 
+const requestSocialOverlayAfterLogin = () => {
+    try {
+        sessionStorage.setItem('profitdock.show_social_after_login', 'true');
+    } catch (error) {
+        console.warn('[Callback] Could not schedule social overlay:', error);
+    }
+};
+
 const buildLegacyAccounts = (tokens: TTokenResponse) => {
     const accounts_list: Record<string, string> = {};
     const client_accounts: TClientAccounts = {};
@@ -265,6 +273,7 @@ const bootstrapLegacyTokens = async ({
     // Important: the legacy callback already contains the real Deriv account tokens.
     // Persist them immediately and let the main shell perform the live websocket
     // authorization. This avoids mobile browsers hanging indefinitely on /auth/callback.
+    requestSocialOverlayAfterLogin();
     window.location.replace(getPostLoginRedirectUrl(preferred_account.currency || selected_currency));
 };
 
@@ -386,6 +395,7 @@ const bootstrapOAuthAccessToken = async ({
     localStorage.setItem('profitdock_auth_stage', 'authorized');
     setLoggedStateCookie('true');
 
+    requestSocialOverlayAfterLogin();
     window.location.replace(getPostLoginRedirectUrl(preferred_account.currency || selected_currency));
 };
 
@@ -418,7 +428,7 @@ const LegacyCallbackPage = () => {
         );
     }
 
-    return <ChunkLoader message={localize('Finalizing your ProfitDock sign-in...')} />;
+    return <ChunkLoader message={localize('Requesting Deriv token...')} />;
 };
 
 const PkceCallbackPage = () => {
@@ -442,6 +452,7 @@ const PkceCallbackPage = () => {
 
             if (!code || !state) {
                 if (localStorage.getItem('authToken')) {
+                    requestSocialOverlayAfterLogin();
                     window.location.replace('/');
                     return;
                 }
@@ -519,7 +530,7 @@ const PkceCallbackPage = () => {
         );
     }
 
-    return <ChunkLoader message={localize('Finalizing your ProfitDock sign-in...')} />;
+    return <ChunkLoader message={localize('Requesting Deriv token...')} />;
 };
 
 const OidcCallbackPage = () => {

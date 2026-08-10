@@ -124,7 +124,7 @@ const AnalysisTool = observer(() => {
                     showTickCounts={false}
                 />
 
-                {liveFeed.analytics && (
+                {liveFeed.analytics ? (
                     <div className='deriv-live__double-grid'>
                         <ModuleCard title='Even / Odd Analysis' summary={liveFeed.analytics.evenOdd} />
                         <ModuleCard title='Rise / Fall Analysis' summary={liveFeed.analytics.riseFall} />
@@ -147,6 +147,12 @@ const AnalysisTool = observer(() => {
                             }
                         />
                         <ModuleCard title='Matches / Differs Analysis' summary={liveFeed.analytics.matchesDiffers} />
+                    </div>
+                ) : (
+                    <div className='deriv-live__double-grid'>
+                        {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className='deriv-live__panel deriv-live__panel--module deriv-live__panel--skeleton' style={{ minHeight: '260px' }} />
+                        ))}
                     </div>
                 )}
             </div>
