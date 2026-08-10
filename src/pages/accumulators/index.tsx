@@ -3703,13 +3703,6 @@ const AccumulatorsPage = observer(() => {
                                         </div>
                                     </div>
 
-                                    <div className='accumulators-page__payout-row accumulators-page__payout-row--manual-sheet'>
-                                        <span className='accumulators-page__payout-label'>{localize('Max. payout')}</span>
-                                        <strong className='accumulators-page__payout-value'>
-                                            {manualMaxPayoutValue !== null ? formatMoney(manualMaxPayoutValue, currency) : '--'}
-                                        </strong>
-                                    </div>
-
                                     <div className='accumulators-page__trade-actions accumulators-page__trade-actions--manual-sheet'>
                                         {manualIsTradeOpen ? (
                                             <button
@@ -3729,7 +3722,14 @@ const AccumulatorsPage = observer(() => {
                                                 onPointerDown={(e) => { e.preventDefault(); void handleManualBuy(resolvedManualMarket); }}
                                                 disabled={manualTradeState.status === 'opening'}
                                             >
-                                                {manualTradeState.status === 'opening' ? localize('Purchasing...') : localize('Buy')}
+                                                <div className="accumulators-page__trade-button-content">
+                                                    <span className="accumulators-page__trade-button-main">
+                                                        {manualTradeState.status === 'opening' ? localize('Purchasing...') : localize('Buy')}
+                                                    </span>
+                                                    <span className="accumulators-page__trade-button-sub">
+                                                        {localize('Max payout')} {manualMaxPayoutValue !== null ? formatMoney(manualMaxPayoutValue, currency) : '--'} {currency}
+                                                    </span>
+                                                </div>
                                             </button>
                                         )}
                                     </div>
