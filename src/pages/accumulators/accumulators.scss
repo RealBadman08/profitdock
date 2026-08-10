@@ -175,6 +175,16 @@
     overflow: hidden !important;
     box-shadow: var(--acc-shadow) !important;
     background: #ffffff !important;
+
+    @media (max-width: 768px) {
+        border-radius: 0 !important;
+        margin: -1rem -1rem 0 !important;
+        width: calc(100% + 2rem) !important;
+    }
+}
+
+[data-theme='dark'] .accumulators-page__manual-panel {
+    background: var(--acc-surface) !important;
 }
 
 .accumulators-page__manual-panel::before,
@@ -439,12 +449,6 @@
     gap: 0;
     margin: 0;
     width: 100%;
-
-    @media (max-width: 768px) {
-        margin-left: -1rem;
-        margin-right: -1rem;
-        width: calc(100% + 2rem);
-    }
 }
 
 .accumulators-page__manual-header-row {
@@ -456,6 +460,11 @@
     min-width: 0;
     background: #ffffff;
     border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+
+[data-theme='dark'] .accumulators-page__manual-header-row {
+    background: var(--acc-surface);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .accumulators-page__manual-header-left {
