@@ -3727,7 +3727,7 @@ const AccumulatorsPage = observer(() => {
                                                         {manualTradeState.status === 'opening' ? localize('Purchasing...') : localize('Buy')}
                                                     </span>
                                                     <span className="accumulators-page__trade-button-sub">
-                                                        {localize('Max payout')} {manualMaxPayoutValue !== null ? formatMoney(manualMaxPayoutValue, currency) : '--'} {currency}
+                                                        {localize('Max payout')} {manualMaxPayoutValue !== null ? formatMoney(manualMaxPayoutValue, currency) : '--'}
                                                     </span>
                                                 </div>
                                             </button>

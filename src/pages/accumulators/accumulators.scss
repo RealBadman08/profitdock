@@ -229,6 +229,10 @@
     gap: 0;
 }
 
+.theme--dark .accumulators-page__manual-chart-card {
+    background: var(--acc-surface);
+}
+
 /* Mobile mimic order card styles (exactly like screenshot) */
 .accumulators-page__manual-order-card--mobile-mimic {
     background: #ffffff;
@@ -288,6 +292,11 @@
     box-shadow: none;
 }
 
+.theme--dark .accumulators-page__param-box {
+    background: var(--acc-surface-soft);
+    border-color: var(--acc-border);
+}
+
 .accumulators-page__param-label {
     font-size: 1.2rem;
     color: #9e9e9e;
@@ -299,6 +308,10 @@
     width: 100%;
     display: block;
     margin-bottom: 0.4rem;
+}
+
+.theme--dark .accumulators-page__param-label {
+    color: var(--acc-muted);
 }
 
 .accumulators-page__param-value {
@@ -330,10 +343,20 @@
     text-align-last: center;
 }
 
+.theme--dark .accumulators-page__param-value input,
+.theme--dark .accumulators-page__param-value select {
+    color: var(--acc-text);
+    color-scheme: dark;
+}
+
 .accumulators-page__param-currency {
     font-size: 1.8rem;
     font-weight: 700;
     color: #000000;
+}
+
+.theme--dark .accumulators-page__param-currency {
+    color: var(--acc-text);
 }
 
 .accumulators-page__payout-row {
@@ -367,22 +390,22 @@
 }
 
 .accumulators-page__trade-button--buy-mimic {
-    background: #00c853;
-    color: #ffffff;
-    border: none;
-    border-radius: 2.4rem;
-    width: 100%;
-    height: auto;
-    padding: 1rem 1.4rem;
+    background: #00c853 !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 999rem !important;
+    width: 100% !important;
+    height: auto !important;
+    padding: 1.2rem 1.6rem !important;
     font-size: 1.6rem;
     font-weight: 700;
     text-transform: capitalize;
-    transition: background 0.25s ease, color 0.25s ease;
-    box-shadow: none;
+    transition: background 0.25s ease, opacity 0.2s;
+    box-shadow: 0 4px 16px rgba(0,200,83,0.3) !important;
     cursor: pointer;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
     text-align: center;
 }
 
@@ -406,13 +429,13 @@
 }
 
 .accumulators-page__trade-button--close-mimic {
-    background: #e0e0e0;
-    color: #333333;
-    border: none;
-    border-radius: 0;
-    width: 100%;
-    height: 52px;
-    padding: 1.4rem;
+    background: #e0e0e0 !important;
+    color: #333333 !important;
+    border: none !important;
+    border-radius: 999rem !important;
+    width: 100% !important;
+    height: auto !important;
+    padding: 1.2rem 1.6rem !important;
     font-size: 1.6rem;
     font-weight: 700;
     transition: background 0.25s ease;
@@ -442,21 +465,9 @@
     opacity: 0.9;
 }
 
-.accumulators-page__trade-button--close-mimic {
-    background: #2f2f2f;
-    color: #ffffff;
-    border: none;
-    border-radius: 999rem;
-    width: 100%;
-    padding: 1.4rem;
-    font-size: 2rem;
-    font-weight: 700;
-    transition: opacity 0.2s;
-}
-
 .theme--dark .accumulators-page__trade-button--close-mimic {
-    background-color: #f2f3f4;
-    color: #0f172a;
+    background: #3a3d40 !important;
+    color: #ffffff !important;
 }
 
 .theme--dark .accumulators-page__param-box {
@@ -653,6 +664,10 @@ div.accumulators-page__trade-actions--manual-sheet {
     letter-spacing: 0.02em;
     line-height: 1.2;
     margin-top: 0.2rem;
+}
+
+.theme--dark .accumulators-page__manual-market-price {
+    color: var(--acc-muted);
 }
 
 .accumulators-page__manual-menu-button {
