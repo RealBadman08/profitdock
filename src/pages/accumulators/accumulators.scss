@@ -178,8 +178,9 @@
 
     @media (max-width: 768px) {
         border-radius: 0 !important;
-        margin: -1rem -1rem 0 !important;
-        width: calc(100% + 2rem) !important;
+        margin-left: -1rem !important;
+        margin-right: -1rem !important;
+        width: auto !important;
     }
 }
 
@@ -384,6 +385,10 @@
     transition: background 0.25s ease, color 0.25s ease;
     box-shadow: none;
     cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
 }
 
 .accumulators-page__trade-button--close-mimic {
@@ -598,6 +603,15 @@
     opacity: 0;
     position: absolute;
     z-index: 2;
+}
+
+[data-theme='dark'] .accumulators-page__manual-market-select select {
+    color-scheme: dark;
+}
+
+[data-theme='dark'] .accumulators-page__manual-market-select select option {
+    background: var(--acc-surface);
+    color: var(--acc-text);
 }
 
 .accumulators-page__manual-market-title {
