@@ -184,7 +184,7 @@
     }
 }
 
-[data-theme='dark'] .accumulators-page__manual-panel {
+.theme--dark .accumulators-page__manual-panel {
     background: var(--acc-surface) !important;
 }
 
@@ -242,7 +242,7 @@
     box-shadow: none;
 }
 
-[data-theme='dark'] .accumulators-page__manual-order-card--mobile-mimic {
+.theme--dark .accumulators-page__manual-order-card--mobile-mimic {
     background: var(--acc-surface);
 }
 
@@ -440,12 +440,12 @@
     transition: opacity 0.2s;
 }
 
-[data-theme='dark'] .accumulators-page__trade-button--close-mimic {
+.theme--dark .accumulators-page__trade-button--close-mimic {
     background-color: #f2f3f4;
     color: #0f172a;
 }
 
-[data-theme='dark'] .accumulators-page__param-box {
+.theme--dark .accumulators-page__param-box {
     background: var(--acc-surface-soft);
 }
 
@@ -454,6 +454,11 @@
     gap: 0;
     margin: 0;
     width: 100%;
+
+    @media (min-width: 769px) {
+        padding: 0 1.6rem;
+        margin-bottom: 1.6rem;
+    }
 }
 
 .accumulators-page__manual-header-row {
@@ -467,7 +472,7 @@
     border-bottom: 1px solid rgba(0,0,0,0.06);
 }
 
-[data-theme='dark'] .accumulators-page__manual-header-row {
+.theme--dark .accumulators-page__manual-header-row {
     background: var(--acc-surface);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -605,11 +610,11 @@
     z-index: 2;
 }
 
-[data-theme='dark'] .accumulators-page__manual-market-select select {
+.theme--dark .accumulators-page__manual-market-select select {
     color-scheme: dark;
 }
 
-[data-theme='dark'] .accumulators-page__manual-market-select select option {
+.theme--dark .accumulators-page__manual-market-select select option {
     background: var(--acc-surface);
     color: var(--acc-text);
 }
