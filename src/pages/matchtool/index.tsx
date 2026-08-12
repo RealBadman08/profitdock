@@ -23,6 +23,7 @@ import {
 import { getProfitdockPublicSocketUrl } from '@/external/bot-skeleton/services/api/appId';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { localize } from '@deriv-com/translations';
+import { runVirtualTrade } from '@/utils/virtual-trade';
 import './matchtool.scss';
 
 type ApiLike = {
@@ -327,7 +328,7 @@ const ResultBadge = ({ result }: { result: RoundRow['result'] }) => (
 
 const MatchtoolPage = observer(() => {
     const { accountList, activeLoginid, authData, connectionStatus } = useApiBase();
-    const { transactions } = useStore();
+    const { transactions, client } = useStore();
     const [markets, setMarkets] = useState<MatchMarket[]>([]);
     const [selectedMarket, setSelectedMarket] = useProfitdockPersistentState('profitdock.matchtool.market', '');
     const [analysisTicks, setAnalysisTicks] = useProfitdockPersistentState('profitdock.matchtool.ticks', '1000');
@@ -592,6 +593,35 @@ const MatchtoolPage = observer(() => {
                 throw new Error('MatchTool stopped before trades were placed.');
             }
 
+            // --- VIRTUAL MODE ---
+            if (client.is_dummy_active) {
+                const api = await ensureTradingApi();
+                const stakePerPick = stakeAmount;
+                setRoundRows(picks.map(pick => ({ ...pick, result: 'placed' })));
+                await Promise.all(
+                    picks.map(async pick => {
+                        const profit = await runVirtualTrade({
+                            api,
+                            contractType: 'DIGITMATCH',
+                            barrier: pick.digit,
+                            currency,
+                            stake: stakePerPick,
+                            symbol: selectedMarketInfo.symbol,
+                            displayName: selectedMarketInfo.display_name || selectedMarketInfo.symbol,
+                            duration: 1,
+                            onUpdate: contract => transactions.pushTransaction(contract as any),
+                            getDummyBalance: () => client.dummy_balance,
+                            setDummyBalance: val => client.setDummyBalance(val),
+                        });
+                        const result = profit > 0 ? 'won' : 'lost';
+                        updateRoundRow(pick.digit, { profit, result });
+                    })
+                );
+                setFeedback('MatchTool round settled (virtual).');
+                return;
+            }
+
+            // --- REAL MODE ---
             const api = await ensureTradingApi();
             const placed = await Promise.all(
                 picks.map(pick =>

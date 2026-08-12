@@ -20,6 +20,7 @@ import {
     subscribeProfitdockTradeStop,
 } from '@/utils/profitdock-trade-controller';
 import { ProposalOpenContract } from '@deriv/api-types';
+import { runVirtualTrade } from '@/utils/virtual-trade';
 import './mesh.scss';
 
 type ApiLike = {
@@ -574,7 +575,7 @@ const MeshContractTape = ({
 
 const MeshPage = observer(() => {
     const { accountList, activeLoginid, authData, connectionStatus } = useApiBase();
-    const { transactions } = useStore();
+    const { transactions, client } = useStore();
     const [markets, setMarkets] = useState<MeshMarket[]>([]);
     const [selectedMarket, setSelectedMarket] = useProfitdockPersistentState('profitdock.mesh.market', '');
     const [digits, setDigits] = useState<number[]>([]);
@@ -798,6 +799,26 @@ const MeshPage = observer(() => {
 
             const promises = Array.from({ length: count }).map(async () => {
                 if (!runningRef.current) return;
+
+                // --- VIRTUAL MODE ---
+                if (client.is_dummy_active) {
+                    await runVirtualTrade({
+                        api,
+                        contractType: signal.contractType,
+                        barrier: signal.digit,
+                        currency,
+                        stake,
+                        symbol: selectedMarketInfo.symbol,
+                        displayName: selectedMarketInfo.display_name || selectedMarketInfo.symbol,
+                        duration: Math.max(1, Math.min(10, Math.trunc(Number(numberOfTicksStr)))),
+                        onUpdate: contract => transactions.pushTransaction(contract as any),
+                        getDummyBalance: () => client.dummy_balance,
+                        setDummyBalance: val => client.setDummyBalance(val),
+                    });
+                    return;
+                }
+
+                // --- REAL MODE ---
                 const buy = await requestDirectBuy({
                     api,
                     currency,

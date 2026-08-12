@@ -1,4 +1,4 @@
-import { action, computed, makeObservable, observable } from 'mobx';
+import { action, computed, makeObservable, observable, runInAction } from 'mobx';
 import { ContentFlag, isEmptyObject } from '@/components/shared';
 import { isEuCountry, isMultipliersOnly, isOptionsBlocked } from '@/components/shared/common/utility';
 import { removeCookies } from '@/components/shared/utils/storage/storage';
@@ -18,7 +18,9 @@ const eu_excluded_regex = /^mt$/;
 export default class ClientStore {
     loginid = '';
     account_list: TAuthData['account_list'] = [];
-    balance = '0';
+    _real_balance = '0';
+    dummy_balance = Number(localStorage.getItem('profitdock_dummy_balance') || '0');
+    is_dummy_active = localStorage.getItem('profitdock_dummy_active') === 'true';
     currency = 'AUD';
     is_logged_in = false;
     account_status: GetAccountStatus | undefined;
@@ -28,7 +30,7 @@ export default class ClientStore {
     upgradeable_landing_companies: string[] = [];
     accounts: Record<string, TAuthData['account_list'][number]> = {};
     is_landing_company_loaded: boolean | undefined;
-    all_accounts_balance: Balance | null = null;
+    _real_all_accounts_balance: Balance | null = null;
     is_logging_out = false;
 
     // TODO: fix with self exclusion
@@ -43,14 +45,20 @@ export default class ClientStore {
                 this.setUpgradeableLandingCompanies(authData.upgradeable_landing_companies);
             }
         });
+        
+        if (this.is_dummy_active) {
+            this.toggleDummyMode(true);
+        }
 
         makeObservable(this, {
             accounts: observable,
             account_list: observable,
             account_settings: observable,
             account_status: observable,
-            all_accounts_balance: observable,
-            balance: observable,
+            _real_all_accounts_balance: observable,
+            _real_balance: observable,
+            dummy_balance: observable,
+            is_dummy_active: observable,
             currency: observable,
             is_landing_company_loaded: observable,
             is_logged_in: observable,
@@ -59,6 +67,8 @@ export default class ClientStore {
             upgradeable_landing_companies: observable,
             website_status: observable,
             is_logging_out: observable,
+            balance: computed,
+            all_accounts_balance: computed,
             active_accounts: computed,
             clients_country: computed,
             is_bot_allowed: computed,
@@ -78,6 +88,8 @@ export default class ClientStore {
             setAccountStatus: action,
             setAllAccountsBalance: action,
             setBalance: action,
+            setDummyBalance: action,
+            toggleDummyMode: action,
             setCurrency: action,
             setIsLoggedIn: action,
             setIsLoggingOut: action,
@@ -96,6 +108,53 @@ export default class ClientStore {
         return this.accounts instanceof Object
             ? Object.values(this.accounts).filter(account => !account.is_disabled)
             : [];
+    }
+
+    get balance() {
+        const hasCustomBalance = typeof window !== 'undefined' && localStorage.getItem('profitdock_dummy_balance') !== null;
+        if (this.is_dummy_active && hasCustomBalance) {
+            return this.dummy_balance.toFixed(2);
+        }
+        return this._real_balance;
+    }
+
+    get all_accounts_balance() {
+        const real_all = this._real_all_accounts_balance;
+        if (this.is_dummy_active && this.loginid && !this.is_virtual) {
+            if (real_all?.accounts?.[this.loginid]) {
+                return {
+                    ...real_all,
+                    accounts: {
+                        ...real_all.accounts,
+                        [this.loginid]: {
+                            ...real_all.accounts[this.loginid],
+                            balance: this.dummy_balance,
+                        }
+                    }
+                };
+            } else {
+                return {
+                    ...real_all,
+                    balance: this.dummy_balance,
+                    currency: this.currency,
+                    loginid: this.loginid,
+                    total: {
+                        deriv: { amount: this.dummy_balance, currency: this.currency },
+                        ...(real_all?.total || {})
+                    },
+                    accounts: {
+                        ...(real_all?.accounts || {}),
+                        [this.loginid]: {
+                            balance: this.dummy_balance,
+                            currency: this.currency,
+                            demo_account: 0,
+                            status: 1
+                        }
+                    }
+                } as any;
+            }
+        }
+        return real_all;
     }
 
     get clients_country() {
@@ -256,7 +315,81 @@ export default class ClientStore {
     };
 
     setBalance = (balance: string) => {
-        this.balance = balance;
+        const newRealBalance = parseFloat(balance) || 0;
+        const oldRealBalance = parseFloat(this._real_balance) || 0;
+        const hasCustomBalance = typeof window !== 'undefined' && localStorage.getItem('profitdock_dummy_balance') !== null;
+
+        if (this.is_dummy_active && hasCustomBalance && oldRealBalance > 0) {
+            const diff = newRealBalance - oldRealBalance;
+            if (diff !== 0) {
+                this.dummy_balance = Math.max(0, this.dummy_balance + diff);
+                localStorage.setItem('profitdock_dummy_balance', this.dummy_balance.toString());
+            }
+        }
+
+        this._real_balance = balance;
+
+        if (this.is_dummy_active && !hasCustomBalance) {
+            this.dummy_balance = newRealBalance;
+        }
+    };
+
+    setDummyBalance = (balance: number) => {
+        this.dummy_balance = balance;
+        localStorage.setItem('profitdock_dummy_balance', balance.toString());
+    };
+
+    /** Key used to store the real account loginid before virtual mode swap */
+    private _savedRealLoginId: string | null = null;
+
+    toggleDummyMode = (isActive: boolean) => {
+        // Update observable state synchronously so UI responds immediately
+        this.is_dummy_active = isActive;
+        localStorage.setItem('profitdock_dummy_active', isActive.toString());
+
+        // Clear any old interceptor
+        if (typeof window !== 'undefined') {
+            window._profitdock_dummy_interceptor = undefined;
+        }
+
+        if (isActive) {
+            // --- Find VRTC (demo) account ---
+            const demoLoginId = this.virtual_account_loginid || this.all_loginids.find(id => id.startsWith('VRTC'));
+
+            if (!demoLoginId) {
+                console.warn('[VirtualMode] No VRTC demo account found — virtual mode inactive');
+                runInAction(() => {
+                    this.is_dummy_active = false;
+                });
+                localStorage.setItem('profitdock_dummy_active', 'false');
+                return;
+            }
+
+            // Save the current real account so we can restore it later
+            this._savedRealLoginId = localStorage.getItem('active_loginid') || this.loginid;
+
+            // Swap active loginid to demo
+            localStorage.setItem('active_loginid', demoLoginId);
+
+            // Re-init API in the background — don't block the toggle
+            Promise.resolve().then(() => api_base.init(true)).catch(e =>
+                console.warn('[VirtualMode] API re-init failed:', e)
+            );
+        } else {
+            // --- Restore real account ---
+            const restoreLoginId = this._savedRealLoginId ||
+                this.all_loginids.find(id => !this.accounts[id].is_virtual) || '';
+
+            if (restoreLoginId) {
+                localStorage.setItem('active_loginid', restoreLoginId);
+            }
+            this._savedRealLoginId = null;
+
+            // Re-init API in the background
+            Promise.resolve().then(() => api_base.init(true)).catch(e =>
+                console.warn('[VirtualMode] API restore failed:', e)
+            );
+        }
     };
 
     setCurrency = (currency: string) => {
@@ -334,7 +467,7 @@ export default class ClientStore {
     };
 
     setAllAccountsBalance = (all_accounts_balance: Balance | undefined) => {
-        this.all_accounts_balance = all_accounts_balance ?? null;
+        this._real_all_accounts_balance = all_accounts_balance ?? null;
     };
 
     setIsLoggingOut = (is_logging_out: boolean) => {
@@ -350,12 +483,12 @@ export default class ClientStore {
         this.accounts = {};
         this.is_logged_in = false;
         this.loginid = '';
-        this.balance = '0';
+        this._real_balance = '0';
         this.currency = 'USD';
 
         this.is_landing_company_loaded = false;
 
-        this.all_accounts_balance = null;
+        this._real_all_accounts_balance = null;
 
         localStorage.removeItem('active_loginid');
         localStorage.removeItem('accountsList');

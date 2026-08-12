@@ -267,7 +267,7 @@ const SELL_RETRY_ATTEMPTS = 6;
 const SELL_RETRY_DELAY_MS = 220;
 const MANUAL_DEFAULTS: ManualCardConfig = {
     stake: '2',
-    takeProfit: '0.5',
+    takeProfit: '',
 };
 const AUTO_DEFAULTS = {
     martingaleMultiplier: '2',
@@ -1173,6 +1173,119 @@ const AccumulatorsPage = observer(() => {
     const [manualTrades, setManualTrades] = useState<Record<string, ManualTradeState>>({});
     const [manualProposal, setManualProposal] = useState<ManualLiveProposalState>(EMPTY_MANUAL_PROPOSAL);
     const [manualChartTicks, setManualChartTicks] = useState<ManualChartTick[]>([]);
+    
+    // --- DUMMY MODE MONITOR ---
+    const dummyRef = useRef({ lastStats: {} as Record<string, number> });
+    const currency = store.client.currency;
+    useEffect(() => {
+        if (!store.client.is_dummy_active) return;
+        
+        setManualTrades(prev => {
+             let changed = false;
+             const next = { ...prev };
+             Object.entries(next).forEach(([symbol, trade]) => {
+                  if (trade.status === 'open' && trade.contractId && String(trade.contractId).startsWith('dummy_')) {
+                       let currentStat: number | null = null;
+                       if (manualProposal.symbol === symbol) currentStat = manualProposal.currentStat;
+                       
+                       if (currentStat === null) return;
+                       
+                       const lastStat = dummyRef.current.lastStats[trade.contractId as any] ?? currentStat;
+                       
+                       if (currentStat === 0 && lastStat > 0) {
+                           const exitSpot = manualProposal.spot ?? undefined;
+                           next[symbol] = {
+                               ...trade,
+                               status: 'lost',
+                               feedback: localize('Virtual trade lost (Barrier hit)'),
+                               profit: -trade.buyPrice,
+                               isValidToSell: false
+                           };
+                           changed = true;
+                           
+                           transactions.pushTransaction({
+                               accountID: 'VIRTUAL',
+                               buy_price: trade.buyPrice,
+                               contract_id: trade.contractId as any,
+                               contract_type: 'ACCU',
+                               currency,
+                               date_start: Math.floor(Date.now() / 1000),
+                               display_name: symbol,
+                               is_completed: true,
+                               longcode: `Virtual Trade Lost`,
+                               profit: -trade.buyPrice,
+                               entry_tick: (trade as any).entrySpot,
+                               entry_tick_time: (trade as any).entryTime,
+                               exit_tick: exitSpot !== undefined ? String(exitSpot) : undefined,
+                               exit_tick_time: new Date().toUTCString(),
+                               transaction_ids: {
+                                   buy: trade.contractId as any,
+                                   sell: `dummy_loss_${Date.now()}` as any,
+                               },
+                               underlying: symbol,
+                           } as any);
+                           
+                       } else if (currentStat > lastStat) {
+                           const ticksPassed = trade.tickPassed + (currentStat - lastStat);
+                           const rate = growthRatePercent / 100;
+                           const newProfit = trade.buyPrice * Math.pow(1 + rate, ticksPassed) - trade.buyPrice;
+                           
+                           const config = manualConfigs[symbol] || MANUAL_DEFAULTS;
+                           const takeProfit = toPositiveNumber(config.takeProfit);
+                           
+                           if (takeProfit && newProfit >= takeProfit) {
+                               const exitSpotTp = manualProposal.spot ?? undefined;
+                               store.client.setDummyBalance(store.client.dummy_balance + trade.buyPrice + newProfit);
+                               next[symbol] = {
+                                   ...trade,
+                                   status: 'sold',
+                                   feedback: localize('Virtual trade hit Take Profit'),
+                                   profit: newProfit,
+                                   tickPassed: ticksPassed,
+                                   isValidToSell: false
+                               };
+                               
+                               transactions.pushTransaction({
+                                   accountID: 'VIRTUAL',
+                                   buy_price: trade.buyPrice,
+                                   contract_id: trade.contractId as any,
+                                   contract_type: 'ACCU',
+                                   currency,
+                                   date_start: Math.floor(Date.now() / 1000),
+                                   display_name: symbol,
+                                   is_completed: true,
+                                   longcode: `Virtual Trade TP Hit`,
+                                   profit: newProfit,
+                                   entry_tick: (trade as any).entrySpot !== undefined ? Number((trade as any).entrySpot) : undefined,
+                                   entry_tick_display_value: String((trade as any).entrySpot),
+                                   entry_tick_time: (trade as any).entryTime,
+                                   exit_tick: exitSpotTp !== undefined ? Number(exitSpotTp) : undefined,
+                                   exit_tick_display_value: exitSpotTp !== undefined ? String(exitSpotTp) : undefined,
+                                   exit_tick_time: new Date().toUTCString(),
+                                   transaction_ids: {
+                                       buy: trade.contractId as any,
+                                       sell: `dummy_tp_${Date.now()}` as any,
+                                   },
+                                   underlying: symbol,
+                               } as any);
+                               
+                           } else {
+                               next[symbol] = {
+                                   ...trade,
+                                   profit: newProfit,
+                                   tickPassed: ticksPassed
+                               };
+                           }
+                           changed = true;
+                       }
+                       dummyRef.current.lastStats[trade.contractId as any] = currentStat;
+                  }
+             });
+             return changed ? next : prev;
+        });
+    }, [manualProposal.currentStat, store.client.is_dummy_active, growthRatePercent, manualConfigs, store.client, transactions, currency]);
+    // --------------------------
+
     const [manualTickError, setManualTickError] = useState<string | null>(null);
     const [isManualTickLoading, setIsManualTickLoading] = useState(true);
     const [manualBarrierFlash, setManualBarrierFlash] = useState(false);
@@ -2160,6 +2273,50 @@ const AccumulatorsPage = observer(() => {
                 return;
             }
 
+            if (store.client.is_dummy_active) {
+                const dummyId = `dummy_${Date.now()}`;
+                const entrySpotVal = manualProposal.spot ?? primaryManualFeed.spot ?? secondaryManualFeed.spot;
+                const entrySpotStr = entrySpotVal !== null && entrySpotVal !== undefined ? String(entrySpotVal) : undefined;
+                const entryTimeStr = new Date().toUTCString();
+                store.client.setDummyBalance(store.client.dummy_balance - stake);
+                
+                transactions.pushTransaction({
+                    accountID: 'VIRTUAL',
+                    buy_price: stake,
+                    contract_id: dummyId as any,
+                    contract_type: 'ACCU',
+                    currency,
+                    date_start: Math.floor(Date.now() / 1000),
+                    display_name: market.displayName,
+                    is_completed: false,
+                    longcode: `Virtual Trade: Win by not hitting the barrier.`,
+                    profit: 0,
+                    entry_tick: entrySpotStr !== undefined ? Number(entrySpotStr) : undefined,
+                    entry_tick_display_value: String(entrySpotStr),
+                    entry_tick_time: entryTimeStr,
+                    transaction_ids: {
+                        buy: dummyId as any,
+                    },
+                    underlying: market.symbol,
+                } as any);
+
+                setManualTrades(previous => ({
+                    ...previous,
+                    [market.symbol]: {
+                        buyPrice: stake,
+                        contractId: dummyId as any,
+                        feedback: localize('Virtual trade opened.'),
+                        isValidToSell: true,
+                        profit: 0,
+                        status: 'open',
+                        tickPassed: 0,
+                        entrySpot: entrySpotStr,
+                        entryTime: entryTimeStr,
+                    },
+                }));
+                return;
+            }
+
             const api = await ensureAccumulatorTradingApi();
 
             if (!api) {
@@ -2345,9 +2502,43 @@ const AccumulatorsPage = observer(() => {
 
     const handleManualSell = useCallback(
         async (market: AccumulatorMarketSnapshot) => {
-            const api = await ensureAccumulatorTradingApi();
             const activeTrade = manualTrades[market.symbol];
 
+            if (store.client.is_dummy_active && activeTrade?.contractId && String(activeTrade.contractId).startsWith('dummy_')) {
+                const finalProfit = activeTrade.profit;
+                store.client.setDummyBalance(store.client.dummy_balance + activeTrade.buyPrice + finalProfit);
+                
+                transactions.pushTransaction({
+                    accountID: 'VIRTUAL',
+                    buy_price: activeTrade.buyPrice,
+                    contract_id: activeTrade.contractId,
+                    contract_type: 'ACCU',
+                    currency,
+                    date_start: Math.floor(Date.now() / 1000),
+                    display_name: market.displayName,
+                    is_completed: true,
+                    longcode: `Virtual Trade Sold`,
+                    profit: finalProfit,
+                    transaction_ids: {
+                        buy: activeTrade.contractId as any,
+                        sell: `dummy_sell_${Date.now()}` as any,
+                    },
+                    underlying: market.symbol,
+                });
+
+                setManualTrades(previous => ({
+                    ...previous,
+                    [market.symbol]: {
+                        ...previous[market.symbol],
+                        status: 'sold',
+                        feedback: localize('Virtual trade sold successfully'),
+                        isValidToSell: false
+                    }
+                }));
+                return;
+            }
+
+            const api = await ensureAccumulatorTradingApi();
             if (!api || !activeTrade?.contractId) {
                 return;
             }

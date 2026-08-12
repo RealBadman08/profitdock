@@ -101,7 +101,9 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
 
     const modifiedAccountList = useMemo(() => {
         return effectiveAccountList?.map(account => {
-            const live_balance = client.all_accounts_balance?.accounts?.[account?.loginid]?.balance;
+            const live_balance = (client.is_dummy_active && !account.is_virtual)
+                ? client.dummy_balance 
+                : client.all_accounts_balance?.accounts?.[account?.loginid]?.balance;
 
             return {
                 ...account,
@@ -122,6 +124,8 @@ const AccountSwitcher = observer(({ activeAccount }: TAccountSwitcher) => {
     }, [
         effectiveAccountList,
         client.all_accounts_balance?.accounts,
+        client.dummy_balance,
+        client.is_dummy_active,
         client.website_status?.currencies_config,
         activeAccount?.loginid,
     ]);

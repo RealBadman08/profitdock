@@ -1,32 +1,36 @@
 @use 'components/shared/styles/mixins' as *;
 
 .accumulators-page {
-    --acc-bg: #ffffff;
-    --acc-surface: #ffffff;
-    --acc-surface-soft: #f5f7fa;
-    --acc-border: #d6dadb;
+    --acc-surface: rgb(255 255 255 / 96%);
+    --acc-surface-soft: #edf4fa;
+    --acc-border: #d9e2ea;
     --acc-text: #10233f;
     --acc-muted: #5d728a;
-    --acc-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-    --acc-bottom-clearance: calc(30rem + env(safe-area-inset-bottom, 0px));
+    --acc-shadow: 0 1.2rem 3.4rem rgb(15 23 42 / 10%);
+    --acc-bottom-clearance: calc(24rem + env(safe-area-inset-bottom, 0px));
     --acc-red: #ff444f;
     --acc-red-soft: rgba(255, 68, 79, 0.14);
-    min-height: 100%;
-    padding: 1.4rem 1.4rem var(--acc-bottom-clearance);
-    background: var(--acc-bg);
+    padding: 0 0 var(--acc-bottom-clearance);
     color: var(--acc-text);
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
+    background: transparent;
 
     @include mobile-or-tablet-screen {
-        --acc-bottom-clearance: calc(34rem + env(safe-area-inset-bottom, 0px));
-        padding: 1rem 1rem var(--acc-bottom-clearance);
+        --acc-bottom-clearance: calc(28rem + env(safe-area-inset-bottom, 0px));
+        padding: 0 0 var(--acc-bottom-clearance);
     }
 }
 
+/* Lock the main scroll container when accumulators tab is active */
+.main-body:has(.accumulators-page) {
+    overflow: hidden !important;
+    padding-bottom: 0 !important;
+}
+
 .accumulators-page__stack {
-    display: grid;
-    gap: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
 }
 
 .accumulators-page__mode-switch,
@@ -307,6 +311,7 @@
     text-overflow: ellipsis;
     width: 100%;
     display: block;
+    text-align: center;
     margin-bottom: 0.4rem;
 }
 
@@ -475,8 +480,8 @@
 }
 
 div.accumulators-page__trade-actions--manual-sheet {
-    grid-template-columns: 1fr;
-    gap: 0;
+    display: flex !important;
+    flex-direction: column;
     margin: 0 0 1.6rem 0;
     width: 100%;
     padding: 0 1.6rem;
@@ -487,15 +492,15 @@ div.accumulators-page__trade-actions--manual-sheet {
     align-items: center;
     justify-content: space-between;
     gap: 1.2rem;
-    padding: 1.2rem 1.6rem;
+    padding: 1rem 1.2rem 0.8rem;
     min-width: 0;
-    background: #ffffff;
-    border-bottom: 1px solid rgba(0,0,0,0.06);
+    background: transparent;
+    border-bottom: none;
 }
 
 .theme--dark .accumulators-page__manual-header-row {
-    background: var(--acc-surface);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: transparent;
+    border-bottom: none;
 }
 
 .accumulators-page__manual-header-left {
@@ -530,7 +535,7 @@ div.accumulators-page__trade-actions--manual-sheet {
     padding: 0.4rem;
     position: relative;
     width: 100%;
-    margin-bottom: 2.2rem;
+    margin-bottom: 0.6rem;
 }
 
 .accumulators-page__mode-slider {
@@ -621,6 +626,7 @@ div.accumulators-page__trade-actions--manual-sheet {
     gap: 0.7rem;
     min-width: 0;
     position: relative;
+    background: transparent;
 }
 
 .accumulators-page__manual-market-select select {
@@ -636,7 +642,7 @@ div.accumulators-page__trade-actions--manual-sheet {
 }
 
 .theme--dark .accumulators-page__manual-market-select select option {
-    background: var(--acc-surface);
+    background: #171c24;
     color: var(--acc-text);
 }
 
@@ -1165,6 +1171,7 @@ div.accumulators-page__trade-actions--manual-sheet {
 .accumulators-page__input-wrap--select {
     position: relative;
     padding: 0 2.8rem 0 0;
+    background: transparent;
 }
 
 .accumulators-page__input-wrap--select::after {
@@ -1888,13 +1895,12 @@ div.accumulators-page__trade-actions--manual-sheet {
 
 .theme--dark {
     .accumulators-page {
-        --acc-bg: #0e0e0e;
-        --acc-surface: #151717;
-        --acc-surface-soft: #242828;
-        --acc-border: #323738;
-        --acc-text: #ffffff;
-        --acc-muted: #c2c2c2;
-        --acc-shadow: 0 22px 48px rgba(0, 0, 0, 0.44), 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+        --acc-surface: #0e0e0e;
+        --acc-surface-soft: #171c24;
+        --acc-border: rgb(255 255 255 / 12%);
+        --acc-text: #f5f7fb;
+        --acc-muted: #94a3b8;
+        --acc-shadow: 0 1.8rem 4.5rem rgb(0 0 0 / 45%), inset 0 1px 0 rgb(255 255 255 / 6%);
         --acc-red-soft: rgba(255, 68, 79, 0.2);
     }
 
@@ -1955,7 +1961,7 @@ div.accumulators-page__trade-actions--manual-sheet {
 
     .accumulators-page__input-wrap select option,
     .accumulators-page__input-wrap select optgroup {
-        background: #171b22;
+        background: #171c24;
         color: #f1f5f9;
     }
 
@@ -1975,8 +1981,9 @@ div.accumulators-page__trade-actions--manual-sheet {
     .accumulators-page__manual-barriers > div,
     .accumulators-page__manual-stats-ribbon,
     .accumulators-page__manual-chart-stage {
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0) 28%), var(--acc-surface-soft);
-        box-shadow: 0 14px 28px rgba(0, 0, 0, 0.24), 0 1px 0 rgba(255, 255, 255, 0.018) inset;
+        background: transparent;
+        box-shadow: none;
+        border-color: rgba(255, 255, 255, 0.06);
     }
 
     .accumulators-page__chart-grid {

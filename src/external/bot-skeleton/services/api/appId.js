@@ -99,7 +99,13 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
     deriv_api.is_profitdock_authenticated_socket = /\/trading\/v1\/options\/ws\/(?:demo|real)\?/i.test(socket_url);
 
     const original_send = deriv_api.send.bind(deriv_api);
-    deriv_api.send = request => original_send(cleanupProfitdockRequest(request));
+    deriv_api.send = request => {
+        if (typeof window !== 'undefined' && window._profitdock_dummy_interceptor) {
+            const interceptRes = window._profitdock_dummy_interceptor(request, deriv_api);
+            if (interceptRes !== undefined) return interceptRes;
+        }
+        return original_send(cleanupProfitdockRequest(request));
+    };
 
     return deriv_api;
 };
@@ -110,7 +116,9 @@ export const generateDerivApiInstance = (socket_url_override = null) => {
     }
 
     if (isCustomLegacyOAuthDomain()) {
-        return createDerivApiInstanceForSocketUrl(PROFITDOCK_PUBLIC_SOCKET_URL);
+        const socketAppId = getSocketAppId();
+        const cleanedAppId = socketAppId?.replace?.(/[^a-zA-Z0-9]/g, '') ?? socketAppId ?? '1089';
+        return createDerivApiInstanceForSocketUrl(`${PROFITDOCK_PUBLIC_SOCKET_URL}?app_id=${cleanedAppId}`);
     }
 
     const cleanedServer = getSocketURL().replace(/[^a-zA-Z0-9.]/g, '');
@@ -127,7 +135,11 @@ export const getLoginId = () => {
     return null;
 };
 
-export const getProfitdockPublicSocketUrl = () => PROFITDOCK_PUBLIC_SOCKET_URL;
+export const getProfitdockPublicSocketUrl = () => {
+    const socketAppId = getSocketAppId();
+    const cleanedAppId = socketAppId?.replace?.(/[^a-zA-Z0-9]/g, '') ?? socketAppId ?? '1089';
+    return `${PROFITDOCK_PUBLIC_SOCKET_URL}?app_id=${cleanedAppId}`;
+};
 
 export const createProfitdockAuthorizedDerivApiInstance = async ({
     access_token = getProfitdockOAuthToken(),

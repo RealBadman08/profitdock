@@ -14,6 +14,7 @@ import { useApiBase } from '@/hooks/useApiBase';
 import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentState';
 import { useStore } from '@/hooks/useStore';
 import { normalizeMartingaleMultiplier, roundMartingaleStake } from '@/hooks/useMartingale';
+import { runVirtualTrade } from '@/utils/virtual-trade';
 
 import {
     emitProfitdockTradeStatus,
@@ -353,7 +354,7 @@ const CorsaPage = observer(() => {
     const modeIndicatorRef = useRef<HTMLDivElement>(null);
     const modeSingleBtnRef = useRef<HTMLButtonElement>(null);
     const modeAllBtnRef = useRef<HTMLButtonElement>(null);
-    const { transactions } = useStore();
+    const { transactions, client } = useStore();
     const { authData, connectionStatus } = useApiBase();
     const currency = authData?.currency || getStoredProfitdockActiveCurrency() || 'USD';
     const [markets, setMarkets] = useState<MarketSymbol[]>(() => getCorsaMarkets([]));
@@ -620,6 +621,31 @@ const CorsaPage = observer(() => {
 
                     void (async () => {
                         try {
+                            // --- VIRTUAL MODE ---
+                            if (client.is_dummy_active) {
+                                const profit = await runVirtualTrade({
+                                    api,
+                                    contractType: liveContractType,
+                                    currency,
+                                    stake: currentStake,
+                                    symbol: market.symbol,
+                                    displayName: market.display_name || market.symbol,
+                                    duration: toPositiveInteger(durationTicksRef.current, 1),
+                                    onUpdate: contract => transactions.pushTransaction(contract as any),
+                                    getDummyBalance: () => client.dummy_balance,
+                                    setDummyBalance: val => client.setDummyBalance(val),
+                                });
+                                console.log('[CORSA VIRTUAL]', symbol, 'profit=', profit);
+                                if (profit > 0) {
+                                    currentStake = baseStakeRef.current;
+                                } else {
+                                    const multiplier = toPositiveNumber(martingaleRef.current, 1);
+                                    const normMult = normalizeMartingaleMultiplier(multiplier, 1);
+                                    currentStake = roundMartingaleStake(currentStake * normMult);
+                                }
+                                return;
+                            }
+                            // --- REAL MODE ---
                             const buyRes = await buyDirectContract({
                                 amount: currentStake,
                                 api,

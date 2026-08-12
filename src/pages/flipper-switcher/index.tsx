@@ -291,18 +291,24 @@ const createProposalPayload = ({
     payload[isCustomLegacyOAuthDomain() ? 'underlying_symbol' : 'symbol'] = symbol;
 
     if (predictionMode === 'barrier') {
-        let barrierValue = String(prediction).trim();
-        if (barrierValue && !barrierValue.startsWith('+') && !barrierValue.startsWith('-')) {
-            const num = Number(barrierValue);
-            if (!isNaN(num) && num > 0) {
-                if (contractType === 'LOWER') {
-                    barrierValue = '-' + barrierValue;
-                } else {
-                    barrierValue = '+' + barrierValue;
+        const isDigitContract = ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'].includes(contractType);
+        if (isDigitContract) {
+            // DIGIT contracts require barrier as a plain integer 0–9
+            payload.barrier = Math.max(0, Math.min(9, Math.trunc(Number(prediction))));
+        } else {
+            let barrierValue = String(prediction).trim();
+            if (barrierValue && !barrierValue.startsWith('+') && !barrierValue.startsWith('-')) {
+                const num = Number(barrierValue);
+                if (!isNaN(num) && num > 0) {
+                    if (contractType === 'LOWER') {
+                        barrierValue = '-' + barrierValue;
+                    } else {
+                        barrierValue = '+' + barrierValue;
+                    }
                 }
             }
+            payload.barrier = barrierValue;
         }
-        payload.barrier = barrierValue;
     }
 
     if (predictionMode === 'selected_tick') {
@@ -445,7 +451,8 @@ const getPairLabelFromLegs = (legs: SelectedStrategyLegs) => {
 
 
 const FlipperSwitcherPage = observer(() => {
-    const { transactions } = useStore();
+    const store = useStore();
+    const { transactions } = store;
     const { authData, connectionStatus } = useApiBase();
     const currency = authData?.currency || getStoredProfitdockActiveCurrency() || 'USD';
     const hasRecoverableSession = useCallback(() => isCustomLegacyOAuthDomain() && hasUsableProfitdockStoredSession(), []);
@@ -581,7 +588,8 @@ const FlipperSwitcherPage = observer(() => {
             const api = await ensureTradingApi();
             if (!api || isCancelled) return;
 
-            const duration = turbo ? 1 : toPositiveInteger(durationTicks, 1);
+            const isFiveTickMin = ['higher_lower', 'touch_no_touch', 'only_up_down'].includes(selectedPair.key);
+            const duration = turbo ? (isFiveTickMin ? 5 : 1) : toPositiveInteger(durationTicks, 1);
             
             const fetchLegQuote = async (leg: StrategyLeg | null, stake: string, pred: string) => {
                 if (!leg || !selectedMarketInfoRef.current) return null;
@@ -804,7 +812,9 @@ const FlipperSwitcherPage = observer(() => {
                 await waitForEntryTrigger(orderedCandidates[0].symbol, api, activeLegs);
                 if (!runningRef.current) break;
 
-                const duration = turboRef.current ? 1 : toPositiveInteger(durationTicksRef.current, 1);
+                const currentKey = getPairKeyFromLegs(customLegsRef.current);
+                const isFiveTickMin = ['higher_lower', 'touch_no_touch', 'only_up_down'].includes(currentKey);
+                const duration = turboRef.current ? (isFiveTickMin ? 5 : 1) : toPositiveInteger(durationTicksRef.current, 1);
 
                 const getPredictionValue = (refValue: string, leg: StrategyLeg) => {
                     let val = refValue;
@@ -846,22 +856,80 @@ const FlipperSwitcherPage = observer(() => {
 
                 currentRunIdRef.current = Date.now();
                 let firstId, secondId;
-                try {
-                    const [b1, b2] = await Promise.all([
-                        buyQuote(api, quoteBundle.firstQuote.proposalId, quoteBundle.firstQuote.askPrice),
-                        buyQuote(api, quoteBundle.secondQuote.proposalId, quoteBundle.secondQuote.askPrice)
-                    ]);
-                    firstId = b1.contract_id;
-                    secondId = b2.contract_id;
-                } catch (err) {
-                    setFeedback('Buy failed: ' + (err.message || String(err)));
-                    break;
+                if (store.client.is_dummy_active) {
+                    store.client.setDummyBalance(store.client.dummy_balance - quoteBundle.firstQuote.askPrice - quoteBundle.secondQuote.askPrice);
+                    firstId = `dummy_${Date.now()}_1`;
+                    secondId = `dummy_${Date.now()}_2`;
+                } else {
+                    try {
+                        const [b1, b2] = await Promise.all([
+                            buyQuote(api, quoteBundle.firstQuote.proposalId, quoteBundle.firstQuote.askPrice),
+                            buyQuote(api, quoteBundle.secondQuote.proposalId, quoteBundle.secondQuote.askPrice)
+                        ]);
+                        firstId = b1.contract_id;
+                        secondId = b2.contract_id;
+                    } catch (err) {
+                        setFeedback('Buy failed: ' + (err.message || String(err)));
+                        break;
+                    }
                 }
 
-                const [r1, r2] = await Promise.all([
-                    waitForSettlement(api, firstId, (c) => updatePositionsUi(c, 0, activeLegs)),
-                    waitForSettlement(api, secondId, (c) => updatePositionsUi(c, 1, activeLegs))
-                ]);
+                let r1, r2;
+                if (store.client.is_dummy_active) {
+                    const durMs = duration * 1000 * 2; 
+                    const firstWon = Math.random() > 0.5;
+                    const secondWon = !firstWon;
+
+                    r1 = await new Promise<any>(res => setTimeout(() => {
+                        const profit = firstWon ? quoteBundle.firstQuote.payout - quoteBundle.firstQuote.askPrice : -quoteBundle.firstQuote.askPrice;
+                        updatePositionsUi({ 
+                            contract_id: firstId, 
+                            status: firstWon ? 'won' : 'lost', 
+                            profit, 
+                            buy_price: quoteBundle.firstQuote.askPrice, 
+                            payout: quoteBundle.firstQuote.payout,
+                            currency,
+                            date_start: Math.floor(Date.now() / 1000),
+                            display_name: quoteBundle.marketInfo.displayName,
+                            contract_type: activeLegs[0].contractType,
+                            underlying: quoteBundle.marketInfo.symbol,
+                            longcode: `Virtual Flipper Trade: ${firstWon ? 'Won' : 'Lost'}`,
+                            is_completed: true,
+                            transaction_ids: { buy: firstId, sell: `${firstId}_sell` }
+                        }, 0, activeLegs);
+                        res({ profit, won: firstWon });
+                    }, durMs));
+                    
+                    r2 = await new Promise<any>(res => {
+                        const profit = secondWon ? quoteBundle.secondQuote.payout - quoteBundle.secondQuote.askPrice : -quoteBundle.secondQuote.askPrice;
+                        updatePositionsUi({ 
+                            contract_id: secondId, 
+                            status: secondWon ? 'won' : 'lost', 
+                            profit, 
+                            buy_price: quoteBundle.secondQuote.askPrice, 
+                            payout: quoteBundle.secondQuote.payout,
+                            currency,
+                            date_start: Math.floor(Date.now() / 1000),
+                            display_name: quoteBundle.marketInfo.displayName,
+                            contract_type: activeLegs[1].contractType,
+                            underlying: quoteBundle.marketInfo.symbol,
+                            longcode: `Virtual Flipper Trade: ${secondWon ? 'Won' : 'Lost'}`,
+                            is_completed: true,
+                            transaction_ids: { buy: secondId, sell: `${secondId}_sell` }
+                        }, 1, activeLegs);
+                        res({ profit, won: secondWon });
+                    });
+                    
+                    const totalPayout = (firstWon ? quoteBundle.firstQuote.payout : 0) + (secondWon ? quoteBundle.secondQuote.payout : 0);
+                    store.client.setDummyBalance(store.client.dummy_balance + totalPayout);
+                } else {
+                    const [res1, res2] = await Promise.all([
+                        waitForSettlement(api, firstId, (c) => updatePositionsUi(c, 0, activeLegs)),
+                        waitForSettlement(api, secondId, (c) => updatePositionsUi(c, 1, activeLegs))
+                    ]);
+                    r1 = res1;
+                    r2 = res2;
+                }
 
                 const netProfit = r1.profit + r2.profit;
                 currentSessionPnl = Number((currentSessionPnl + netProfit).toFixed(2));
