@@ -623,6 +623,18 @@ const CorsaPage = observer(() => {
                         try {
                             // --- VIRTUAL MODE ---
                             if (client.is_dummy_active) {
+                                // Insufficient balance guard
+                                if (client.dummy_balance <= 0.35) {
+                                    console.warn('[Corsa Virtual] Insufficient balance:', client.dummy_balance);
+                                    isRunningRef.current = false;
+                                    setIsRunning(false);
+                                    activeByMarketRef.current[symbol] = false;
+                                    tickCleanupRef.current.forEach(cleanup => cleanup());
+                                    tickCleanupRef.current.clear();
+                                    // Show alert so user knows why it stopped
+                                    window.alert('Insufficient balance. Your virtual balance is too low to trade.');
+                                    return;
+                                }
                                 const profit = await runVirtualTrade({
                                     api,
                                     contractType: liveContractType,

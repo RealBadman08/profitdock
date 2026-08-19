@@ -99,7 +99,70 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
     deriv_api.is_profitdock_authenticated_socket = /\/trading\/v1\/options\/ws\/(?:demo|real)\?/i.test(socket_url);
 
     const original_send = deriv_api.send.bind(deriv_api);
-    deriv_api.send = request => {
+
+    // Track virtual trades: contractId -> stake, so we can credit back on settlement
+    const _virtualTrackMap = {};
+
+    deriv_api.send = async request => {
+        const isDummyActive = typeof window !== 'undefined' && localStorage.getItem('profitdock_dummy_active') === 'true';
+        const storedBalance = typeof window !== 'undefined' ? localStorage.getItem('profitdock_dummy_balance') : null;
+        const hasCustomBalance = storedBalance !== null;
+
+        // Intercept BUY requests when virtual mode is ON
+        if (request.buy && isDummyActive && hasCustomBalance) {
+            const dummyBalance = Number(storedBalance || '0');
+            const price = parseFloat(String(request.price || '0'));
+
+            // Block if insufficient
+            if (price > dummyBalance) {
+                return Promise.resolve({
+                    error: { code: 'InsufficientBalance', message: 'Insufficient balance.' },
+                    echo_req: request,
+                    msg_type: 'buy'
+                });
+            }
+
+            // Allow the real buy but immediately deduct from dummy balance
+            const result = await original_send(cleanupProfitdockRequest(request));
+            if (!result?.error && result?.buy) {
+                const newBalance = Math.max(0, dummyBalance - price);
+                localStorage.setItem('profitdock_dummy_balance', String(newBalance));
+                // Store stake so we can credit back profit/loss on settlement
+                _virtualTrackMap[result.buy.contract_id] = price;
+                // Notify store of updated balance
+                if (typeof window !== 'undefined' && window._profitdock_update_balance) {
+                    window._profitdock_update_balance(newBalance);
+                }
+            }
+            return result;
+        }
+
+        // Intercept SELL / proposal_open_contract responses to credit back profits
+        if (request.sell && isDummyActive && hasCustomBalance) {
+            const result = await original_send(cleanupProfitdockRequest(request));
+            return result;
+        }
+
+        // Intercept proposal_open_contract — when contract is settled, credit profit/loss
+        if (request.proposal_open_contract && isDummyActive && hasCustomBalance) {
+            const result = await original_send(cleanupProfitdockRequest(request));
+            if (result?.proposal_open_contract?.is_sold) {
+                const poc = result.proposal_open_contract;
+                const stake = _virtualTrackMap[poc.contract_id];
+                if (stake !== undefined) {
+                    delete _virtualTrackMap[poc.contract_id];
+                    const payout = poc.sell_price || 0;
+                    const currentBalance = Number(localStorage.getItem('profitdock_dummy_balance') || '0');
+                    const newBalance = currentBalance + payout;
+                    localStorage.setItem('profitdock_dummy_balance', String(newBalance));
+                    if (typeof window !== 'undefined' && window._profitdock_update_balance) {
+                        window._profitdock_update_balance(newBalance);
+                    }
+                }
+            }
+            return result;
+        }
+
         if (typeof window !== 'undefined' && window._profitdock_dummy_interceptor) {
             const interceptRes = window._profitdock_dummy_interceptor(request, deriv_api);
             if (interceptRes !== undefined) return interceptRes;

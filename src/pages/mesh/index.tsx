@@ -802,6 +802,16 @@ const MeshPage = observer(() => {
 
                 // --- VIRTUAL MODE ---
                 if (client.is_dummy_active) {
+                    if (client.dummy_balance <= 0.35) {
+                        console.warn('[Mesh Virtual] Insufficient balance:', client.dummy_balance);
+                        if (runningRef.current) {
+                            runningRef.current = false;
+                            setIsRunning(false);
+                            window.alert('Insufficient balance. Your virtual balance is too low to trade.');
+                        }
+                        return;
+                    }
+
                     await runVirtualTrade({
                         api,
                         contractType: signal.contractType,

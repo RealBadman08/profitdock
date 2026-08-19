@@ -205,11 +205,15 @@ const MenuContent = observer(({ onOpenSubmenu }: TMenuContentProps) => {
                             <button onClick={() => setShowDummyModal(false)} style={{ padding: '10px', flex: 1, border: '1px solid #444', background: 'transparent', color: '#ccc', borderRadius: '8px', cursor: 'pointer', fontWeight: 500 }}>Cancel</button>
                             <button onClick={() => {
                                 const parsed = Number(inputValue);
-                                if (!isNaN(parsed) && parsed >= 0) {
+                                if (!isNaN(parsed) && parsed > 0) {
                                     client.setDummyBalance(parsed);
+                                    // Auto-enable virtual mode when a valid balance is set
+                                    if (!client.is_dummy_active) {
+                                        client.toggleDummyMode(true);
+                                    }
                                 }
                                 setShowDummyModal(false);
-                            }} style={{ padding: '10px', flex: 1, background: 'linear-gradient(135deg, #4ade80, #22c55e)', color: '#000', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, border: 'none' }}>Save</button>
+                            }} style={{ padding: '10px', flex: 1, background: 'linear-gradient(135deg, #4ade80, #22c55e)', color: '#000', borderRadius: '8px', cursor: 'pointer', fontWeight: 700, border: 'none' }}>Save & Activate</button>
                         </div>
                     </div>
                 </div>

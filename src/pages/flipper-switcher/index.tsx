@@ -857,6 +857,14 @@ const FlipperSwitcherPage = observer(() => {
                 currentRunIdRef.current = Date.now();
                 let firstId, secondId;
                 if (store.client.is_dummy_active) {
+                    // Insufficient balance guard
+                    const totalCost = quoteBundle.firstQuote.askPrice + quoteBundle.secondQuote.askPrice;
+                    if (store.client.dummy_balance <= 0.35 || store.client.dummy_balance < totalCost) {
+                        setFeedback('Insufficient balance. Your virtual balance is too low to continue trading.');
+                        runningRef.current = false;
+                        setIsRunning(false);
+                        break;
+                    }
                     store.client.setDummyBalance(store.client.dummy_balance - quoteBundle.firstQuote.askPrice - quoteBundle.secondQuote.askPrice);
                     firstId = `dummy_${Date.now()}_1`;
                     secondId = `dummy_${Date.now()}_2`;

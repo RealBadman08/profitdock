@@ -595,8 +595,15 @@ const MatchtoolPage = observer(() => {
 
             // --- VIRTUAL MODE ---
             if (client.is_dummy_active) {
-                const api = await ensureTradingApi();
                 const stakePerPick = stakeAmount;
+                const totalCost = picks.length * stakePerPick;
+                if (client.dummy_balance <= 0.35 || client.dummy_balance < totalCost) {
+                    setIsRunning(false);
+                    stopRequestedRef.current = true;
+                    window.alert('Insufficient balance. Your virtual balance is too low to trade.');
+                    throw new Error('Insufficient balance.');
+                }
+                const api = await ensureTradingApi();
                 setRoundRows(picks.map(pick => ({ ...pick, result: 'placed' })));
                 await Promise.all(
                     picks.map(async pick => {

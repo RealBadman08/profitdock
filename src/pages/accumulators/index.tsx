@@ -2274,6 +2274,19 @@ const AccumulatorsPage = observer(() => {
             }
 
             if (store.client.is_dummy_active) {
+                if (store.client.dummy_balance <= 0.35 || store.client.dummy_balance < stake) {
+                    setManualTrades(previous => ({
+                        ...previous,
+                        [market.symbol]: {
+                            buyPrice: 0,
+                            feedback: localize('Insufficient balance. Your virtual balance is too low to trade.'),
+                            profit: 0,
+                            status: 'error',
+                            tickPassed: 0,
+                        },
+                    }));
+                    return;
+                }
                 const dummyId = `dummy_${Date.now()}`;
                 const entrySpotVal = manualProposal.spot ?? primaryManualFeed.spot ?? secondaryManualFeed.spot;
                 const entrySpotStr = entrySpotVal !== null && entrySpotVal !== undefined ? String(entrySpotVal) : undefined;

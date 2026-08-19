@@ -192,6 +192,8 @@ export default class TransactionsStore {
             }
         );
         statistics.number_of_runs = total_runs;
+        // Total payout = total_stake + total_profit (clamped to 0 when on net loss)
+        statistics.total_payout = Math.max(0, statistics.total_stake + statistics.total_profit);
         return statistics;
     }
 

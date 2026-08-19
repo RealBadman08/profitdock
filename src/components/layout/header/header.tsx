@@ -237,19 +237,8 @@ const AppHeader = observer(({ isAuthenticating }: TAppHeaderProps) => {
                     </Button>
                     <Button
                         primary
-                        onClick={async () => {
-                            const getQueryParams = new URLSearchParams(window.location.search);
-                            const currency = getQueryParams.get('account') ?? '';
-                            const query_param_currency =
-                                currency || sessionStorage.getItem('query_param_currency') || 'USD';
-
-                            if (is_profitdock_domain || isCustomLegacyOAuthDomain()) {
-                                sessionStorage.setItem('query_param_currency', query_param_currency);
-                                redirectToProfitdockOAuth('registration');
-                                return;
-                            }
-
-                            redirectToSignUp();
+                        onClick={() => {
+                            window.open('https://t.deriv.link?t=GUBYSJWZYJ4C', '_blank', 'noopener,noreferrer');
                         }}
                     >
                         <Localize i18n_default_text='Sign up' />

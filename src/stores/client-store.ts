@@ -22,6 +22,10 @@ export default class ClientStore {
     dummy_balance = Number(localStorage.getItem('profitdock_dummy_balance') || '0');
     is_dummy_active = localStorage.getItem('profitdock_dummy_active') === 'true';
     currency = 'AUD';
+
+    // Per-account localStorage helpers
+    private _dummyBalanceKey = (id?: string) => `profitdock_dummy_balance_${id || this.loginid || 'guest'}`;
+    private _dummyActiveKey  = (id?: string) => `profitdock_dummy_active_${id || this.loginid || 'guest'}`;
     is_logged_in = false;
     account_status: GetAccountStatus | undefined;
     account_settings: GetSettings | undefined;
@@ -46,8 +50,16 @@ export default class ClientStore {
             }
         });
         
-        if (this.is_dummy_active) {
-            this.toggleDummyMode(true);
+        // is_dummy_active and dummy_balance are already restored from localStorage above
+        // No auto-toggle needed — flag and balance persist across reloads naturally
+
+        // Register window hook so appId.js interceptor can update balance reactively
+        if (typeof window !== 'undefined') {
+            (window as any)._profitdock_update_balance = (newBalance: number) => {
+                runInAction(() => {
+                    this.dummy_balance = newBalance;
+                });
+            };
         }
 
         makeObservable(this, {
@@ -304,6 +316,20 @@ export default class ClientStore {
 
     setLoginId = (loginid: string) => {
         this.loginid = loginid;
+        // Reload per-account dummy state whenever the active account changes
+        if (loginid) {
+            const storedBalance = localStorage.getItem(this._dummyBalanceKey(loginid));
+            const storedActive  = localStorage.getItem(this._dummyActiveKey(loginid));
+            runInAction(() => {
+                if (storedBalance !== null) {
+                    this.dummy_balance = Number(storedBalance) || 0;
+                } else {
+                    // No per-account key yet — reset to 0 so users start fresh
+                    this.dummy_balance = 0;
+                }
+                this.is_dummy_active = storedActive === 'true';
+            });
+        }
     };
 
     setAccountList = (account_list?: TAuthData['account_list']) => {
@@ -315,27 +341,24 @@ export default class ClientStore {
     };
 
     setBalance = (balance: string) => {
-        const newRealBalance = parseFloat(balance) || 0;
-        const oldRealBalance = parseFloat(this._real_balance) || 0;
-        const hasCustomBalance = typeof window !== 'undefined' && localStorage.getItem('profitdock_dummy_balance') !== null;
-
-        if (this.is_dummy_active && hasCustomBalance && oldRealBalance > 0) {
-            const diff = newRealBalance - oldRealBalance;
-            if (diff !== 0) {
-                this.dummy_balance = Math.max(0, this.dummy_balance + diff);
-                localStorage.setItem('profitdock_dummy_balance', this.dummy_balance.toString());
-            }
-        }
-
+        // Always store the real backend balance
         this._real_balance = balance;
-
-        if (this.is_dummy_active && !hasCustomBalance) {
-            this.dummy_balance = newRealBalance;
+        // When virtual mode is OFF, keep dummy_balance in sync with real balance
+        // so if they later enable virtual mode without setting a custom amount it looks correct
+        if (!this.is_dummy_active) {
+            const newRealBalance = parseFloat(balance) || 0;
+            // Only set dummy_balance to real if no custom balance was ever set
+            const hasCustomBalance = typeof window !== 'undefined' && localStorage.getItem('profitdock_dummy_balance') !== null;
+            if (!hasCustomBalance) {
+                this.dummy_balance = newRealBalance;
+            }
         }
     };
 
     setDummyBalance = (balance: number) => {
         this.dummy_balance = balance;
+        // Write to both per-account key AND legacy generic key for backwards compat
+        localStorage.setItem(this._dummyBalanceKey(), balance.toString());
         localStorage.setItem('profitdock_dummy_balance', balance.toString());
     };
 
@@ -343,53 +366,18 @@ export default class ClientStore {
     private _savedRealLoginId: string | null = null;
 
     toggleDummyMode = (isActive: boolean) => {
-        // Update observable state synchronously so UI responds immediately
         this.is_dummy_active = isActive;
+        // Write to both per-account key AND legacy generic key
+        localStorage.setItem(this._dummyActiveKey(), isActive.toString());
         localStorage.setItem('profitdock_dummy_active', isActive.toString());
 
-        // Clear any old interceptor
-        if (typeof window !== 'undefined') {
-            window._profitdock_dummy_interceptor = undefined;
+        if (!isActive) {
+            // Turning OFF — clear the virtual balance so real balance shows
+            localStorage.removeItem(this._dummyBalanceKey());
+            localStorage.removeItem('profitdock_dummy_balance');
+            this.dummy_balance = 0;
         }
-
-        if (isActive) {
-            // --- Find VRTC (demo) account ---
-            const demoLoginId = this.virtual_account_loginid || this.all_loginids.find(id => id.startsWith('VRTC'));
-
-            if (!demoLoginId) {
-                console.warn('[VirtualMode] No VRTC demo account found — virtual mode inactive');
-                runInAction(() => {
-                    this.is_dummy_active = false;
-                });
-                localStorage.setItem('profitdock_dummy_active', 'false');
-                return;
-            }
-
-            // Save the current real account so we can restore it later
-            this._savedRealLoginId = localStorage.getItem('active_loginid') || this.loginid;
-
-            // Swap active loginid to demo
-            localStorage.setItem('active_loginid', demoLoginId);
-
-            // Re-init API in the background — don't block the toggle
-            Promise.resolve().then(() => api_base.init(true)).catch(e =>
-                console.warn('[VirtualMode] API re-init failed:', e)
-            );
-        } else {
-            // --- Restore real account ---
-            const restoreLoginId = this._savedRealLoginId ||
-                this.all_loginids.find(id => !this.accounts[id].is_virtual) || '';
-
-            if (restoreLoginId) {
-                localStorage.setItem('active_loginid', restoreLoginId);
-            }
-            this._savedRealLoginId = null;
-
-            // Re-init API in the background
-            Promise.resolve().then(() => api_base.init(true)).catch(e =>
-                console.warn('[VirtualMode] API restore failed:', e)
-            );
-        }
+        // Turning ON — do nothing extra; the balance input in the panel will call setDummyBalance
     };
 
     setCurrency = (currency: string) => {
@@ -482,6 +470,9 @@ export default class ClientStore {
         this.landing_companies = undefined;
         this.accounts = {};
         this.is_logged_in = false;
+        // NOTE: do NOT reset dummy_balance / is_dummy_active here — they are
+        // per-account keys that should survive across logout so that on next
+        // login the same account gets its balance back.
         this.loginid = '';
         this._real_balance = '0';
         this.currency = 'USD';
@@ -497,6 +488,11 @@ export default class ClientStore {
         localStorage.removeItem('client_account_details');
         localStorage.removeItem('config.post_login_redirect_uri');
         localStorage.removeItem('profitdock_auth_stage');
+        // Reset in-memory state but keep per-account localStorage intact
+        runInAction(() => {
+            this.dummy_balance = 0;
+            this.is_dummy_active = false;
+        });
         sessionStorage.removeItem('redirect_url');
         removeCookies('client_information');
 
