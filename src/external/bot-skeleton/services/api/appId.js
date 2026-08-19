@@ -104,8 +104,12 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
     const _virtualTrackMap = {};
 
     deriv_api.send = async request => {
-        const isDummyActive = typeof window !== 'undefined' && localStorage.getItem('profitdock_dummy_active') === 'true';
-        const storedBalance = typeof window !== 'undefined' ? localStorage.getItem('profitdock_dummy_balance') : null;
+        const activeLoginId = typeof window !== 'undefined' ? localStorage.getItem('active_loginid') : null;
+        const dummyActiveKey = `profitdock_dummy_active_${activeLoginId || 'guest'}`;
+        const dummyBalanceKey = `profitdock_dummy_balance_${activeLoginId || 'guest'}`;
+
+        const isDummyActive = typeof window !== 'undefined' && localStorage.getItem(dummyActiveKey) === 'true';
+        const storedBalance = typeof window !== 'undefined' ? localStorage.getItem(dummyBalanceKey) : null;
         const hasCustomBalance = storedBalance !== null;
 
         // Intercept BUY requests when virtual mode is ON
@@ -126,7 +130,7 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
             const result = await original_send(cleanupProfitdockRequest(request));
             if (!result?.error && result?.buy) {
                 const newBalance = Math.max(0, dummyBalance - price);
-                localStorage.setItem('profitdock_dummy_balance', String(newBalance));
+                localStorage.setItem(dummyBalanceKey, String(newBalance));
                 // Store stake so we can credit back profit/loss on settlement
                 _virtualTrackMap[result.buy.contract_id] = price;
                 // Notify store of updated balance
@@ -152,9 +156,9 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
                 if (stake !== undefined) {
                     delete _virtualTrackMap[poc.contract_id];
                     const payout = poc.sell_price || 0;
-                    const currentBalance = Number(localStorage.getItem('profitdock_dummy_balance') || '0');
+                    const currentBalance = Number(localStorage.getItem(dummyBalanceKey) || '0');
                     const newBalance = currentBalance + payout;
-                    localStorage.setItem('profitdock_dummy_balance', String(newBalance));
+                    localStorage.setItem(dummyBalanceKey, String(newBalance));
                     if (typeof window !== 'undefined' && window._profitdock_update_balance) {
                         window._profitdock_update_balance(newBalance);
                     }

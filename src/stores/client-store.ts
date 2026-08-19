@@ -123,7 +123,7 @@ export default class ClientStore {
     }
 
     get balance() {
-        const hasCustomBalance = typeof window !== 'undefined' && localStorage.getItem('profitdock_dummy_balance') !== null;
+        const hasCustomBalance = typeof window !== 'undefined' && localStorage.getItem(this._dummyBalanceKey()) !== null;
         if (this.is_dummy_active && hasCustomBalance) {
             return this.dummy_balance.toFixed(2);
         }
@@ -348,7 +348,7 @@ export default class ClientStore {
         if (!this.is_dummy_active) {
             const newRealBalance = parseFloat(balance) || 0;
             // Only set dummy_balance to real if no custom balance was ever set
-            const hasCustomBalance = typeof window !== 'undefined' && localStorage.getItem('profitdock_dummy_balance') !== null;
+            const hasCustomBalance = typeof window !== 'undefined' && localStorage.getItem(this._dummyBalanceKey()) !== null;
             if (!hasCustomBalance) {
                 this.dummy_balance = newRealBalance;
             }
