@@ -20,12 +20,13 @@ export default class ClientStore {
     account_list: TAuthData['account_list'] = [];
     _real_balance = '0';
     dummy_balance = Number(localStorage.getItem('profitdock_dummy_balance') || '0');
-    is_dummy_active = localStorage.getItem('profitdock_dummy_active') === 'true';
+    // Virtual mode is disabled until properly re-implemented — always boot as false
+    is_dummy_active = false;
     currency = 'AUD';
 
-    // Per-account localStorage helpers
-    private _dummyBalanceKey = (id?: string) => `profitdock_dummy_balance_${id || this.loginid || 'guest'}`;
-    private _dummyActiveKey  = (id?: string) => `profitdock_dummy_active_${id || this.loginid || 'guest'}`;
+    // We now use global keys so Virtual Mode state persists across account switches
+    private _dummyActiveKey = () => `profitdock_dummy_active_global`;
+    private _dummyBalanceKey = () => `profitdock_dummy_balance_global`;
     is_logged_in = false;
     account_status: GetAccountStatus | undefined;
     account_settings: GetSettings | undefined;
@@ -43,6 +44,9 @@ export default class ClientStore {
     private authDataSubscription: { unsubscribe: () => void } | null = null;
 
     constructor() {
+        if (typeof window !== 'undefined') {
+            (window as any)._clientStore = this;
+        }
         // Subscribe to auth data changes
         this.authDataSubscription = authData$.subscribe(authData => {
             if (authData?.upgradeable_landing_companies) {
@@ -327,6 +331,7 @@ export default class ClientStore {
                     // No per-account key yet — reset to 0 so users start fresh
                     this.dummy_balance = 0;
                 }
+                // Restore virtual mode state per account from localStorage
                 this.is_dummy_active = storedActive === 'true';
             });
         }
@@ -367,7 +372,8 @@ export default class ClientStore {
 
     toggleDummyMode = (isActive: boolean) => {
         this.is_dummy_active = isActive;
-        // Write to both per-account key AND legacy generic key
+
+        // Persist globally so balance and mode survive refresh and account switch
         localStorage.setItem(this._dummyActiveKey(), isActive.toString());
         localStorage.setItem('profitdock_dummy_active', isActive.toString());
 
@@ -377,7 +383,7 @@ export default class ClientStore {
             localStorage.removeItem('profitdock_dummy_balance');
             this.dummy_balance = 0;
         }
-        // Turning ON — do nothing extra; the balance input in the panel will call setDummyBalance
+        // Turning ON — balance input in the panel will call setDummyBalance
     };
 
     setCurrency = (currency: string) => {

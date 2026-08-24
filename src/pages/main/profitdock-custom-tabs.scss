@@ -1,0 +1,437 @@
+.deriv-live--analysis,
+.accumulators-page,
+.flipper-page,
+.corsa-page,
+.matchtool-page,
+.mesh-page,
+.profitdock-smooth-page {
+    --profitdock-custom-tab-polish: 1;
+    --profitdock-tableless-tabs: 1;
+
+    background: #f7f8fa !important;
+    color: var(--text-general) !important;
+}
+
+.profitdock-smooth-page {
+    --profitdock-smooth-surface: transparent !important;
+    --profitdock-smooth-line: transparent !important;
+    --profitdock-smooth-shadow: none !important;
+
+    background: #f7f8fa !important;
+}
+
+.profitdock-smooth-section,
+.deriv-live--analysis .deriv-live__hero--analysis,
+.deriv-live--analysis .deriv-live__panel,
+.deriv-live--analysis .deriv-live__metric,
+.deriv-live--analysis .deriv-live__stat-card,
+.deriv-live--analysis .deriv-live__quote-row,
+.deriv-live--analysis .deriv-live__distribution-row,
+.accumulators-page__mode-switch,
+.accumulators-page__manual-chart-card,
+.accumulators-page__manual-order-card,
+.accumulators-page__manual-barriers > div,
+.accumulators-page__manual-stats-ribbon,
+.accumulators-page__manual-chart-stage,
+.accumulators-page__auto-panel,
+.accumulators-page__auto-aside,
+.accumulators-page__auto-stat-panel,
+.accumulators-page__tick-stream,
+.accumulators-page__scan-table,
+.accumulators-page__positions-table,
+.accumulators-page__summary-block,
+.flipper-page__active-card,
+.flipper-page__control-panel,
+.flipper-page__positions,
+.flipper-page__feedback,
+.corsa-page__controls,
+.corsa-page__watch-card,
+.matchtool-page__controls,
+.matchtool-page__analysis,
+.matchtool-page__round,
+.matchtool-page__notice,
+.matchtool-page__table,
+.mesh-page__topbar,
+.mesh-page__orbit,
+.mesh-page__rings,
+.mesh-page__signals,
+.mesh-page__notice,
+.copy-trading__panel,
+.copy-trading__account-card,
+.copy-trading__empty,
+.copy-trading__notice,
+.free-bots__catalog,
+.free-bots__bot,
+.free-bots__error {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+.flipper-page__active-card,
+.flipper-page__control-panel,
+.corsa-page__controls,
+.corsa-page__watch-card,
+.matchtool-page__controls,
+.matchtool-page__analysis,
+.matchtool-page__round,
+.mesh-page__topbar,
+.mesh-page__orbit,
+.mesh-page__rings,
+.mesh-page__signals,
+.copy-trading__panel,
+.free-bots__catalog {
+    border-radius: 0 !important;
+}
+
+.deriv-live--analysis .deriv-live__control-grid--analysis,
+.accumulators-page__form-grid,
+.accumulators-page__auto-grid,
+.flipper-page__control-panel,
+.corsa-page__controls,
+.matchtool-page__controls,
+.mesh-page__topbar,
+.copy-trading__token-section,
+.free-bots__list {
+    gap: clamp(1rem, 1.6vw, 1.8rem) !important;
+}
+
+.deriv-live__field input,
+.deriv-live__field select,
+.deriv-live__field textarea,
+.accumulators-page__input-wrap,
+.accumulators-page__input-wrap input,
+.accumulators-page__input-wrap select,
+.flipper-page__field input,
+.flipper-page__field select,
+.flipper-page__active-row input,
+.flipper-page__select-wrap,
+.corsa-page__field input,
+.corsa-page__field select,
+.corsa-page__select-wrap,
+.matchtool-page__field input,
+.matchtool-page__field select,
+.matchtool-page__select-wrap,
+.mesh-page__select-wrap,
+.mesh-page__select-wrap input,
+.mesh-page__select-wrap select,
+.copy-trading__input-shell,
+.copy-trading__replace-row input {
+    background: #ffffff !important;
+    border: 1px solid rgb(15 23 42 / 10%) !important;
+    box-shadow: none !important;
+    color: #0f172a !important;
+}
+
+.deriv-live__field select option,
+.deriv-live__field select optgroup,
+.accumulators-page__input-wrap select option,
+.accumulators-page__input-wrap select optgroup,
+.flipper-page__field select option,
+.flipper-page__field select optgroup,
+.corsa-page__field select option,
+.corsa-page__field select optgroup,
+.matchtool-page__field select option,
+.matchtool-page__field select optgroup,
+.mesh-page__select-wrap select option,
+.mesh-page__select-wrap select optgroup {
+    background: #ffffff !important;
+    color: #0f172a !important;
+}
+
+.accumulators-page__metrics > div,
+.accumulators-page__engine-metrics > div,
+.accumulators-page__field--summary,
+.accumulators-page__scan-row,
+.accumulators-page__stat-pill,
+.accumulators-page__growth-chip,
+.flipper-page__active-row,
+.flipper-page__positions > div,
+.flipper-page__positions > span,
+.corsa-page__market-row,
+.matchtool-page__table-row,
+.mesh-page__signal-card,
+.copy-trading__account-card,
+.free-bots__bot {
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+}
+
+.matchtool-page__table-row--head,
+.accumulators-page__scan-table-head,
+.accumulators-page__positions-grid--header {
+    background: transparent !important;
+    border: 0 !important;
+}
+
+.flipper-page__positions,
+.matchtool-page__table,
+.accumulators-page__scan-table,
+.accumulators-page__positions-table {
+    overflow: visible !important;
+}
+
+.free-bots__bot,
+.copy-trading__account-card,
+.accumulators-page__scan-row,
+.corsa-page__market-row,
+.matchtool-page__table-row {
+    padding-inline: 0 !important;
+}
+
+.free-bots__load-button,
+.copy-trading__add-button,
+.copy-trading__switch,
+.flipper-page__strategy-button,
+.flipper-page__toggle,
+.flipper-page__run,
+.corsa-page__run,
+.matchtool-page__run,
+.accumulators-page__trade-button,
+.mesh-page__trade-button {
+    box-shadow: none !important;
+}
+
+body.theme--dark,
+html.theme--dark {
+    .deriv-live--analysis,
+    .accumulators-page,
+    .flipper-page,
+    .corsa-page,
+    .matchtool-page,
+    .mesh-page,
+    .profitdock-smooth-page {
+        background: #000000 !important;
+        color: #f5f7fb !important;
+    }
+
+    .profitdock-smooth-page {
+        --profitdock-smooth-page-bg: #000000 !important;
+        --profitdock-smooth-surface: transparent !important;
+        --profitdock-smooth-line: transparent !important;
+        --profitdock-smooth-muted: #a7b0bf !important;
+        --profitdock-smooth-shadow: none !important;
+
+        background: #000000 !important;
+    }
+
+    .profitdock-smooth-section,
+    .deriv-live--analysis .deriv-live__hero--analysis,
+    .deriv-live--analysis .deriv-live__panel,
+    .deriv-live--analysis .deriv-live__metric,
+    .deriv-live--analysis .deriv-live__stat-card,
+    .deriv-live--analysis .deriv-live__quote-row,
+    .deriv-live--analysis .deriv-live__distribution-row,
+    .accumulators-page__mode-switch,
+    .accumulators-page__manual-chart-card,
+    .accumulators-page__manual-order-card,
+    .accumulators-page__manual-barriers > div,
+    .accumulators-page__manual-stats-ribbon,
+    .accumulators-page__manual-chart-stage,
+    .accumulators-page__auto-panel,
+    .accumulators-page__auto-aside,
+    .accumulators-page__auto-stat-panel,
+    .accumulators-page__tick-stream,
+    .accumulators-page__scan-table,
+    .accumulators-page__positions-table,
+    .accumulators-page__summary-block,
+    .flipper-page__active-card,
+    .flipper-page__control-panel,
+    .flipper-page__positions,
+    .flipper-page__feedback,
+    .corsa-page__controls,
+    .corsa-page__watch-card,
+    .matchtool-page__controls,
+    .matchtool-page__analysis,
+    .matchtool-page__round,
+    .matchtool-page__notice,
+    .matchtool-page__table,
+    .mesh-page__topbar,
+    .mesh-page__orbit,
+    .mesh-page__rings,
+    .mesh-page__signals,
+    .mesh-page__notice,
+    .copy-trading__panel,
+    .copy-trading__account-card,
+    .copy-trading__empty,
+    .copy-trading__notice,
+    .free-bots__catalog,
+    .free-bots__bot,
+    .free-bots__error {
+        background: transparent !important;
+        border-color: transparent !important;
+        box-shadow: none !important;
+    }
+
+    .deriv-live__field input,
+    .deriv-live__field select,
+    .deriv-live__field textarea,
+    .accumulators-page__input-wrap,
+    .accumulators-page__input-wrap input,
+    .accumulators-page__input-wrap select,
+    .flipper-page__field input,
+    .flipper-page__field select,
+    .flipper-page__active-row input,
+    .flipper-page__select-wrap,
+    .corsa-page__field input,
+    .corsa-page__field select,
+    .corsa-page__select-wrap,
+    .matchtool-page__field input,
+    .matchtool-page__field select,
+    .matchtool-page__select-wrap,
+    .mesh-page__select-wrap,
+    .mesh-page__select-wrap input,
+    .mesh-page__select-wrap select,
+    .copy-trading__input-shell,
+    .copy-trading__replace-row input {
+        background: #101010 !important;
+        border-color: rgb(255 255 255 / 10%) !important;
+        color: #f5f7fb !important;
+    }
+
+    .deriv-live__field select option,
+    .deriv-live__field select optgroup,
+    .accumulators-page__input-wrap select option,
+    .accumulators-page__input-wrap select optgroup,
+    .flipper-page__field select option,
+    .flipper-page__field select optgroup,
+    .corsa-page__field select option,
+    .corsa-page__field select optgroup,
+    .matchtool-page__field select option,
+    .matchtool-page__field select optgroup,
+    .mesh-page__select-wrap select option,
+    .mesh-page__select-wrap select optgroup {
+        background: #101010 !important;
+        color: #f5f7fb !important;
+    }
+
+    .accumulators-page__metrics > div,
+    .accumulators-page__engine-metrics > div,
+    .accumulators-page__field--summary,
+    .accumulators-page__scan-row,
+    .accumulators-page__stat-pill,
+    .accumulators-page__growth-chip,
+    .flipper-page__active-row,
+    .flipper-page__positions > div,
+    .flipper-page__positions > span,
+    .corsa-page__market-row,
+    .matchtool-page__table-row,
+    .mesh-page__signal-card,
+    .copy-trading__account-card,
+    .free-bots__bot {
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .deriv-live--analysis,
+    .accumulators-page,
+    .flipper-page,
+    .corsa-page,
+    .matchtool-page,
+    .mesh-page,
+    .profitdock-smooth-page {
+        background: #f7f8fa !important;
+    }
+
+    body.theme--dark,
+    html.theme--dark {
+        .deriv-live--analysis,
+        .accumulators-page,
+        .flipper-page,
+        .corsa-page,
+        .matchtool-page,
+        .mesh-page,
+        .profitdock-smooth-page {
+            background: #000000 !important;
+        }
+    }
+}
+
+.accumulators-page__input-wrap > input,
+.accumulators-page__input-wrap > select,
+.flipper-page__select-wrap > input,
+.flipper-page__select-wrap > select,
+.corsa-page__select-wrap > input,
+.corsa-page__select-wrap > select,
+.matchtool-page__select-wrap > input,
+.matchtool-page__select-wrap > select,
+.mesh-page__select-wrap > input,
+.mesh-page__select-wrap > select,
+.copy-trading__input-shell > input,
+.copy-trading__replace-row > input {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: inherit !important;
+    outline: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: inherit !important;
+}
+
+.accumulators-page__input-wrap > input,
+.flipper-page__select-wrap > input,
+.corsa-page__select-wrap > input,
+.matchtool-page__select-wrap > input,
+.mesh-page__select-wrap > input,
+.copy-trading__input-shell > input,
+.copy-trading__replace-row > input {
+    cursor: text !important;
+}
+
+.accumulators-page__input-wrap > select,
+.flipper-page__select-wrap > select,
+.corsa-page__select-wrap > select,
+.matchtool-page__select-wrap > select,
+.mesh-page__select-wrap > select {
+    cursor: pointer !important;
+}
+
+.accumulators-page__input-wrap,
+.flipper-page__select-wrap,
+.corsa-page__select-wrap,
+.matchtool-page__select-wrap,
+.mesh-page__select-wrap,
+.copy-trading__input-shell {
+    cursor: text !important;
+}
+
+.accumulators-page__input-wrap > span {
+    pointer-events: none !important;
+}
+
+.deriv-live--analysis input[type='number'],
+.accumulators-page input[type='number'],
+.flipper-page input[type='number'],
+.corsa-page input[type='number'],
+.matchtool-page input[type='number'],
+.mesh-page input[type='number'],
+.copy-trading input[type='number'] {
+    appearance: textfield !important;
+    -moz-appearance: textfield !important;
+}
+
+.deriv-live--analysis input[type='number']::-webkit-inner-spin-button,
+.deriv-live--analysis input[type='number']::-webkit-outer-spin-button,
+.accumulators-page input[type='number']::-webkit-inner-spin-button,
+.accumulators-page input[type='number']::-webkit-outer-spin-button,
+.flipper-page input[type='number']::-webkit-inner-spin-button,
+.flipper-page input[type='number']::-webkit-outer-spin-button,
+.corsa-page input[type='number']::-webkit-inner-spin-button,
+.corsa-page input[type='number']::-webkit-outer-spin-button,
+.matchtool-page input[type='number']::-webkit-inner-spin-button,
+.matchtool-page input[type='number']::-webkit-outer-spin-button,
+.mesh-page input[type='number']::-webkit-inner-spin-button,
+.mesh-page input[type='number']::-webkit-outer-spin-button,
+.copy-trading input[type='number']::-webkit-inner-spin-button,
+.copy-trading input[type='number']::-webkit-outer-spin-button {
+    margin: 0 !important;
+    -webkit-appearance: none !important;
+}

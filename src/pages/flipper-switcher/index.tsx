@@ -23,6 +23,8 @@ import {
 } from '@/utils/profitdock-trade-controller';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { localize } from '@deriv-com/translations';
+import { virtualEngine } from '@/utils/virtual-engine';
+import { mirrorCopyTradingContractParameters } from '@/utils/copy-trading-execution';
 import './flipper-switcher.scss';
 
 type ApiLike = {
@@ -85,6 +87,15 @@ type OpenContractResponse = {
     };
 };
 
+type FlipperQuote = {
+    askPrice: number;
+    contractParameters: Record<string, unknown>;
+    longcode?: string;
+    payout?: number;
+    proposalId: string;
+    spot?: number;
+};
+
 type FlipperPosition = {
     buyPrice: number;
     contractId: number;
@@ -134,6 +145,14 @@ const STRATEGY_PAIRS: StrategyPair[] = [
         ],
     },
     {
+        key: 'rise_fall_equals',
+        label: 'Rise = / Fall =',
+        legs: [
+            { contractType: 'CALLE', label: 'Rise =' },
+            { contractType: 'PUTE', label: 'Fall =' },
+        ],
+    },
+    {
         key: 'higher_lower',
         label: 'Higher / Lower',
         legs: [
@@ -159,22 +178,7 @@ const STRATEGY_PAIRS: StrategyPair[] = [
     },
 ];
 
-const BUTTONS = [
-    STRATEGY_PAIRS[0].legs[0],
-    STRATEGY_PAIRS[0].legs[1],
-    STRATEGY_PAIRS[1].legs[0],
-    STRATEGY_PAIRS[1].legs[1],
-    STRATEGY_PAIRS[2].legs[0],
-    STRATEGY_PAIRS[2].legs[1],
-    STRATEGY_PAIRS[3].legs[0],
-    STRATEGY_PAIRS[3].legs[1],
-    STRATEGY_PAIRS[4].legs[0],
-    STRATEGY_PAIRS[4].legs[1],
-    STRATEGY_PAIRS[5].legs[0],
-    STRATEGY_PAIRS[5].legs[1],
-    STRATEGY_PAIRS[6].legs[0],
-    STRATEGY_PAIRS[6].legs[1],
-];
+const BUTTONS = STRATEGY_PAIRS.flatMap(pair => pair.legs);
 
 const getDerivApi = () => api_base.api as ApiLike | undefined;
 const getActiveTransactionAccountId = () => api_base.account_id || localStorage.getItem('active_loginid') || undefined;
@@ -254,6 +258,39 @@ const formatMoney = (value: number, currency: string) => `${value >= 0 ? '+' : '
 const toggleMarketSymbol = (symbols: string[], symbol: string) =>
     symbols.includes(symbol) ? symbols.filter(item => item !== symbol) : [...symbols, symbol];
 
+const CONTRACT_TICK_LIMITS: Record<string, { min: number; max?: number }> = {
+    RUNHIGH: { min: 2, max: 5 },
+    RUNLOW: { min: 2, max: 5 },
+    ONETOUCH: { min: 5 },
+    NOTOUCH: { min: 5 },
+    HIGHER: { min: 1 },
+    LOWER: { min: 1 },
+    CALL: { min: 1 },
+    PUT: { min: 1 },
+    DIGITEVEN: { min: 1 },
+    DIGITODD: { min: 1 },
+    DIGITMATCH: { min: 1 },
+    DIGITDIFF: { min: 1 },
+    DIGITOVER: { min: 1 },
+    DIGITUNDER: { min: 1 },
+};
+
+const validateDurationTicks = (contractType: string, duration: number) => {
+    const finalDuration = Number.isFinite(duration) && duration > 0 ? Math.trunc(duration) : 1;
+    const limits = CONTRACT_TICK_LIMITS[contractType] ?? { min: 1 };
+    const minTicks = limits.min;
+
+    if (finalDuration < minTicks) {
+        throw new Error(`${contractType} requires at least ${minTicks} ticks.`);
+    }
+
+    if (limits.max && finalDuration > limits.max) {
+        throw new Error(`${contractType} requires ${minTicks} to ${limits.max} ticks.`);
+    }
+
+    return finalDuration;
+};
+
 const createProposalPayload = ({
     amount,
     contractType,
@@ -271,12 +308,8 @@ const createProposalPayload = ({
     predictionMode?: 'barrier' | 'selected_tick' | 'none';
     symbol: string;
 }) => {
-    let finalDurationUnit = 't';
-    let finalDuration = duration;
-
-    if (!Number.isFinite(finalDuration) || finalDuration <= 0) {
-        finalDuration = 1;
-    }
+    const finalDurationUnit = 't';
+    const finalDuration = validateDurationTicks(contractType, duration);
 
     const payload: Record<string, unknown> = {
         amount,
@@ -342,18 +375,19 @@ const requestQuote = async (api: ApiLike, payload: Record<string, unknown>) => {
 
     return {
         askPrice: response.proposal.ask_price,
+        contractParameters: payload,
         longcode: response.proposal.longcode,
         proposalId: response.proposal.id,
         spot: response.proposal.spot,
         payout: response.proposal.payout,
-    };
+    } as FlipperQuote;
 };
 
-const buyQuote = async (api: ApiLike, proposalId: string, askPrice: number) => {
+const buyQuote = async (api: ApiLike, quote: FlipperQuote) => {
     const response = normalizeApiMessage<BuyResponse>(
         await api.send({
-            buy: proposalId,
-            price: String(askPrice),
+            buy: quote.proposalId,
+            price: String(quote.askPrice),
         })
     );
 
@@ -364,6 +398,12 @@ const buyQuote = async (api: ApiLike, proposalId: string, askPrice: number) => {
     if (!response?.buy?.contract_id) {
         throw new Error('Deriv accepted the buy request but did not return a contract id.');
     }
+
+    void mirrorCopyTradingContractParameters(
+        quote.contractParameters,
+        undefined,
+        `auto:${response.buy.contract_id}`
+    );
 
     return response.buy;
 };
@@ -582,27 +622,26 @@ const FlipperSwitcherPage = observer(() => {
 
     useEffect(() => {
         let isCancelled = false;
-        
+
         const fetchQuotes = async () => {
-            if (isRunning) return; 
+            if (isRunning) return;
             const api = await ensureTradingApi();
             if (!api || isCancelled) return;
 
-            const isFiveTickMin = ['higher_lower', 'touch_no_touch', 'only_up_down'].includes(selectedPair.key);
-            const duration = turbo ? (isFiveTickMin ? 5 : 1) : toPositiveInteger(durationTicks, 1);
-            
+            const duration = toPositiveInteger(durationTicks, 1);
+
             const fetchLegQuote = async (leg: StrategyLeg | null, stake: string, pred: string) => {
                 if (!leg || !selectedMarketInfoRef.current) return null;
                 const currentStake = toPositiveNumber(stake, 0);
                 if (currentStake <= 0) return null;
-                
+
                 let val = pred;
                 if (!val) {
                     val = leg.predictionMode === 'barrier' ? '+0.25' : (entryPoint || '0');
                 }
-                
+
                 const parsedPred = leg.contractType.includes('DIGIT') ? Math.max(0, Math.min(9, Math.trunc(Number(val)))) : val;
-                
+
                 try {
                     const quote = await requestQuote(api, createProposalPayload({
                         amount: currentStake,
@@ -631,13 +670,13 @@ const FlipperSwitcherPage = observer(() => {
             }
         };
 
-        const timer = setTimeout(fetchQuotes, 500); 
+        const timer = setTimeout(fetchQuotes, 500);
         return () => {
             isCancelled = true;
             clearTimeout(timer);
         };
     }, [
-        selectedLegs, stakeOne, stakeTwo, predictionOne, predictionTwo, 
+        selectedLegs, stakeOne, stakeTwo, predictionOne, predictionTwo,
         entryPoint, turbo, durationTicks, selectedMarket, currency, isRunning, ensureTradingApi
     ]);
 
@@ -723,6 +762,26 @@ const FlipperSwitcherPage = observer(() => {
             let currentRunCount = 0;
             let currentSessionPnl = 0;
 
+            const getSessionStopMessage = () => {
+                const maxRuns = toPositiveInteger(roundsRef.current, 0);
+                const takeProfitLimit = toPositiveNumber(takeProfitRef.current);
+                const stopLossLimit = toPositiveNumber(stopLossRef.current);
+
+                if (maxRuns > 0 && currentRunCount >= maxRuns) {
+                    return localize('Rounds limit reached. Stopped.');
+                }
+
+                if (takeProfitLimit > 0 && currentSessionPnl >= takeProfitLimit) {
+                    return localize('Take profit reached. Stopped.');
+                }
+
+                if (stopLossLimit > 0 && currentSessionPnl <= -stopLossLimit) {
+                    return localize('Stop loss reached. Stopped.');
+                }
+
+                return '';
+            };
+
             const updatePositionsUi = (contract: any, legIndex: number, activeLegs: any) => {
                 const liveContract = contract;
                 transactions.pushTransaction({
@@ -794,14 +853,15 @@ const FlipperSwitcherPage = observer(() => {
                     break;
                 }
 
-                const api = await ensureTradingApi();
-                if (!api) {
-                    setIsRunning(false);
-                    runningRef.current = false;
+                const preRunStopMessage = getSessionStopMessage();
+                if (preRunStopMessage) {
+                    setFeedback(preRunStopMessage);
                     break;
                 }
 
-                const marketCandidates = switchMarketRef.current && switchMarketSymbolsRef.current.length > 0 
+                let api: any = await ensureTradingApi();
+
+                const marketCandidates = switchMarketRef.current && switchMarketSymbolsRef.current.length > 0
                     ? selectedSwitchMarkets : [selectedMarketInfoRef.current];
                 const currentMarketIndex = marketCandidates.findIndex(m => m.symbol === selectedMarketInfoRef.current.symbol);
                 const orderedCandidates = [
@@ -809,12 +869,32 @@ const FlipperSwitcherPage = observer(() => {
                     ...marketCandidates.slice(0, Math.max(currentMarketIndex, 0)),
                 ];
 
+                // --- VIRTUAL MODE FOR FLIPPER ---
+                if (store.client.is_dummy_active) {
+                    if (store.client.dummy_balance <= 0.35) {
+                        console.warn('[Flipper Virtual] Insufficient balance:', store.client.dummy_balance);
+                        setIsRunning(false);
+                        runningRef.current = false;
+                        window.alert('Insufficient balance. Your virtual balance is too low to trade.');
+                        break;
+                    }
+                    await virtualEngine['_requestTicks']?.(orderedCandidates[0].symbol);
+                    // No need to override `api` here; the global interceptor in api-base.ts
+                    // automatically routes proposal/buy/sell to virtualEngine and lets ticks pass through!
+                }
+
+                if (!api) {
+                    setIsRunning(false);
+                    runningRef.current = false;
+                    break;
+                }
+
+                // orderedCandidates moved above Virtual Mode logic
+
                 await waitForEntryTrigger(orderedCandidates[0].symbol, api, activeLegs);
                 if (!runningRef.current) break;
 
-                const currentKey = getPairKeyFromLegs(customLegsRef.current);
-                const isFiveTickMin = ['higher_lower', 'touch_no_touch', 'only_up_down'].includes(currentKey);
-                const duration = turboRef.current ? (isFiveTickMin ? 5 : 1) : toPositiveInteger(durationTicksRef.current, 1);
+                const duration = toPositiveInteger(durationTicksRef.current, 1);
 
                 const getPredictionValue = (refValue: string, leg: StrategyLeg) => {
                     let val = refValue;
@@ -855,92 +935,28 @@ const FlipperSwitcherPage = observer(() => {
                 }
 
                 currentRunIdRef.current = Date.now();
-                let firstId, secondId;
-                if (store.client.is_dummy_active) {
-                    // Insufficient balance guard
-                    const totalCost = quoteBundle.firstQuote.askPrice + quoteBundle.secondQuote.askPrice;
-                    if (store.client.dummy_balance <= 0.35 || store.client.dummy_balance < totalCost) {
-                        setFeedback('Insufficient balance. Your virtual balance is too low to continue trading.');
-                        runningRef.current = false;
-                        setIsRunning(false);
-                        break;
-                    }
-                    store.client.setDummyBalance(store.client.dummy_balance - quoteBundle.firstQuote.askPrice - quoteBundle.secondQuote.askPrice);
-                    firstId = `dummy_${Date.now()}_1`;
-                    secondId = `dummy_${Date.now()}_2`;
-                } else {
-                    try {
-                        const [b1, b2] = await Promise.all([
-                            buyQuote(api, quoteBundle.firstQuote.proposalId, quoteBundle.firstQuote.askPrice),
-                            buyQuote(api, quoteBundle.secondQuote.proposalId, quoteBundle.secondQuote.askPrice)
-                        ]);
-                        firstId = b1.contract_id;
-                        secondId = b2.contract_id;
-                    } catch (err) {
-                        setFeedback('Buy failed: ' + (err.message || String(err)));
-                        break;
-                    }
-                }
+                let firstId: any, secondId: any;
 
-                let r1, r2;
-                if (store.client.is_dummy_active) {
-                    const durMs = duration * 1000 * 2; 
-                    const firstWon = Math.random() > 0.5;
-                    const secondWon = !firstWon;
-
-                    r1 = await new Promise<any>(res => setTimeout(() => {
-                        const profit = firstWon ? quoteBundle.firstQuote.payout - quoteBundle.firstQuote.askPrice : -quoteBundle.firstQuote.askPrice;
-                        updatePositionsUi({ 
-                            contract_id: firstId, 
-                            status: firstWon ? 'won' : 'lost', 
-                            profit, 
-                            buy_price: quoteBundle.firstQuote.askPrice, 
-                            payout: quoteBundle.firstQuote.payout,
-                            currency,
-                            date_start: Math.floor(Date.now() / 1000),
-                            display_name: quoteBundle.marketInfo.displayName,
-                            contract_type: activeLegs[0].contractType,
-                            underlying: quoteBundle.marketInfo.symbol,
-                            longcode: `Virtual Flipper Trade: ${firstWon ? 'Won' : 'Lost'}`,
-                            is_completed: true,
-                            transaction_ids: { buy: firstId, sell: `${firstId}_sell` }
-                        }, 0, activeLegs);
-                        res({ profit, won: firstWon });
-                    }, durMs));
-                    
-                    r2 = await new Promise<any>(res => {
-                        const profit = secondWon ? quoteBundle.secondQuote.payout - quoteBundle.secondQuote.askPrice : -quoteBundle.secondQuote.askPrice;
-                        updatePositionsUi({ 
-                            contract_id: secondId, 
-                            status: secondWon ? 'won' : 'lost', 
-                            profit, 
-                            buy_price: quoteBundle.secondQuote.askPrice, 
-                            payout: quoteBundle.secondQuote.payout,
-                            currency,
-                            date_start: Math.floor(Date.now() / 1000),
-                            display_name: quoteBundle.marketInfo.displayName,
-                            contract_type: activeLegs[1].contractType,
-                            underlying: quoteBundle.marketInfo.symbol,
-                            longcode: `Virtual Flipper Trade: ${secondWon ? 'Won' : 'Lost'}`,
-                            is_completed: true,
-                            transaction_ids: { buy: secondId, sell: `${secondId}_sell` }
-                        }, 1, activeLegs);
-                        res({ profit, won: secondWon });
-                    });
-                    
-                    const totalPayout = (firstWon ? quoteBundle.firstQuote.payout : 0) + (secondWon ? quoteBundle.secondQuote.payout : 0);
-                    store.client.setDummyBalance(store.client.dummy_balance + totalPayout);
-                } else {
-                    const [res1, res2] = await Promise.all([
-                        waitForSettlement(api, firstId, (c) => updatePositionsUi(c, 0, activeLegs)),
-                        waitForSettlement(api, secondId, (c) => updatePositionsUi(c, 1, activeLegs))
+                try {
+                    const [b1, b2] = await Promise.all([
+                        buyQuote(api, quoteBundle.firstQuote),
+                        buyQuote(api, quoteBundle.secondQuote)
                     ]);
-                    r1 = res1;
-                    r2 = res2;
+                    firstId = b1.contract_id;
+                    secondId = b2.contract_id;
+                } catch (err: any) {
+                    setFeedback('Buy failed: ' + (err?.message || String(err)));
+                    break;
                 }
+
+                const [r1, r2] = await Promise.all([
+                    waitForSettlement(api, firstId, (c) => updatePositionsUi(c, 0, activeLegs)),
+                    waitForSettlement(api, secondId, (c) => updatePositionsUi(c, 1, activeLegs))
+                ]);
 
                 const netProfit = r1.profit + r2.profit;
                 currentSessionPnl = Number((currentSessionPnl + netProfit).toFixed(2));
+                sessionPnlRef.current = currentSessionPnl;
                 currentRunCount++;
 
                 console.log('[FLIPPER]',
@@ -981,10 +997,13 @@ const FlipperSwitcherPage = observer(() => {
                     won: prev.won + (won ? 1 : 0),
                 }));
 
-                const maxR = toPositiveInteger(roundsRef.current, 0);
                 const lossesT = toPositiveInteger(lossesToSwitchRef.current, 1);
-                const tp = toPositiveNumber(takeProfitRef.current);
-                const sl = toPositiveNumber(stopLossRef.current);
+                const postRunStopMessage = getSessionStopMessage();
+
+                if (postRunStopMessage) {
+                    setFeedback(postRunStopMessage);
+                    break;
+                }
 
                 // Switch market if EITHER side has escalated past the threshold
                 if (switchOnLossRef.current && (currentLossStreakOne >= lossesT || currentLossStreakTwo >= lossesT)) {
@@ -1003,10 +1022,6 @@ const FlipperSwitcherPage = observer(() => {
                     }
                 }
 
-                if ((maxR > 0 && currentRunCount >= maxR) || (tp > 0 && currentSessionPnl >= tp) || (sl > 0 && currentSessionPnl <= -sl)) {
-                    setFeedback('Limit reached. Stopped.');
-                    break;
-                }
             }
         } catch (error) {
             console.error('[FlipperLoop Error]', error);

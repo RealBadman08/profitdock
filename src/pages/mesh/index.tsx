@@ -21,6 +21,7 @@ import {
 } from '@/utils/profitdock-trade-controller';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { runVirtualTrade } from '@/utils/virtual-trade';
+import { mirrorCopyTradingContractParameters } from '@/utils/copy-trading-execution';
 import './mesh.scss';
 
 type ApiLike = {
@@ -294,6 +295,12 @@ const requestDirectBuy = async ({
                 .join(': ')
         );
     }
+
+    void mirrorCopyTradingContractParameters(
+        buyPayload.parameters,
+        undefined,
+        `auto:${buyResponse.buy.contract_id}`
+    );
 
     return buyResponse.buy;
 };
@@ -813,9 +820,8 @@ const MeshPage = observer(() => {
                     }
 
                     await runVirtualTrade({
-                        api,
                         contractType: signal.contractType,
-                        barrier: signal.digit,
+                        barrier: signal.barrier,
                         currency,
                         stake,
                         symbol: selectedMarketInfo.symbol,

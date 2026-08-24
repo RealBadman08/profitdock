@@ -1,5 +1,6 @@
 @use 'components/shared/styles/constants' as *;
 @use 'components/shared/styles/mixins' as *;
+@use './profitdock-custom-tabs';
 
 .run-panel {
     // fix for the RTL issue on tab active line

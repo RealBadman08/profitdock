@@ -20,6 +20,7 @@ import {
     V2GetActiveClientId,
     V2GetActiveToken,
 } from './appId';
+import { virtualEngine } from '@/utils/virtual-engine';
 import chart_api from './chart-api';
 import {
     ensureProfitdockStoredAccounts,
@@ -870,3 +871,65 @@ class APIBase {
 }
 
 export const api_base = new APIBase();
+
+// Expose on window so virtual-engine.ts can access it lazily without a circular import
+if (typeof window !== 'undefined') {
+    (window as any)._profitdockApiBase = api_base;
+}
+
+// --- VIRTUAL MODE INTERCEPTOR (Pure Local Engine) ---
+// Routes trade commands to our local VirtualTradingEngine.
+// The real API connection is NEVER used for virtual trades.
+// Authorize, account switching, ticks, and market data still use the real API.
+if (typeof window !== 'undefined') {
+    // Pipe virtualEngine events into Bot Builder's real WS stream
+    // so that Bot Builder's RxJS observables receive the fake contract updates.
+    virtualEngine.subscribe((msg: any) => {
+        if (!(window as any)._clientStore?.is_dummy_active) return;
+        const socket = (api_base?.api as any)?._profitdock_socket;
+        if (socket && typeof socket.dispatchEvent === 'function') {
+            socket.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(msg) }));
+        }
+    });
+
+    (window as any)._profitdock_dummy_interceptor = (request: any, api: any) => {
+        const store = (window as any)._clientStore;
+        if (!store || !store.is_dummy_active) return undefined;
+
+        // ---- Balance query: return virtual balance immediately ----
+        if (request.balance === 1) {
+            const fakeBalance = {
+                balance: {
+                    balance: store.dummy_balance,
+                    currency: store.currency || 'USD',
+                    loginid: store.loginid,
+                },
+                msg_type: 'balance',
+            };
+            if (request.subscribe) {
+                setTimeout(() => {
+                    const socket = api._profitdock_socket;
+                    if (socket && typeof socket.dispatchEvent === 'function') {
+                        socket.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(fakeBalance) }));
+                    }
+                }, 10);
+            }
+            return Promise.resolve(fakeBalance);
+        }
+
+        // ---- Skip guard: allows VirtualEngine to fetch real proposals without looping ----
+        if (request.passthrough?._vrtc_skip) {
+            return undefined; // Let it pass through to the real API
+        }
+
+        // ---- Trade commands: route to local VirtualEngine ----
+        // proposal → VirtualEngine fetches real quote internally then returns it
+        // buy/sell/proposal_open_contract → handled 100% locally
+        if (request.buy || request.proposal || request.sell || request.proposal_open_contract !== undefined) {
+            return virtualEngine.handleRequest(request);
+        }
+
+        // Everything else (authorize, ticks, market data, history) → real API
+        return undefined;
+    };
+}

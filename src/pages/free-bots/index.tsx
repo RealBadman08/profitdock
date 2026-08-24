@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { observer } from 'mobx-react-lite';
+import { ProfitDockSmoothPage, ProfitDockSmoothSection } from '@/components/profitdock-smooth-layout';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { load, save_types } from '@/external/bot-skeleton';
 import { useStore } from '@/hooks/useStore';
@@ -169,55 +170,31 @@ const FreeBots = observer(() => {
     };
 
     return (
-        <div className='free-bots'>
-            <div className='free-bots__shell'>
-                <header className='free-bots__hero'>
-                    <div className='free-bots__eyebrow'>Free Bots</div>
-                    <h1 className='free-bots__title'>Best Bots</h1>
-                    <p className='free-bots__subtitle'>
-                        Discover our top-performing trading bots designed for maximum profitability.
-                    </p>
-                </header>
+        <ProfitDockSmoothPage className='free-bots' maxWidth='108rem'>
+            {errorMessage && <div className='free-bots__error'>{errorMessage}</div>}
 
-                {errorMessage && <div className='free-bots__error'>{errorMessage}</div>}
+            <ProfitDockSmoothSection className='free-bots__catalog' ariaLabel='Bots'>
+                <div className='free-bots__list'>
+                    {BEST_BOTS.map(bot => (
+                        <article key={bot.id} className='free-bots__bot'>
+                            <div className='free-bots__bot-copy'>
+                                <strong>{bot.name}</strong>
+                                <p>{bot.description}</p>
+                            </div>
 
-                <section className='free-bots__table' aria-label='Best bots table'>
-                    <div className='free-bots__table-head'>
-                        <div>Bot Name</div>
-                        <div>Description</div>
-                        <div>Action</div>
-                    </div>
-
-                    <div className='free-bots__table-body'>
-                        {BEST_BOTS.map(bot => (
-                            <article key={bot.id} className='free-bots__row'>
-                                <div className='free-bots__cell free-bots__cell--name'>
-                                    <span className='free-bots__mobile-label'>Bot Name</span>
-                                    <strong>{bot.name}</strong>
-                                </div>
-
-                                <div className='free-bots__cell free-bots__cell--description'>
-                                    <span className='free-bots__mobile-label'>Description</span>
-                                    <p>{bot.description}</p>
-                                </div>
-
-                                <div className='free-bots__cell free-bots__cell--action'>
-                                    <span className='free-bots__mobile-label'>Action</span>
-                                    <button
-                                        type='button'
-                                        className='free-bots__load-button'
-                                        onClick={() => void loadBot(bot)}
-                                        disabled={loadingBotId === bot.id}
-                                    >
-                                        {loadingBotId === bot.id ? 'LOADING' : 'LOAD'}
-                                    </button>
-                                </div>
-                            </article>
-                        ))}
-                    </div>
-                </section>
-            </div>
-        </div>
+                            <button
+                                type='button'
+                                className='free-bots__load-button'
+                                onClick={() => void loadBot(bot)}
+                                disabled={loadingBotId === bot.id}
+                            >
+                                {loadingBotId === bot.id ? 'Loading' : 'Load'}
+                            </button>
+                        </article>
+                    ))}
+                </div>
+            </ProfitDockSmoothSection>
+        </ProfitDockSmoothPage>
     );
 });
 

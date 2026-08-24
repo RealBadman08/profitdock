@@ -1,204 +1,495 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
-import { api_base } from '@/external/bot-skeleton';
+import { ProfitDockSmoothPage, ProfitDockSmoothSection } from '@/components/profitdock-smooth-layout';
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
+import { getProfitdockOAuthToken } from '@/external/bot-skeleton/services/api/profitdock-oauth-session';
 import { useApiBase } from '@/hooks/useApiBase';
-import type { CopyTradingStartRequest } from '@deriv/api-types';
 import './copy-trading.scss';
 
-type TCopyTradingApi = {
-    send: (payload: unknown) => Promise<Record<string, unknown> & { error?: { message?: string } }>;
+type TAccountType = 'real' | 'demo' | 'virtual' | 'unknown';
+
+type TConnectedAccount = {
+    account_name: string;
+    account_type: TAccountType;
+    balance: number;
+    connection_status: 'connected' | 'authentication_expired' | 'deleted';
+    copy_trading_enabled: boolean;
+    created_at: string;
+    currency: string;
+    deriv_account_id: string;
+    id: string;
+    updated_at: string;
 };
 
 type TNotice = {
     message: string;
-    tone: 'error' | 'success';
+    tone: 'error' | 'info' | 'success';
 } | null;
 
-type TSavedToken = {
-    id: string;
-    value: string;
+type TCopyTradingResponse = {
+    account?: TConnectedAccount;
+    accounts?: TConnectedAccount[];
+    connected?: TConnectedAccount[];
+    error?: string;
+    message?: string;
+    ok?: boolean;
 };
 
-const MAX_COPY_TOKENS = 20;
+const MAX_CONNECTED_ACCOUNTS = 20;
 
-const getCopyTradingApi = async () => {
-    if (!api_base.api) {
-        await api_base.init();
+const requestCopyTrading = async (path: string, init: RequestInit = {}) => {
+    const headers = new Headers(init.headers);
+    const sessionToken = getProfitdockOAuthToken();
+
+    if (init.body && !headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
     }
 
-    const api = api_base.api as unknown as TCopyTradingApi | null;
-
-    if (!api) {
-        throw new Error('The Deriv connection is not ready yet.');
+    if (sessionToken && !headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${sessionToken}`);
     }
 
-    return api;
+    const response = await fetch(path, {
+        ...init,
+        credentials: 'include',
+        headers,
+    });
+    const text = await response.text();
+    let payload: TCopyTradingResponse = {};
+
+    try {
+        payload = (text ? JSON.parse(text) : {}) as TCopyTradingResponse;
+    } catch {
+        payload = { message: text || 'Copy Trading request failed.' };
+    }
+
+    if (!response.ok) {
+        throw new Error(payload.message || 'Copy Trading request failed.');
+    }
+
+    return payload;
 };
 
-const maskToken = (token: string) => {
-    if (token.length <= 10) {
-        return token;
-    }
+const keepRealAccounts = (accounts: TConnectedAccount[] = []) =>
+    accounts.filter(account => account.account_type === 'real' && account.connection_status !== 'deleted');
 
-    return `${token.slice(0, 6)}...${token.slice(-4)}`;
+const getAvatarInitials = (account: TConnectedAccount) => {
+    const displayName = String(account.account_name || account.deriv_account_id || '').trim();
+    const initials = displayName
+        .replace(/[^a-z0-9 ]/gi, ' ')
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(part => part[0])
+        .join('');
+
+    return (initials || account.deriv_account_id || 'RA').slice(0, 2).toUpperCase();
 };
 
-const buildTokenId = () => `copy-token-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+const getAccountBalance = (account: TConnectedAccount) => {
+    const balance = Number(account.balance);
+    const amount = Number.isFinite(balance) ? balance.toFixed(2) : '0.00';
+    return `${amount} ${account.currency || ''}`.trim();
+};
 
 const CopyTrading = observer(() => {
-    const { activeLoginid, connectionStatus, isAuthorized, isAuthorizing } = useApiBase();
-    const [tokenInput, setTokenInput] = useState('');
-    const [savedTokens, setSavedTokens] = useState<TSavedToken[]>([]);
-    const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
+    const { connectionStatus, isAuthorized, isAuthorizing } = useApiBase();
+    const tokenInputRef = useRef<HTMLInputElement>(null);
+    const menuRefs = useRef<Record<string, HTMLDivElement | null>>({});
+    const [accounts, setAccounts] = useState<TConnectedAccount[]>([]);
+    const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isTokenVisible, setIsTokenVisible] = useState(false);
+    const [menuAccountId, setMenuAccountId] = useState<string | null>(null);
     const [notice, setNotice] = useState<TNotice>(null);
+    const [pendingAction, setPendingAction] = useState<string | null>(null);
+    const [replacementToken, setReplacementToken] = useState('');
+    const [storedAuthToken, setStoredAuthToken] = useState('');
 
-    const canStartCopyTrading = isAuthorized && connectionStatus === CONNECTION_STATUS.OPENED;
-    const tokenLimitReached = savedTokens.length >= MAX_COPY_TOKENS;
-    const normalizedInput = tokenInput.trim();
+    const canManageAccounts = isAuthorized || connectionStatus === CONNECTION_STATUS.OPENED || !!storedAuthToken;
+    const realAccounts = keepRealAccounts(accounts);
+    const connectedAccountLimitReached = realAccounts.length >= MAX_CONNECTED_ACCOUNTS;
+
+    useEffect(() => {
+        const syncStoredToken = () => setStoredAuthToken(getProfitdockOAuthToken());
+        syncStoredToken();
+
+        const interval = window.setInterval(syncStoredToken, 1500);
+        window.addEventListener('storage', syncStoredToken);
+
+        return () => {
+            window.clearInterval(interval);
+            window.removeEventListener('storage', syncStoredToken);
+        };
+    }, []);
 
     useEffect(() => {
         if (!notice) {
             return undefined;
         }
 
-        const timeout = window.setTimeout(() => setNotice(null), 5000);
+        const timeout = window.setTimeout(() => setNotice(null), 6500);
         return () => window.clearTimeout(timeout);
     }, [notice]);
 
-    const hasDuplicateInput = useMemo(
-        () => savedTokens.some(token => token.value.toLowerCase() === normalizedInput.toLowerCase()),
-        [normalizedInput, savedTokens]
-    );
-
-    const handleAddToken = () => {
-        if (!normalizedInput) {
-            setNotice({ message: 'Enter the API token you want to add.', tone: 'error' });
-            return;
-        }
-
-        if (hasDuplicateInput) {
-            setNotice({ message: 'That API token is already in the list.', tone: 'error' });
-            return;
-        }
-
-        if (tokenLimitReached) {
-            setNotice({ message: 'You can save up to 20 API tokens here.', tone: 'error' });
-            return;
-        }
-
-        setSavedTokens(previous => [...previous, { id: buildTokenId(), value: normalizedInput }]);
-        setTokenInput('');
-        setNotice({ message: 'API token added.', tone: 'success' });
-    };
-
-    const handleRemoveToken = (tokenId: string) => {
-        setSavedTokens(previous => previous.filter(token => token.id !== tokenId));
-    };
-
-    const handleStartCopy = async (tokenValue: string) => {
-        const token = tokenValue.trim();
-
-        if (!token) {
-            setNotice({ message: 'Enter the API token you want to copy.', tone: 'error' });
-            return;
-        }
-
-        if (!canStartCopyTrading) {
-            setNotice({ message: 'Authorize a Deriv account first before starting copy trading.', tone: 'error' });
-            return;
-        }
-
-        setIsSubmitting(token);
-
-        try {
-            const api = await getCopyTradingApi();
-            const payload: CopyTradingStartRequest = {
-                copy_start: token,
-                ...(activeLoginid ? { loginid: activeLoginid } : {}),
-            };
-
-            const response = await api.send(payload);
-
-            if (response.error) {
-                throw new Error(response.error.message || 'Unable to start copy trading.');
+    useEffect(() => {
+        const closeMenu = (event: MouseEvent) => {
+            if (!menuAccountId) return;
+            const currentMenu = menuRefs.current[menuAccountId];
+            if (currentMenu && !currentMenu.contains(event.target as Node)) {
+                setMenuAccountId(null);
             }
+        };
 
-            setNotice({ message: 'Copy trading started successfully.', tone: 'success' });
+        document.addEventListener('mousedown', closeMenu);
+        return () => document.removeEventListener('mousedown', closeMenu);
+    }, [menuAccountId]);
+
+    const loadAccounts = useCallback(async () => {
+        if (!canManageAccounts) {
+            setAccounts([]);
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const payload = await requestCopyTrading('/api/copy-trading/accounts');
+            setAccounts(keepRealAccounts(payload.accounts || []));
         } catch (error) {
             setNotice({
-                message: error instanceof Error ? error.message : 'Unable to start copy trading.',
+                message: error instanceof Error ? error.message : 'Unable to load connected Copy Trading accounts.',
                 tone: 'error',
             });
         } finally {
-            setIsSubmitting(null);
+            setIsLoading(false);
+        }
+    }, [canManageAccounts]);
+
+    useEffect(() => {
+        void loadAccounts();
+    }, [loadAccounts]);
+
+    const updateAccountInState = (updatedAccount: TConnectedAccount) => {
+        if (updatedAccount.account_type !== 'real') return;
+        setAccounts(previous =>
+            keepRealAccounts(previous.map(account => (account.id === updatedAccount.id ? updatedAccount : account)))
+        );
+    };
+
+    const handleAddAccount = async () => {
+        const token = tokenInputRef.current?.value.trim() || '';
+
+        if (!canManageAccounts) {
+            setNotice({ message: 'Log in to ProfitDock before connecting Copy Trading accounts.', tone: 'error' });
+            return;
+        }
+
+        if (!token) {
+            setNotice({ message: 'Enter a Deriv API token to add an account.', tone: 'error' });
+            return;
+        }
+
+        if (connectedAccountLimitReached) {
+            setNotice({ message: 'You can connect up to 20 real Deriv accounts.', tone: 'error' });
+            return;
+        }
+
+        setPendingAction('connect');
+        try {
+            const payload = await requestCopyTrading('/api/copy-trading/accounts', {
+                body: JSON.stringify({ token }),
+                method: 'POST',
+            });
+
+            setAccounts(keepRealAccounts(payload.accounts || payload.connected || []));
+            if (tokenInputRef.current) tokenInputRef.current.value = '';
+            setNotice({ message: 'Real Deriv account added securely.', tone: 'success' });
+        } catch (error) {
+            setNotice({
+                message: error instanceof Error ? error.message : 'Unable to connect that Deriv account.',
+                tone: 'error',
+            });
+        } finally {
+            setPendingAction(null);
+        }
+    };
+
+    const handleToggleCopying = async (account: TConnectedAccount, enabled: boolean) => {
+        if (account.connection_status !== 'connected') {
+            setNotice({ message: 'Reconnect this account before enabling copied trades.', tone: 'error' });
+            return;
+        }
+
+        setPendingAction(`toggle-${account.id}`);
+        try {
+            const payload = await requestCopyTrading('/api/copy-trading/account', {
+                body: JSON.stringify({
+                    account_id: account.id,
+                    copy_trading_enabled: enabled,
+                }),
+                method: 'PATCH',
+            });
+
+            if (payload.account) updateAccountInState(payload.account);
+            setNotice({
+                message: enabled ? 'Copied trades enabled for this account.' : 'Copied trades disabled for this account.',
+                tone: 'success',
+            });
+        } catch (error) {
+            setNotice({
+                message: error instanceof Error ? error.message : 'Unable to update Copy Trading for this account.',
+                tone: 'error',
+            });
+        } finally {
+            setPendingAction(null);
+        }
+    };
+
+    const handleStartEditAccount = (account: TConnectedAccount) => {
+        setEditingAccountId(account.id);
+        setReplacementToken('');
+        setMenuAccountId(null);
+    };
+
+    const handleReplaceAccountToken = async (account: TConnectedAccount) => {
+        const token = replacementToken.trim();
+        if (!token) {
+            setNotice({ message: 'Paste the replacement Deriv API token first.', tone: 'error' });
+            return;
+        }
+
+        setPendingAction(`replace-${account.id}`);
+        try {
+            const payload = await requestCopyTrading('/api/copy-trading/accounts', {
+                body: JSON.stringify({ token }),
+                method: 'POST',
+            });
+            const nextAccounts = keepRealAccounts(payload.accounts || payload.connected || []);
+            const accountWasUpdated = nextAccounts.some(item => item.deriv_account_id === account.deriv_account_id);
+
+            setAccounts(nextAccounts);
+            setEditingAccountId(null);
+            setReplacementToken('');
+            setNotice({
+                message: accountWasUpdated
+                    ? 'Saved credential replaced for this account.'
+                    : 'Token connected account(s), but not the account you selected.',
+                tone: accountWasUpdated ? 'success' : 'info',
+            });
+        } catch (error) {
+            setNotice({
+                message: error instanceof Error ? error.message : 'Unable to replace this account token.',
+                tone: 'error',
+            });
+        } finally {
+            setPendingAction(null);
+        }
+    };
+
+    const handleDisconnectAccount = async (account: TConnectedAccount) => {
+        const confirmed = window.confirm(`Delete ${account.deriv_account_id} from Copy Trading?`);
+        if (!confirmed) return;
+
+        setPendingAction(`delete-${account.id}`);
+        setMenuAccountId(null);
+        try {
+            await requestCopyTrading('/api/copy-trading/account', {
+                body: JSON.stringify({ account_id: account.id }),
+                method: 'DELETE',
+            });
+
+            setAccounts(previous => previous.filter(item => item.id !== account.id));
+            setNotice({ message: 'Deriv account deleted from Copy Trading.', tone: 'success' });
+        } catch (error) {
+            setNotice({
+                message: error instanceof Error ? error.message : 'Unable to delete this account.',
+                tone: 'error',
+            });
+        } finally {
+            setPendingAction(null);
         }
     };
 
     return (
-        <div className='copy-trading'>
-            <section className='copy-trading__panel'>
-                <div className='copy-trading__composer'>
-                    <label className='copy-trading__field'>
-                        <span>API token</span>
+        <ProfitDockSmoothPage className='copy-trading' maxWidth='78rem'>
+            <ProfitDockSmoothSection className='copy-trading__panel' ariaLabel='Copy Trading account manager'>
+                <div className='copy-trading__token-section'>
+                    <div className='copy-trading__input-shell'>
                         <input
                             autoComplete='off'
-                            onChange={event => setTokenInput(event.target.value)}
-                            placeholder='Paste trader API token'
-                            type='text'
-                            value={tokenInput}
+                            disabled={isAuthorizing || pendingAction === 'connect' || connectedAccountLimitReached}
+                            id='copy-trading-token-input'
+                            placeholder='Enter Deriv API token'
+                            ref={tokenInputRef}
+                            type={isTokenVisible ? 'text' : 'password'}
                         />
-                    </label>
-
+                        <button
+                            aria-label={isTokenVisible ? 'Hide Deriv API token' : 'Show Deriv API token'}
+                            className='copy-trading__eye-button'
+                            onClick={() => setIsTokenVisible(previous => !previous)}
+                            type='button'
+                        >
+                            <svg aria-hidden='true' height='24' viewBox='0 0 24 24' width='24'>
+                                <path
+                                    d='M2.6 12s3.4-6 9.4-6 9.4 6 9.4 6-3.4 6-9.4 6-9.4-6-9.4-6Z'
+                                    fill='none'
+                                    stroke='currentColor'
+                                    strokeLinecap='round'
+                                    strokeLinejoin='round'
+                                    strokeWidth='2'
+                                />
+                                <circle cx='12' cy='12' fill='none' r='3' stroke='currentColor' strokeWidth='2' />
+                            </svg>
+                        </button>
+                    </div>
                     <button
-                        className='copy-trading__button copy-trading__button--secondary'
-                        disabled={isAuthorizing || tokenLimitReached}
-                        onClick={handleAddToken}
+                        className='copy-trading__add-button'
+                        disabled={
+                            !canManageAccounts ||
+                            isAuthorizing ||
+                            pendingAction === 'connect' ||
+                            connectedAccountLimitReached
+                        }
+                        onClick={() => void handleAddAccount()}
                         type='button'
                     >
-                        {tokenLimitReached ? 'Token limit reached' : 'Add token'}
+                        {pendingAction === 'connect' ? 'Adding account...' : 'Add Account'}
                     </button>
                 </div>
 
-                <div className='copy-trading__token-count'>{savedTokens.length} / {MAX_COPY_TOKENS} tokens saved</div>
+                <div className='copy-trading__section-heading'>
+                    <button
+                        aria-label='Refresh connected accounts'
+                        className='copy-trading__refresh-button'
+                        disabled={!canManageAccounts || isLoading}
+                        onClick={() => void loadAccounts()}
+                        type='button'
+                    >
+                        <svg aria-hidden='true' viewBox='0 0 24 24'>
+                            <path
+                                d='M20 12a8 8 0 0 1-13.66 5.66M4 12A8 8 0 0 1 17.66 6.34M17 3v4h-4M7 21v-4h4'
+                                fill='none'
+                                stroke='currentColor'
+                                strokeLinecap='round'
+                                strokeLinejoin='round'
+                                strokeWidth='2.2'
+                            />
+                        </svg>
+                    </button>
+                </div>
 
-                <div className='copy-trading__token-list'>
-                    {savedTokens.length ? (
-                        savedTokens.map(token => (
-                            <div className='copy-trading__token-row' key={token.id}>
-                                <div className='copy-trading__token-value'>
-                                    <strong>{maskToken(token.value)}</strong>
-                                </div>
+                {!canManageAccounts ? (
+                    <div className='copy-trading__empty'>Log in to ProfitDock before managing Copy Trading accounts.</div>
+                ) : null}
 
-                                <div className='copy-trading__token-actions'>
-                                    <button
-                                        className='copy-trading__button'
-                                        disabled={isSubmitting !== null || isAuthorizing}
-                                        onClick={() => void handleStartCopy(token.value)}
-                                        type='button'
+                <div className='copy-trading__account-list'>
+                    {isLoading ? (
+                        <div className='copy-trading__empty'>Refreshing accounts...</div>
+                    ) : realAccounts.length ? (
+                        realAccounts.map((account, index) => {
+                            const isPending = pendingAction?.endsWith(account.id);
+                            const isEnabled = account.copy_trading_enabled && account.connection_status === 'connected';
+                            const avatarTone = index % 5;
+
+                            return (
+                                <article className='copy-trading__account-card' key={account.id}>
+                                    <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
+                                        {getAvatarInitials(account)}
+                                    </div>
+                                    <div className='copy-trading__account-text'>
+                                        <strong>{account.deriv_account_id}</strong>
+                                        <span>{getAccountBalance(account)}</span>
+                                    </div>
+                                    <label
+                                        className={`copy-trading__switch ${isEnabled ? 'copy-trading__switch--enabled' : 'copy-trading__switch--disabled'}`}
                                     >
-                                        {isSubmitting === token.value ? 'Starting...' : 'Start copy trading'}
-                                    </button>
-
-                                    <button
-                                        className='copy-trading__remove'
-                                        disabled={isSubmitting !== null}
-                                        onClick={() => handleRemoveToken(token.id)}
-                                        type='button'
+                                        <input
+                                            checked={isEnabled}
+                                            disabled={account.connection_status !== 'connected' || isPending}
+                                            onChange={event =>
+                                                void handleToggleCopying(account, event.currentTarget.checked)
+                                            }
+                                            type='checkbox'
+                                        />
+                                        <span />
+                                    </label>
+                                    <div
+                                        className='copy-trading__menu-anchor'
+                                        ref={element => {
+                                            menuRefs.current[account.id] = element;
+                                        }}
                                     >
-                                        Remove
-                                    </button>
-                                </div>
-                            </div>
-                        ))
+                                        <button
+                                            aria-expanded={menuAccountId === account.id}
+                                            aria-label='Account actions'
+                                            className='copy-trading__menu-button'
+                                            disabled={isPending}
+                                            onClick={() =>
+                                                setMenuAccountId(previous => (previous === account.id ? null : account.id))
+                                            }
+                                            type='button'
+                                        >
+                                            <span />
+                                            <span />
+                                            <span />
+                                        </button>
+                                        {menuAccountId === account.id ? (
+                                            <div className='copy-trading__menu' role='menu'>
+                                                <button onClick={() => handleStartEditAccount(account)} type='button'>
+                                                    Edit token
+                                                </button>
+                                                <button
+                                                    className='copy-trading__menu-danger'
+                                                    onClick={() => void handleDisconnectAccount(account)}
+                                                    type='button'
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        ) : null}
+                                    </div>
+
+                                    {editingAccountId === account.id ? (
+                                        <div className='copy-trading__replace-row'>
+                                            <input
+                                                autoComplete='off'
+                                                disabled={isPending}
+                                                onChange={event => setReplacementToken(event.currentTarget.value)}
+                                                placeholder='Paste replacement Deriv API token'
+                                                type='password'
+                                                value={replacementToken}
+                                            />
+                                            <button
+                                                disabled={isPending}
+                                                onClick={() => void handleReplaceAccountToken(account)}
+                                                type='button'
+                                            >
+                                                Save
+                                            </button>
+                                            <button
+                                                disabled={isPending}
+                                                onClick={() => {
+                                                    setEditingAccountId(null);
+                                                    setReplacementToken('');
+                                                }}
+                                                type='button'
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    ) : null}
+                                </article>
+                            );
+                        })
                     ) : (
-                        <div className='copy-trading__empty'>Add up to 20 trader API tokens, then start copy trading from the one you want.</div>
+                        <div className='copy-trading__empty'>No real accounts connected yet. Add a Deriv API token to begin.</div>
                     )}
                 </div>
 
-                {notice ? <div className={`copy-trading__notice copy-trading__notice--${notice.tone}`}>{notice.message}</div> : null}
-            </section>
-        </div>
+                {notice ? (
+                    <div className={`copy-trading__notice copy-trading__notice--${notice.tone}`}>{notice.message}</div>
+                ) : null}
+            </ProfitDockSmoothSection>
+        </ProfitDockSmoothPage>
     );
 });
 

@@ -17,6 +17,12 @@ class DemoTradingProxy {
         this._initApi().catch(e => console.warn('[DemoProxy] warmUp failed:', e));
     }
 
+    /** Wait for the proxy to be ready, initializing if needed */
+    async ensureReady(): Promise<void> {
+        if (this.isReady) return;
+        await this._initApi();
+    }
+
     private async _initApi() {
         if (this.isInitializing) {
             return this.initPromise;
@@ -41,12 +47,20 @@ class DemoTradingProxy {
             });
 
             // Find VRTC demo token
-            const accountsList = JSON.parse(localStorage.getItem('accountsList') || '{}');
-            const demoLoginId = Object.keys(accountsList).find(id => id.startsWith('VRTC'));
-            const demoToken = demoLoginId ? accountsList[demoLoginId] : null;
+            let demoToken = null;
+            if (typeof window !== 'undefined' && (window as any)._clientStore?.accounts) {
+                const accounts = (window as any)._clientStore.accounts;
+                const demoLoginId = Object.keys(accounts).find(id => id.startsWith('VRTC'));
+                if (demoLoginId) demoToken = accounts[demoLoginId].token;
+            }
+            if (!demoToken) {
+                const clientAccounts = JSON.parse(localStorage.getItem('client.accounts') || '{}');
+                const demoLoginId = Object.keys(clientAccounts).find(id => id.startsWith('VRTC'));
+                demoToken = demoLoginId ? clientAccounts[demoLoginId].token : null;
+            }
 
             if (!demoToken) {
-                throw new Error('[DemoProxy] No VRTC demo token found');
+                throw new Error('[DemoProxy] No VRTC demo token found in local storage or client store');
             }
 
             const authRes = await api.authorize(demoToken);
@@ -86,9 +100,14 @@ class DemoTradingProxy {
         }
         try {
             return await this.api.send(request);
-        } catch (e) {
+        } catch (e: any) {
             console.warn('[DemoProxy] sendRequest error:', e);
-            return null;
+            // The calling code (Flipper, etc.) often expects to inspect the response or error object
+            // DerivAPIBasic rejects with the parsed JSON error response.
+            if (e && typeof e === 'object') {
+                return e;
+            }
+            return { error: { message: String(e) } };
         }
     }
 

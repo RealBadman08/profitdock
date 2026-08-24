@@ -15,6 +15,7 @@ import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentSta
 import { useStore } from '@/hooks/useStore';
 import { normalizeMartingaleMultiplier, roundMartingaleStake } from '@/hooks/useMartingale';
 import { runVirtualTrade } from '@/utils/virtual-trade';
+import { mirrorCopyTradingContractParameters } from '@/utils/copy-trading-execution';
 
 import {
     emitProfitdockTradeStatus,
@@ -194,6 +195,8 @@ const buyDirectContract = async ({
                 .join(': ')
         );
     }
+
+    void mirrorCopyTradingContractParameters(parameters, undefined, `auto:${response.buy.contract_id}`);
 
     return response.buy;
 };
@@ -636,7 +639,6 @@ const CorsaPage = observer(() => {
                                     return;
                                 }
                                 const profit = await runVirtualTrade({
-                                    api,
                                     contractType: liveContractType,
                                     currency,
                                     stake: currentStake,
@@ -657,6 +659,7 @@ const CorsaPage = observer(() => {
                                 }
                                 return;
                             }
+
                             // --- REAL MODE ---
                             const buyRes = await buyDirectContract({
                                 amount: currentStake,

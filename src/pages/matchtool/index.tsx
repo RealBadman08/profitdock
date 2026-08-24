@@ -24,6 +24,7 @@ import { getProfitdockPublicSocketUrl } from '@/external/bot-skeleton/services/a
 import { ProposalOpenContract } from '@deriv/api-types';
 import { localize } from '@deriv-com/translations';
 import { runVirtualTrade } from '@/utils/virtual-trade';
+import { mirrorCopyTradingContractParameters } from '@/utils/copy-trading-execution';
 import './matchtool.scss';
 
 type ApiLike = {
@@ -317,6 +318,12 @@ const requestProposalThenBuy = async ({
         );
     }
 
+    void mirrorCopyTradingContractParameters(
+        proposalPayload,
+        undefined,
+        `auto:${buyResponse.buy.contract_id}`
+    );
+
     return buyResponse.buy;
 };
 
@@ -593,6 +600,7 @@ const MatchtoolPage = observer(() => {
                 throw new Error('MatchTool stopped before trades were placed.');
             }
 
+
             // --- VIRTUAL MODE ---
             if (client.is_dummy_active) {
                 const stakePerPick = stakeAmount;
@@ -600,15 +608,13 @@ const MatchtoolPage = observer(() => {
                 if (client.dummy_balance <= 0.35 || client.dummy_balance < totalCost) {
                     setIsRunning(false);
                     stopRequestedRef.current = true;
-                    window.alert('Insufficient balance. Your virtual balance is too low to trade.');
+                    setFeedback('Insufficient balance. Your virtual balance is too low to trade.');
                     throw new Error('Insufficient balance.');
                 }
-                const api = await ensureTradingApi();
                 setRoundRows(picks.map(pick => ({ ...pick, result: 'placed' })));
-                await Promise.all(
+                const results = await Promise.allSettled(
                     picks.map(async pick => {
                         const profit = await runVirtualTrade({
-                            api,
                             contractType: 'DIGITMATCH',
                             barrier: pick.digit,
                             currency,
@@ -622,9 +628,11 @@ const MatchtoolPage = observer(() => {
                         });
                         const result = profit > 0 ? 'won' : 'lost';
                         updateRoundRow(pick.digit, { profit, result });
+                        return profit;
                     })
                 );
-                setFeedback('MatchTool round settled (virtual).');
+                const anyFailed = results.some(r => r.status === 'rejected');
+                setFeedback(anyFailed ? 'Some trades failed — check your demo account balance.' : 'MatchTool round complete.');
                 return;
             }
 

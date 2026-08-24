@@ -24,6 +24,7 @@ import {
     subscribeProfitdockTradeStart,
     subscribeProfitdockTradeStop,
 } from '@/utils/profitdock-trade-controller';
+import { mirrorCopyTradingContractParameters } from '@/utils/copy-trading-execution';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { localize } from '@deriv-com/translations';
 import './accumulators.scss';
@@ -143,6 +144,7 @@ type AutoEngineState = {
 
 type AccumulatorQuote = {
     askPrice: number;
+    contractParameters?: Record<string, unknown>;
     longcode?: string;
     proposalId: string;
 };
@@ -661,16 +663,15 @@ const requestAccumulatorQuote = async (api: ApiLike, params: {
     symbol: string;
     takeProfit?: number;
 }) => {
+    const contractParameters = buildAccumulatorRequest({
+        amount: params.amount,
+        currency: params.currency,
+        growthRate: params.growthRatePercent / 100,
+        symbol: params.symbol,
+        takeProfit: params.takeProfit,
+    });
     const response = normalizeApiMessage<AccumulatorProposalResponse>(
-        await api.send(
-            buildAccumulatorRequest({
-                amount: params.amount,
-                currency: params.currency,
-                growthRate: params.growthRatePercent / 100,
-                symbol: params.symbol,
-                takeProfit: params.takeProfit,
-            })
-        )
+        await api.send(contractParameters)
     );
 
     if (response?.error) {
@@ -683,6 +684,7 @@ const requestAccumulatorQuote = async (api: ApiLike, params: {
 
     return {
         askPrice: response.proposal.ask_price,
+        contractParameters,
         longcode: response.proposal.longcode,
         proposalId: response.proposal.id,
     } as AccumulatorQuote;
@@ -704,6 +706,14 @@ const buyAccumulatorQuote = async (
         const error = new Error(getDerivErrorMessage(response.error, fallbackMessage)) as Error & { code?: string };
         error.code = response.error.code;
         throw error;
+    }
+
+    if (response?.buy?.contract_id && quote.contractParameters) {
+        void mirrorCopyTradingContractParameters(
+            quote.contractParameters,
+            undefined,
+            `auto:${response.buy.contract_id}`
+        );
     }
 
     return response;
@@ -1176,7 +1186,7 @@ const AccumulatorsPage = observer(() => {
     
     // --- DUMMY MODE MONITOR ---
     const dummyRef = useRef({ lastStats: {} as Record<string, number> });
-    const currency = store.client.currency;
+    const currency = authData?.currency || getStoredProfitdockActiveCurrency() || store.client.currency || 'USD';
     useEffect(() => {
         if (!store.client.is_dummy_active) return;
         
@@ -1313,7 +1323,6 @@ const AccumulatorsPage = observer(() => {
     const [autoScanStatsHistory, setAutoScanStatsHistory] = useState<Record<string, number[]>>({});
 
     const hasRecoverableProfitdockSession = useCallback(() => isCustomLegacyOAuthDomain() && hasUsableProfitdockStoredSession(), []);
-    const currency = authData?.currency || getStoredProfitdockActiveCurrency() || 'USD';
     const { isLoading: isLoadingRankings, rankedMarkets, supportedMarkets } = useAccumulatorRankings(
         growthRatePercent,
         currency,
@@ -2373,6 +2382,13 @@ const AccumulatorsPage = observer(() => {
                     let quote = canUseLiveProposal
                         ? ({
                               askPrice: manualProposal.askPrice,
+                              contractParameters: buildAccumulatorRequest({
+                                  amount: stake,
+                                  currency,
+                                  growthRate: growthRatePercent / 100,
+                                  symbol: market.symbol,
+                                  takeProfit,
+                              }),
                               longcode: manualProposal.longcode,
                               proposalId: manualProposal.proposalId,
                           } as AccumulatorQuote)

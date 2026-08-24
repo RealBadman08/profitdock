@@ -427,7 +427,7 @@ const AppWrapper = observer(() => {
                                             width='24px'
                                             fill='var(--text-general)'
                                         />
-                                        <Localize i18n_default_text='Free Bots' />
+                                        <Localize i18n_default_text='Bot' />
                                     </>
                                 }
                                 id='id-free-bots'
@@ -435,7 +435,7 @@ const AppWrapper = observer(() => {
                                 <div className='free-bots-wrapper'>
                                     <Suspense
                                         fallback={
-                                            <ChunkLoader message={localize('Please wait, loading free bots...')} />
+                                            <ChunkLoader message={localize('Please wait, loading bot...')} />
                                         }
                                     >
                                         <FreeBots />
