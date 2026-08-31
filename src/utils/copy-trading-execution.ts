@@ -230,6 +230,16 @@ export const mirrorCopyTradingContractParameters = async (
             headers.Authorization = `Bearer ${token}`;
         }
 
+        // Send the active loginid so the server can resolve the owner account
+        // without calling the Deriv Options API (which rejects legacy Deriv tokens).
+        const active_loginid =
+            typeof window !== 'undefined'
+                ? (window.localStorage.getItem('active_loginid') || '')
+                : '';
+        if (active_loginid) {
+            headers['X-Deriv-Loginid'] = active_loginid;
+        }
+
         const response = await fetch(COPY_TRADING_BULK_PURCHASE_URL, {
             body: JSON.stringify({
                 contract_parameters: normalized_parameters,
