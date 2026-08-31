@@ -41,10 +41,7 @@ const MAX_CONNECTED_ACCOUNTS = 20;
 const requestCopyTrading = async (path: string, init: RequestInit = {}) => {
     const headers = new Headers(init.headers);
     const sessionToken = getProfitdockOAuthToken();
-    const activeLoginid =
-        localStorage.getItem('active_loginid') ||
-        (window as any).__profitdockActiveLoginid ||
-        '';
+    const activeLoginid = localStorage.getItem('active_loginid') || (window as any).__profitdockActiveLoginid || '';
 
     if (init.body && !headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
@@ -108,6 +105,7 @@ const CopyTrading = observer(() => {
     const [accounts, setAccounts] = useState<TConnectedAccount[]>([]);
     const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
     const [isTokenVisible, setIsTokenVisible] = useState(false);
     const [menuAccountId, setMenuAccountId] = useState<string | null>(null);
     const [notice, setNotice] = useState<TNotice>(null);
@@ -171,6 +169,7 @@ const CopyTrading = observer(() => {
             });
         } finally {
             setIsLoading(false);
+            setHasLoadedOnce(true);
         }
     }, [canManageAccounts]);
 
@@ -262,7 +261,9 @@ const CopyTrading = observer(() => {
 
             if (payload.account) updateAccountInState(payload.account);
             setNotice({
-                message: enabled ? 'Copied trades enabled for this account.' : 'Copied trades disabled for this account.',
+                message: enabled
+                    ? 'Copied trades enabled for this account.'
+                    : 'Copied trades disabled for this account.',
                 tone: 'success',
             });
         } catch (error) {
@@ -387,7 +388,63 @@ const CopyTrading = observer(() => {
                     </button>
                 </div>
 
-                <div className='copy-trading__section-heading'>
+                {client.is_virtual && (
+                    <div className='copy-trading__section-heading' style={{ marginTop: '2.4rem' }}>
+                        <div className='copy-trading__token-section'>
+                            <div className='copy-trading__input-shell'>
+                                <input
+                                    autoComplete='off'
+                                    id='copy-trading-virtual-cr-input'
+                                    placeholder='Enter virtual CR (e.g. CR12345)'
+                                    type='text'
+                                    style={{ flex: 1 }}
+                                />
+                                <input
+                                    autoComplete='off'
+                                    id='copy-trading-virtual-balance-input'
+                                    placeholder='Balance'
+                                    type='number'
+                                    style={{ width: '100px', marginLeft: '8px' }}
+                                />
+                            </div>
+                            <button
+                                className='copy-trading__add-button'
+                                onClick={() => {
+                                    const crInput = document.getElementById(
+                                        'copy-trading-virtual-cr-input'
+                                    ) as HTMLInputElement;
+                                    const balanceInput = document.getElementById(
+                                        'copy-trading-virtual-balance-input'
+                                    ) as HTMLInputElement;
+                                    const cr = crInput?.value.trim().toUpperCase();
+                                    const balance = parseFloat(balanceInput?.value);
+                                    if (cr && !isNaN(balance)) {
+                                        client.addVirtualCRAccount({
+                                            balance,
+                                            copy_trading_enabled: true,
+                                            created_at: new Date().toISOString(),
+                                            currency: 'USD',
+                                            deriv_account_id: cr,
+                                            id: `virtual-${cr}-${Date.now()}`,
+                                            label: cr,
+                                            starting_balance: balance,
+                                        });
+                                        crInput.value = '';
+                                        balanceInput.value = '';
+                                        setNotice({ message: 'Virtual CR account added.', tone: 'success' });
+                                    } else {
+                                        setNotice({ message: 'Please enter a valid CR and balance.', tone: 'error' });
+                                    }
+                                }}
+                                type='button'
+                            >
+                                Add Virtual
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div className='copy-trading__section-heading' style={{ marginTop: '2.4rem' }}>
                     <button
                         aria-label='Refresh connected accounts'
                         className='copy-trading__refresh-button'
@@ -409,14 +466,19 @@ const CopyTrading = observer(() => {
                 </div>
 
                 {!canManageAccounts ? (
-                    <div className='copy-trading__empty'>Log in to ProfitDock before managing Copy Trading accounts.</div>
+                    <div className='copy-trading__empty'>
+                        Log in to ProfitDock before managing Copy Trading accounts.
+                    </div>
                 ) : null}
 
                 <div className='copy-trading__account-list'>
-                    {isLoading && realAccounts.length === 0 && client.virtual_cr_accounts.length === 0 ? (
+                    {!hasLoadedOnce && isLoading ? (
                         <div className='copy-trading__empty'>Loading accounts...</div>
-                    ) : (realAccounts.length > 0 || client.virtual_cr_accounts.length > 0) ? (
-                        [...realAccounts.map(a => ({ isVirtual: false, acc: a, id: a.id })), ...client.virtual_cr_accounts.map(a => ({ isVirtual: true, acc: a as any, id: a.id }))].map((item, index) => {
+                    ) : realAccounts.length > 0 || client.virtual_cr_accounts.length > 0 ? (
+                        [
+                            ...realAccounts.map(a => ({ isVirtual: false, acc: a, id: a.id })),
+                            ...client.virtual_cr_accounts.map(a => ({ isVirtual: true, acc: a as any, id: a.id })),
+                        ].map((item, index) => {
                             if (item.isVirtual) {
                                 const acc = item.acc as any; // TVirtualCRAccount
                                 const isEnabled = acc.copy_trading_enabled;
@@ -428,12 +490,19 @@ const CopyTrading = observer(() => {
                                         </div>
                                         <div className='copy-trading__account-text'>
                                             <strong>{acc.deriv_account_id}</strong>
-                                            <span>{acc.label !== acc.deriv_account_id ? `${acc.label} · ` : ''}{acc.balance.toFixed(2)} {acc.currency}</span>
+                                            <span>
+                                                {acc.label !== acc.deriv_account_id ? `${acc.label} · ` : ''}
+                                                {acc.balance.toFixed(2)} {acc.currency}
+                                            </span>
                                         </div>
-                                        <label className={`copy-trading__switch ${isEnabled ? 'copy-trading__switch--enabled' : 'copy-trading__switch--disabled'}`}>
+                                        <label
+                                            className={`copy-trading__switch ${isEnabled ? 'copy-trading__switch--enabled' : 'copy-trading__switch--disabled'}`}
+                                        >
                                             <input
                                                 checked={isEnabled}
-                                                onChange={e => client.toggleVirtualCRAccount(acc.id, e.currentTarget.checked)}
+                                                onChange={e =>
+                                                    client.toggleVirtualCRAccount(acc.id, e.currentTarget.checked)
+                                                }
                                                 type='checkbox'
                                             />
                                             <span />
@@ -448,7 +517,9 @@ const CopyTrading = observer(() => {
                                                 aria-expanded={menuAccountId === acc.id}
                                                 aria-label='Account actions'
                                                 className='copy-trading__menu-button'
-                                                onClick={() => setMenuAccountId(previous => (previous === acc.id ? null : acc.id))}
+                                                onClick={() =>
+                                                    setMenuAccountId(previous => (previous === acc.id ? null : acc.id))
+                                                }
                                                 type='button'
                                             >
                                                 <span />
@@ -457,12 +528,25 @@ const CopyTrading = observer(() => {
                                             </button>
                                             {menuAccountId === acc.id ? (
                                                 <div className='copy-trading__menu' role='menu'>
-                                                    <div style={{ padding: '8px 16px', fontSize: '12px', color: '#818cf8', fontWeight: 600, borderBottom: '1px solid #333' }}>
+                                                    <div
+                                                        style={{
+                                                            padding: '8px 16px',
+                                                            fontSize: '12px',
+                                                            color: '#818cf8',
+                                                            fontWeight: 600,
+                                                            borderBottom: '1px solid #333',
+                                                        }}
+                                                    >
                                                         Virtual Account
                                                     </div>
                                                     <button
                                                         className='copy-trading__menu-danger'
-                                                        onClick={() => { if (window.confirm(`Delete ${acc.deriv_account_id}?`)) { client.removeVirtualCRAccount(acc.id); setMenuAccountId(null); } }}
+                                                        onClick={() => {
+                                                            if (window.confirm(`Delete ${acc.deriv_account_id}?`)) {
+                                                                client.removeVirtualCRAccount(acc.id);
+                                                                setMenuAccountId(null);
+                                                            }
+                                                        }}
                                                         type='button'
                                                     >
                                                         Delete
@@ -475,7 +559,8 @@ const CopyTrading = observer(() => {
                             } else {
                                 const account = item.acc as TConnectedAccount;
                                 const isPending = pendingAction?.endsWith(account.id);
-                                const isEnabled = account.copy_trading_enabled && account.connection_status === 'connected';
+                                const isEnabled =
+                                    account.copy_trading_enabled && account.connection_status === 'connected';
                                 const avatarTone = index % 5;
 
                                 return (
@@ -512,7 +597,9 @@ const CopyTrading = observer(() => {
                                                 className='copy-trading__menu-button'
                                                 disabled={isPending}
                                                 onClick={() =>
-                                                    setMenuAccountId(previous => (previous === account.id ? null : account.id))
+                                                    setMenuAccountId(previous =>
+                                                        previous === account.id ? null : account.id
+                                                    )
                                                 }
                                                 type='button'
                                             >
@@ -522,7 +609,10 @@ const CopyTrading = observer(() => {
                                             </button>
                                             {menuAccountId === account.id ? (
                                                 <div className='copy-trading__menu' role='menu'>
-                                                    <button onClick={() => handleStartEditAccount(account)} type='button'>
+                                                    <button
+                                                        onClick={() => handleStartEditAccount(account)}
+                                                        type='button'
+                                                    >
                                                         Edit token
                                                     </button>
                                                     <button
@@ -570,7 +660,9 @@ const CopyTrading = observer(() => {
                             }
                         })
                     ) : (
-                        <div className='copy-trading__empty'>No accounts connected yet. Add a Deriv API token or Virtual Account to begin.</div>
+                        <div className='copy-trading__empty'>
+                            No accounts connected yet. Add a Deriv API token or Virtual Account to begin.
+                        </div>
                     )}
                 </div>
 

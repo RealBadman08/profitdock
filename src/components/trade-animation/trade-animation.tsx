@@ -45,23 +45,23 @@ const getCopyTradingFailureMessage = (detail: any) => {
         payload.result?.copy_trading?.errors ||
         payload.errors ||
         [];
-    const firstRecipientError =
-        Array.isArray(errors) && errors.length ? errors[0] : null;
+    const firstRecipientError = Array.isArray(errors) && errors.length ? errors[0] : null;
 
     const extractString = (val: any): string | null => {
         if (typeof val === 'string') return val;
         if (val && typeof val === 'object') {
-            return val.message || val.error_message || val.error_description || val.code || null;
+            return val.message || val.error_message || val.error_description || val.code || val.error || null;
         }
         return null;
     };
 
     const message =
         extractString(firstRecipientError) ||
+        extractString(payload) ||
         extractString(payload.details?.error) ||
         extractString(payload.error) ||
-        extractString(payload) ||
         extractString(detail.error) ||
+        (detail.status ? `HTTP ${detail.status}` : null) ||
         'Copied trade was not placed on the enabled account.';
 
     return `Copy Trading failed: ${message}`;
@@ -171,34 +171,37 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
             ? 'accumulators'
             : safeActiveTab === DBOT_TABS.CORSA
               ? 'corsa'
-                : safeActiveTab === DBOT_TABS.FLIPPER_SWITCHER
-                  ? 'flipper'
-                  : safeActiveTab === DBOT_TABS.MATCHTOOL
-                    ? 'matchtool'
-                    : safeActiveTab === DBOT_TABS.MESH
-                      ? 'mesh'
-                : undefined;
-                
+              : safeActiveTab === DBOT_TABS.FLIPPER_SWITCHER
+                ? 'flipper'
+                : safeActiveTab === DBOT_TABS.MATCHTOOL
+                  ? 'matchtool'
+                  : safeActiveTab === DBOT_TABS.MESH
+                    ? 'mesh'
+                    : undefined;
+
     const globalRunningTradeStatus = getProfitdockTradeStatus();
     const currentTabTradeStatus = getProfitdockTradeStatus(active_profitdock_feature);
-    
+
     // Prioritize the running trade if there is one. Otherwise, show the current tab's status.
     const profitdockTradeStatus = globalRunningTradeStatus?.running ? globalRunningTradeStatus : currentTabTradeStatus;
-    
-    const is_profitdock_trade_tab = [
-        DBOT_TABS.ACCUMULATORS,
-        DBOT_TABS.CORSA,
-        DBOT_TABS.FLIPPER_SWITCHER,
-        DBOT_TABS.MATCHTOOL,
-        DBOT_TABS.MESH,
-    ].includes(safeActiveTab) || Boolean(globalRunningTradeStatus?.running);
+
+    const is_profitdock_trade_tab =
+        [
+            DBOT_TABS.ACCUMULATORS,
+            DBOT_TABS.CORSA,
+            DBOT_TABS.FLIPPER_SWITCHER,
+            DBOT_TABS.MATCHTOOL,
+            DBOT_TABS.MESH,
+        ].includes(safeActiveTab) || Boolean(globalRunningTradeStatus?.running);
 
     const is_profitdock_trade_running = Boolean(
         is_profitdock_trade_tab && profitdockTradeStatus?.running && profitdockTradeStatus?.canStop !== false
     );
-    // Use PURCHASE_SENT (3) instead of RUNNING (2) so that `progress_status` becomes 1 
+    // Use PURCHASE_SENT (3) instead of RUNNING (2) so that `progress_status` becomes 1
     // and the middle animation circle receives the 'active' class, making it spin.
-    const display_contract_stage = is_profitdock_trade_running ? (contract_stages.PURCHASE_SENT as unknown as number) : contract_stage;
+    const display_contract_stage = is_profitdock_trade_running
+        ? (contract_stages.PURCHASE_SENT as unknown as number)
+        : contract_stage;
 
     const status_classes = ['', '', ''];
     const is_purchase_sent = display_contract_stage === (contract_stages.PURCHASE_SENT as unknown);
@@ -230,12 +233,17 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
         ? profitdockTradeStatus?.canStart === false && !is_profitdock_trade_running
         : has_no_bots && !is_bot_builder_tab;
 
-    const is_disabled = is_profitdock_trade_running ? false : is_stop_button_visible ? false : shouldDisable || should_disable_run;
+    const is_disabled = is_profitdock_trade_running
+        ? false
+        : is_stop_button_visible
+          ? false
+          : shouldDisable || should_disable_run;
 
     // Show the tooltip when:
     // 1. The user is NOT in the bot builder tab, AND
     // 2. There are no bots
-    const should_show_tooltip = !is_profitdock_trade_tab && !is_stop_button_visible && !is_bot_builder_tab && has_no_bots;
+    const should_show_tooltip =
+        !is_profitdock_trade_tab && !is_stop_button_visible && !is_bot_builder_tab && has_no_bots;
 
     const button_props = React.useMemo(() => {
         if (is_profitdock_trade_running || (is_stop_button_visible && !is_stop_button_disabled)) {
