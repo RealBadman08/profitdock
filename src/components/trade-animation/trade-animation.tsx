@@ -1,6 +1,7 @@
 import React from 'react';
 import classNames from 'classnames';
 import { observer } from 'mobx-react-lite';
+import { botNotification } from '@/components/bot-notification/bot-notification';
 import ContractResultOverlay from '@/components/contract-result-overlay';
 import { DBOT_TABS } from '@/constants/bot-contents';
 import { contract_stages } from '@/constants/contract-stage';
@@ -25,6 +26,45 @@ import './run-panel-tooltip.scss';
 type TTradeAnimation = {
     className?: string;
     should_show_overlay?: boolean;
+};
+
+const getCopyTradingFailureMessage = (detail: any) => {
+    if (!detail || detail.ok) return '';
+
+    if (detail.skipped) {
+        if (detail.reason === 'duplicate_buy') return '';
+        return `Copy Trading skipped: ${detail.reason}`;
+    }
+
+    const payload = detail.payload || {};
+    const errors =
+        payload.details?.copy_trading?.errors ||
+        payload.details?.result?.copy_trading?.errors ||
+        payload.details?.errors ||
+        payload.copy_trading?.errors ||
+        payload.result?.copy_trading?.errors ||
+        payload.errors ||
+        [];
+    const firstRecipientError =
+        Array.isArray(errors) && errors.length ? errors[0] : null;
+
+    const extractString = (val: any): string | null => {
+        if (typeof val === 'string') return val;
+        if (val && typeof val === 'object') {
+            return val.message || val.error_message || val.error_description || val.code || null;
+        }
+        return null;
+    };
+
+    const message =
+        extractString(firstRecipientError) ||
+        extractString(payload.details?.error) ||
+        extractString(payload.error) ||
+        extractString(payload) ||
+        extractString(detail.error) ||
+        'Copied trade was not placed on the enabled account.';
+
+    return `Copy Trading failed: ${message}`;
 };
 
 const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnimation) => {
@@ -64,6 +104,21 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
             }),
         []
     );
+
+    React.useEffect(() => {
+        let last_message = '';
+
+        const handleCopyTradingResult = (event: Event) => {
+            const message = getCopyTradingFailureMessage((event as CustomEvent).detail);
+            if (!message || message === last_message) return;
+
+            last_message = message;
+            botNotification(message, undefined, { autoClose: 9000, className: 'error-toast' });
+        };
+
+        window.addEventListener('profitdock:copy-trading-result', handleCopyTradingResult);
+        return () => window.removeEventListener('profitdock:copy-trading-result', handleCopyTradingResult);
+    }, []);
 
     // Get the load_modal store to monitor strategy deletions
     const { load_modal } = useStore();
@@ -123,18 +178,27 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                     : safeActiveTab === DBOT_TABS.MESH
                       ? 'mesh'
                 : undefined;
-    const profitdockTradeStatus = getProfitdockTradeStatus(active_profitdock_feature);
+                
+    const globalRunningTradeStatus = getProfitdockTradeStatus();
+    const currentTabTradeStatus = getProfitdockTradeStatus(active_profitdock_feature);
+    
+    // Prioritize the running trade if there is one. Otherwise, show the current tab's status.
+    const profitdockTradeStatus = globalRunningTradeStatus?.running ? globalRunningTradeStatus : currentTabTradeStatus;
+    
     const is_profitdock_trade_tab = [
         DBOT_TABS.ACCUMULATORS,
         DBOT_TABS.CORSA,
         DBOT_TABS.FLIPPER_SWITCHER,
         DBOT_TABS.MATCHTOOL,
         DBOT_TABS.MESH,
-    ].includes(safeActiveTab);
+    ].includes(safeActiveTab) || Boolean(globalRunningTradeStatus?.running);
+
     const is_profitdock_trade_running = Boolean(
         is_profitdock_trade_tab && profitdockTradeStatus?.running && profitdockTradeStatus?.canStop !== false
     );
-    const display_contract_stage = is_profitdock_trade_running ? contract_stages.RUNNING : contract_stage;
+    // Use PURCHASE_SENT (3) instead of RUNNING (2) so that `progress_status` becomes 1 
+    // and the middle animation circle receives the 'active' class, making it spin.
+    const display_contract_stage = is_profitdock_trade_running ? (contract_stages.PURCHASE_SENT as unknown as number) : contract_stage;
 
     const status_classes = ['', '', ''];
     const is_purchase_sent = display_contract_stage === (contract_stages.PURCHASE_SENT as unknown);

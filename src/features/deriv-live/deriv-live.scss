@@ -2,41 +2,42 @@
 @use 'components/shared/styles/mixins' as *;
 
 .deriv-live {
-    --dl-bg: #ffffff;
-    --dl-panel: #ffffff;
+    --dl-bg: #fff;
+    --dl-panel: #fff;
     --dl-panel-strong: #fafafa;
     --dl-border: #d6dadb;
     --dl-border-soft: #e6e9e9;
     --dl-text: #0f172a;
     --dl-muted: #64748b;
     --dl-label: #47627e;
-    --dl-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-    --dl-input-bg: #ffffff;
+    --dl-shadow: 0 6px 18px rgb(15 23 42 / 6%);
+    --dl-input-bg: #fff;
     --dl-input-border: #d6dadb;
-    --dl-input-focus: rgba(37, 99, 235, 0.55);
-    --dl-badge-bg: rgba(37, 99, 235, 0.08);
+    --dl-input-focus: rgb(37 99 235 / 55%);
+    --dl-badge-bg: rgb(37 99 235 / 8%);
     --dl-badge-text: #0f172a;
-    --dl-surface: #ffffff;
+    --dl-surface: #fff;
     --dl-surface-muted: #f5f7fa;
-    --dl-chip-bg: #ffffff;
+    --dl-chip-bg: #fff;
     --dl-chip-border: #d6dadb;
-    --dl-meter-bg: rgba(148, 163, 184, 0.18);
-    --dl-active-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(14, 165, 233, 0.12));
-    --dl-active-border: rgba(59, 130, 246, 0.32);
-    --dl-active-shadow: 0 14px 28px rgba(37, 99, 235, 0.16);
-    --dl-highlight-border: rgba(37, 99, 235, 0.34);
-    --dl-highlight-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.22), 0 12px 24px rgba(37, 99, 235, 0.14);
+    --dl-meter-bg: rgb(148 163 184 / 18%);
+    --dl-active-bg: linear-gradient(135deg, rgb(59 130 246 / 16%), rgb(14 165 233 / 12%));
+    --dl-active-border: rgb(59 130 246 / 32%);
+    --dl-active-shadow: 0 14px 28px rgb(37 99 235 / 16%);
+    --dl-highlight-border: rgb(37 99 235 / 34%);
+    --dl-highlight-shadow: inset 0 0 0 1px rgb(59 130 246 / 22%), 0 12px 24px rgb(37 99 235 / 14%);
     --dl-ring-fill: #6b7280;
-    --dl-ring-track: rgba(15, 23, 42, 0.1);
-    --dl-ring-inner: #ffffff;
-    --dl-ring-inner-border: rgba(15, 23, 42, 0.12);
-    --dl-notice-bg: #ffffff;
+    --dl-ring-track: rgb(15 23 42 / 10%);
+    --dl-ring-inner: #fff;
+    --dl-ring-inner-border: rgb(15 23 42 / 12%);
+    --dl-notice-bg: #fff;
     --dl-notice-text: #1e293b;
-    --dl-social-bg: #ffffff;
-    --dl-social-border: rgba(15, 23, 42, 0.14);
-    --dl-social-shadow: 0 14px 32px rgba(15, 23, 42, 0.14);
-    --dl-empty-bg: #ffffff;
+    --dl-social-bg: #fff;
+    --dl-social-border: rgb(15 23 42 / 14%);
+    --dl-social-shadow: 0 14px 32px rgb(15 23 42 / 14%);
+    --dl-empty-bg: #fff;
     --dl-bottom-clearance: calc(18rem + env(safe-area-inset-bottom, 0px));
+
     min-height: 100%;
     padding: 2rem 2rem var(--dl-bottom-clearance);
     background: var(--dl-bg);
@@ -45,6 +46,7 @@
 
     @include mobile-or-tablet-screen {
         --dl-bottom-clearance: calc(23rem + env(safe-area-inset-bottom, 0px));
+
         padding: 1.2rem 1.2rem var(--dl-bottom-clearance);
     }
 }
@@ -56,27 +58,27 @@
         --dl-panel-strong: #242828;
         --dl-border: #323738;
         --dl-border-soft: #2e2e2e;
-        --dl-text: #ffffff;
+        --dl-text: #fff;
         --dl-muted: #c2c2c2;
         --dl-label: #c2c2c2;
-        --dl-shadow: 0 22px 48px rgba(0, 0, 0, 0.44), 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+        --dl-shadow: 0 22px 48px rgb(0 0 0 / 44%), 0 1px 0 rgb(255 255 255 / 2%) inset;
         --dl-input-bg: #151717;
         --dl-input-border: #323738;
-        --dl-input-focus: rgba(133, 172, 176, 0.72);
-        --dl-badge-bg: rgba(255, 255, 255, 0.08);
-        --dl-badge-text: #ffffff;
+        --dl-input-focus: rgb(133 172 176 / 72%);
+        --dl-badge-bg: rgb(255 255 255 / 8%);
+        --dl-badge-text: #fff;
         --dl-surface: #1d2020;
         --dl-surface-muted: #202424;
         --dl-chip-bg: #202424;
         --dl-chip-border: #323738;
-        --dl-meter-bg: rgba(148, 163, 184, 0.28);
-        --dl-active-bg: linear-gradient(135deg, rgba(34, 186, 255, 0.32), rgba(34, 186, 255, 0.12));
-        --dl-active-border: rgba(116, 220, 255, 0.5);
-        --dl-active-shadow: 0 12px 26px rgba(20, 108, 186, 0.26);
-        --dl-highlight-border: rgba(125, 211, 252, 0.84);
-        --dl-highlight-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.55), 0 8px 18px rgba(56, 189, 248, 0.28);
+        --dl-meter-bg: rgb(148 163 184 / 28%);
+        --dl-active-bg: linear-gradient(135deg, rgb(34 186 255 / 32%), rgb(34 186 255 / 12%));
+        --dl-active-border: rgb(116 220 255 / 50%);
+        --dl-active-shadow: 0 12px 26px rgb(20 108 186 / 26%);
+        --dl-highlight-border: rgb(125 211 252 / 84%);
+        --dl-highlight-shadow: inset 0 0 0 1px rgb(125 211 252 / 55%), 0 8px 18px rgb(56 189 248 / 28%);
         --dl-ring-fill: #9ca3af;
-        --dl-ring-track: rgba(148, 163, 184, 0.34);
+        --dl-ring-track: rgb(148 163 184 / 34%);
         --dl-ring-inner: #151717;
         --dl-ring-inner-border: #323738;
         --dl-notice-bg: #2d1820;
@@ -88,7 +90,7 @@
     }
 
     .deriv-live__social-link--tiktok {
-        color: #ffffff;
+        color: #fff;
     }
 
     .deriv-live__hero,
@@ -106,7 +108,7 @@
     .deriv-live__sequence-tile,
     .deriv-live__digit-button,
     .deriv-live__latest-digit {
-        box-shadow: 0 16px 34px rgba(0, 0, 0, 0.3), 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+        box-shadow: 0 16px 34px rgb(0 0 0 / 30%), 0 1px 0 rgb(255 255 255 / 2%) inset;
     }
 
     .deriv-live__hero,
@@ -114,7 +116,7 @@
     .deriv-live__control-card,
     .deriv-live__price-card,
     .deriv-live__trade-card {
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.018), rgba(255, 255, 255, 0) 22%), var(--dl-panel);
+        background: linear-gradient(180deg, rgb(255 255 255 / 1.8%), rgb(255 255 255 / 0%) 22%), var(--dl-panel);
     }
 
     .deriv-live__metric,
@@ -127,7 +129,7 @@
     .deriv-live__sequence-tile,
     .deriv-live__digit-button,
     .deriv-live__latest-digit {
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0) 28%), var(--dl-surface);
+        background: linear-gradient(180deg, rgb(255 255 255 / 2%), rgb(255 255 255 / 0%) 28%), var(--dl-surface);
     }
 
     .deriv-live__field input,
@@ -157,14 +159,14 @@
     }
 
     .deriv-live__meter {
-        box-shadow: inset 0 0 0 1px rgba(102, 122, 146, 0.34);
+        box-shadow: inset 0 0 0 1px rgb(102 122 146 / 34%);
     }
     
     .deriv-live__sequence-tile--latest {
         border-color: #22c55e;
-        box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.82), 0 0 24px rgba(34, 197, 94, 0.55), inset 0 0 16px rgba(34, 197, 94, 0.14) !important;
+        box-shadow: 0 0 0 1px rgb(34 197 94 / 82%), 0 0 24px rgb(34 197 94 / 55%), inset 0 0 16px rgb(34 197 94 / 14%) !important;
         color: #86efac !important;
-        background: linear-gradient(180deg, rgba(34, 197, 94, 0.16), rgba(34, 197, 94, 0.05)), #050505 !important;
+        background: linear-gradient(180deg, rgb(34 197 94 / 16%), rgb(34 197 94 / 5%)), #050505 !important;
     }
 }
 
@@ -279,7 +281,7 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    @media (max-width: 520px) {
+    @media (width <= 520px) {
         grid-template-columns: 1fr;
     }
 }
@@ -315,7 +317,7 @@
 .deriv-live__token-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
 
-    @media (max-width: 520px) {
+    @media (width <= 520px) {
         grid-template-columns: 1fr;
     }
 }
@@ -384,7 +386,7 @@
 
 .deriv-live__field select option,
 .deriv-live__field select optgroup {
-    background: #ffffff;
+    background: #fff;
     color: #0f172a;
 }
 
@@ -397,7 +399,7 @@
 .deriv-live__field select:focus,
 .deriv-live__field textarea:focus {
     border-color: var(--dl-input-focus);
-    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+    box-shadow: 0 0 0 4px rgb(37 99 235 / 12%);
 }
 
 .deriv-live__field-help {
@@ -460,13 +462,14 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 1rem;
 
-    @media (min-width: 960px) {
+    @media (width >= 960px) {
         grid-template-columns: repeat(10, minmax(0, 1fr));
     }
 }
 
 .deriv-live__digit-card {
     --dl-ring-current: var(--dl-ring-fill);
+
     position: relative;
     display: grid;
     justify-items: center;
@@ -480,12 +483,12 @@
 
 .deriv-live__digit-card--latest {
     border-color: #38bdf8;
-    background: linear-gradient(180deg, rgba(56, 189, 248, 0.08), rgba(56, 189, 248, 0.02)), var(--dl-surface);
-    box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.42);
+    background: linear-gradient(180deg, rgb(56 189 248 / 8%), rgb(56 189 248 / 2%)), var(--dl-surface);
+    box-shadow: 0 0 0 1px rgb(56 189 248 / 42%);
     transform: none;
 }
 
-.deriv-live__digit-card--latest::before {
+.deriv-live__digit-card--latest:before {
     content: none;
 }
 
@@ -501,7 +504,7 @@
 }
 
 .deriv-live__digit-card--latest .deriv-live__digit-ring {
-    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.26);
+    box-shadow: 0 0 0 3px rgb(56 189 248 / 26%);
     animation: none;
 }
 
@@ -515,7 +518,7 @@
     --dl-ring-current: #ff2d55;
 
     .deriv-live__digit-ring {
-        box-shadow: 0 0 0 3px rgba(255, 45, 85, 0.35);
+        box-shadow: 0 0 0 3px rgb(255 45 85 / 35%);
     }
 }
 
@@ -523,7 +526,7 @@
     --dl-ring-current: #facc15;
 
     .deriv-live__digit-ring {
-        box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.35);
+        box-shadow: 0 0 0 3px rgb(250 204 21 / 35%);
     }
 }
 
@@ -531,7 +534,7 @@
     --dl-ring-current: #22c55e;
 
     .deriv-live__digit-ring {
-        box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.35);
+        box-shadow: 0 0 0 3px rgb(34 197 94 / 35%);
     }
 }
 
@@ -539,26 +542,26 @@
     --dl-ring-current: #1d4ed8;
 
     .deriv-live__digit-ring {
-        box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.35);
+        box-shadow: 0 0 0 3px rgb(29 78 216 / 35%);
     }
 }
 
 .theme--dark {
     .deriv-live__digit-card--latest {
         border-color: #38bdf8;
-        background: linear-gradient(180deg, rgba(56, 189, 248, 0.16), rgba(56, 189, 248, 0.05)), #050505;
-        box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.82), 0 0 36px rgba(56, 189, 248, 0.55),
-            inset 0 0 28px rgba(56, 189, 248, 0.14);
+        background: linear-gradient(180deg, rgb(56 189 248 / 16%), rgb(56 189 248 / 5%)), #050505;
+        box-shadow: 0 0 0 1px rgb(56 189 248 / 82%), 0 0 36px rgb(56 189 248 / 55%),
+            inset 0 0 28px rgb(56 189 248 / 14%);
     }
 
-    .deriv-live__digit-card--latest::before {
-        background: radial-gradient(circle at 50% 58%, rgba(56, 189, 248, 0.32), transparent 70%);
+    .deriv-live__digit-card--latest:before {
+        background: radial-gradient(circle at 50% 58%, rgb(56 189 248 / 32%), transparent 70%);
         filter: blur(12px);
     }
 
     .deriv-live__digit-card--latest .deriv-live__digit-ring {
-        box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.46), 0 0 24px rgba(56, 189, 248, 0.85),
-            0 0 42px rgba(56, 189, 248, 0.45);
+        box-shadow: 0 0 0 4px rgb(56 189 248 / 46%), 0 0 24px rgb(56 189 248 / 85%),
+            0 0 42px rgb(56 189 248 / 45%);
     }
 
     .deriv-live__digit-card--latest .deriv-live__digit-value,
@@ -568,7 +571,7 @@
     }
 }
 
-.deriv-live__digit-ring::after {
+.deriv-live__digit-ring:after {
     content: '';
     position: absolute;
     inset: 12%;
@@ -634,7 +637,7 @@
 
 .deriv-live__sequence-tile--latest {
     border-color: #22c55e;
-    box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.42), 0 0 12px rgba(34, 197, 94, 0.25) !important;
+    box-shadow: 0 0 0 1px rgb(34 197 94 / 42%), 0 0 12px rgb(34 197 94 / 25%) !important;
     color: #22c55e !important;
 }
 
@@ -694,7 +697,7 @@
     display: block;
     height: 100%;
     border-radius: inherit;
-    background: currentColor;
+    background: currentcolor;
 }
 
 .deriv-live__sequence {
@@ -829,7 +832,7 @@
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.6rem;
 
-    @media (min-width: 960px) {
+    @media (width >= 960px) {
         grid-template-columns: repeat(10, minmax(0, 1fr));
     }
 }

@@ -222,9 +222,22 @@ const Tabs = ({
             >
                 {React.Children.map(children, (child, index) => {
                     if (!child) return null;
-                    if (index !== active_tab_index) {
+                    const is_active = index === active_tab_index;
+                    // Allow keep_alive via direct prop or data attribute
+                    const keep_alive = child.props.keep_alive || child.props['data-keep-alive'];
+
+                    if (!is_active && !keep_alive) {
                         return undefined;
                     }
+
+                    if (keep_alive) {
+                        return (
+                            <div style={{ display: is_active ? 'block' : 'none', height: '100%', width: '100%' }}>
+                                {child.props.children}
+                            </div>
+                        );
+                    }
+
                     return child.props.children;
                 })}
             </div>

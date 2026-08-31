@@ -327,7 +327,41 @@ const listConnectedAccounts = async ownerDerivAccountId => {
         `copy_trading_accounts?owner_deriv_account_id=eq.${owner}&deleted_at=is.null&account_type=eq.real&order=created_at.desc`
     );
 
-    return Array.isArray(rows) ? rows.map(sanitizeAccount) : [];
+    const rawRows = Array.isArray(rows) ? rows : [];
+
+    // Refresh live balances from Deriv in parallel; fall back to stored balance on any error
+    const refreshed = await Promise.all(
+        rawRows.map(async rawRow => {
+            try {
+                const secretRows = await supabaseFetch(
+                    `copy_trading_account_secrets?id=eq.${encodeURIComponent(rawRow.credential_secret_id)}&owner_deriv_account_id=eq.${encodeURIComponent(ownerDerivAccountId)}&deriv_account_id=eq.${encodeURIComponent(rawRow.deriv_account_id)}&limit=1`
+                );
+                const secret = Array.isArray(secretRows) ? secretRows[0] : null;
+                if (!secret) return sanitizeAccount(rawRow);
+
+                const token = decryptCredential(secret);
+                const derivAccounts = await loadDerivOptionsAccounts(token);
+                const match = derivAccounts.find(a => a.deriv_account_id === rawRow.deriv_account_id);
+                if (!match) return sanitizeAccount(rawRow);
+
+                const freshBalance = Number(match.balance);
+                if (Number(rawRow.balance ?? 0) !== freshBalance) {
+                    // Persist updated balance in background
+                    supabaseFetch(`copy_trading_accounts?id=eq.${encodeURIComponent(rawRow.id)}`, {
+                        method: 'PATCH',
+                        prefer: 'return=minimal',
+                        body: { balance: freshBalance, updated_at: new Date().toISOString() },
+                    }).catch(() => {});
+                }
+
+                return sanitizeAccount({ ...rawRow, balance: freshBalance });
+            } catch {
+                return sanitizeAccount(rawRow);
+            }
+        })
+    );
+
+    return refreshed;
 };
 
 const upsertSecret = async ({ ownerDerivAccountId, account, credential }) => {

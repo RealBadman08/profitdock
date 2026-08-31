@@ -488,6 +488,7 @@ const AppWrapper = observer(() => {
                                     </>
                                 }
                                 id='id-accumulators'
+                                data-keep-alive={true}
                             >
                                 <div className='new-feature-wrapper'>
                                     <Suspense
@@ -507,6 +508,7 @@ const AppWrapper = observer(() => {
                                     </>
                                 }
                                 id='id-flipper-switcher'
+                                data-keep-alive={true}
                             >
                                 <div className='new-feature-wrapper'>
                                     <Suspense
@@ -528,6 +530,7 @@ const AppWrapper = observer(() => {
                                     </>
                                 }
                                 id='id-corsa'
+                                data-keep-alive={true}
                             >
                                 <div className='new-feature-wrapper'>
                                     <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Corsa...')} />}>
@@ -543,6 +546,7 @@ const AppWrapper = observer(() => {
                                     </>
                                 }
                                 id='id-matchtool'
+                                data-keep-alive={true}
                             >
                                 <div className='new-feature-wrapper'>
                                     <Suspense fallback={<ChunkLoader message={localize('Please wait, loading MatchTool...')} />}>
@@ -558,6 +562,7 @@ const AppWrapper = observer(() => {
                                     </>
                                 }
                                 id='id-mesh'
+                                data-keep-alive={true}
                             >
                                 <div className='new-feature-wrapper'>
                                     <Suspense fallback={<ChunkLoader message={localize('Please wait, loading Mesh...')} />}>

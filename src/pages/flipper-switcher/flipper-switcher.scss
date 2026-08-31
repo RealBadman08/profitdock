@@ -1,5 +1,5 @@
 .flipper-page {
-    background: linear-gradient(180deg, #f8fafc 0%, #ffffff 58%, #f6f8fb 100%);
+    background: linear-gradient(180deg, #f8fafc 0%, #fff 58%, #f6f8fb 100%);
     color: #111827;
     min-height: 100%;
     overflow-x: hidden;
@@ -290,7 +290,7 @@
         }
 
         > span {
-            background: #ffffff;
+            background: #fff;
             border-top: 1px solid #e2e8f0;
             min-height: 4.8rem;
             padding: 1rem;
@@ -516,11 +516,11 @@ body.theme--dark .flipper-page {
     .flipper-page__select-wrap {
         background: #061c2e;
         border-color: rgb(255 255 255 / 18%);
-        color: #ffffff;
+        color: #fff;
     }
 
     .flipper-page__play {
-        border-left-color: #ffffff;
+        border-left-color: #fff;
     }
 
     .flipper-page__market-modal {

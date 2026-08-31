@@ -1,5 +1,5 @@
 .matchtool-page {
-    background: linear-gradient(180deg, #fbfcfe 0%, #ffffff 44%, #f6f8fb 100%);
+    background: linear-gradient(180deg, #fbfcfe 0%, #fff 44%, #f6f8fb 100%);
     box-sizing: border-box;
     color: #102033;
     height: 100%;
@@ -8,8 +8,8 @@
     padding: 1rem 1.2rem 9rem;
 
     *,
-    *::before,
-    *::after {
+    *:before,
+    *:after {
         box-sizing: border-box;
     }
 
@@ -35,9 +35,8 @@
 
     &__controls {
         align-items: end;
-        display: grid;
+        display: block;
         gap: 1rem;
-        grid-template-columns: minmax(22rem, 1.6fr) repeat(3, minmax(12rem, 1fr)) auto;
     }
 
     &__field {
@@ -50,8 +49,6 @@
             font-size: 1rem;
             font-weight: 900;
             letter-spacing: 0.12em;
-            text-align: center;
-            text-transform: uppercase;
         }
 
         select,
@@ -66,7 +63,6 @@
             min-width: 0;
             outline: none;
             padding: 0 1rem;
-            text-align: center;
             width: 100%;
         }
 
@@ -86,6 +82,7 @@
         height: 4.3rem;
         min-width: 0;
         padding: 0 1rem;
+        overflow: hidden;
 
         select {
             background: transparent;
@@ -93,6 +90,10 @@
             color: #102033;
             height: auto;
             padding: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 100%;
         }
     }
 
@@ -123,8 +124,8 @@
 
         &--active {
             background: #22c55e;
-            color: #ffffff;
-            box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+            color: #fff;
+            box-shadow: 0 0 8px rgb(34 197 94 / 40%);
         }
     }
 
@@ -133,7 +134,7 @@
         background: #ff444f;
         border: 0;
         border-radius: 0.8rem;
-        color: #ffffff;
+        color: #fff;
         cursor: pointer;
         display: inline-flex;
         font-size: 1.35rem;
@@ -158,7 +159,7 @@
 
     &__play {
         border-bottom: 0.7rem solid transparent;
-        border-left: 1rem solid currentColor;
+        border-left: 1rem solid currentcolor;
         border-top: 0.7rem solid transparent;
         height: 0;
         width: 0;
@@ -197,8 +198,8 @@
 
     &__chart {
         align-items: end;
-        background: #f6f8fb;
-        border: 1px solid #dde5ee;
+        background: transparent;
+        border: none;
         border-radius: 0.5rem;
         display: grid;
         gap: 0.8rem;
@@ -231,13 +232,13 @@
 
         &--glow .matchtool-page__bar {
             background: #22c55e;
-            box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+            box-shadow: 0 0 12px rgb(34 197 94 / 40%);
         }
     }
 
     &__bar-track {
         align-items: end;
-        background: rgba(0, 0, 0, 0.05);
+        background: transparent;
         border-radius: 0.3rem;
         display: flex;
         height: 13rem;
@@ -357,7 +358,7 @@ body.theme--dark .matchtool-page {
     .matchtool-page__notice {
         background: #151923;
         border-color: #263042;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
     }
 
     .matchtool-page__field > span,
@@ -403,8 +404,8 @@ body.theme--dark .matchtool-page {
     }
 
     .matchtool-page__chart {
-        background: #d8dcdf;
-        border-color: #b7bdc4;
+        background: transparent;
+        border-color: transparent;
     }
 
     .matchtool-page__bar-cell span {
@@ -416,7 +417,7 @@ body.theme--dark .matchtool-page {
     }
 
     .matchtool-page__bar-track {
-        background: rgba(255, 255, 255, 0.35);
+        background: transparent;
     }
 
     .matchtool-page__bar {
@@ -425,7 +426,7 @@ body.theme--dark .matchtool-page {
 
     .matchtool-page__bar-cell--glow .matchtool-page__bar {
         background: #22c55e;
-        box-shadow: 0 0 12px rgba(34, 197, 94, 0.6);
+        box-shadow: 0 0 12px rgb(34 197 94 / 60%);
     }
 
     .matchtool-page__table {
@@ -438,7 +439,7 @@ body.theme--dark .matchtool-page {
     }
 
     .matchtool-page__table-row strong {
-        color: #ffffff;
+        color: #fff;
     }
 
     .matchtool-page__table-row span {
@@ -480,7 +481,7 @@ body.theme--dark .matchtool-page {
     }
 }
 
-@media (max-width: 1080px) {
+@media (width <= 1080px) {
     .matchtool-page {
         &__controls {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -493,7 +494,7 @@ body.theme--dark .matchtool-page {
     }
 }
 
-@media (max-width: 640px) {
+@media (width <= 640px) {
     .matchtool-page {
         max-width: 100vw;
         padding: 1rem;

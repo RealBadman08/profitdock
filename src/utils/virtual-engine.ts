@@ -36,7 +36,7 @@ interface FakeContract {
     exit_tick_display_value?: string;
     exit_tick_time?: number;
     status: 'open' | 'won' | 'lost';
-    profit: number;
+    profit?: number;
     ticks_seen: number;
     is_sold: number;
     is_expired: number;
@@ -171,7 +171,7 @@ class VirtualTradingEngine {
                 contract.entry_spot = spot;
                 contract.entry_tick_display_value = fmt;
                 contract.entry_tick_time = epoch;
-                contract.ticks_seen = 0;
+                contract.ticks_seen = 1;
             } else {
                 contract.ticks_seen++;
             }
@@ -242,8 +242,13 @@ class VirtualTradingEngine {
         // Update virtual balance
         const store = (window as any)._clientStore;
         if (store && won) {
-            store.setDummyBalance(store.dummy_balance + contract.buy_price + contract.profit);
+            store.setDummyBalance(store.dummy_balance + contract.buy_price + (contract.profit ?? 0));
         }
+
+        // Notify virtual CR accounts
+        window.dispatchEvent(new CustomEvent('profitdock:trade-result', {
+            detail: { profit: contract.profit ?? 0, stake: contract.buy_price },
+        }));
 
         this._emit({
             msg_type: 'proposal_open_contract',
@@ -270,7 +275,7 @@ class VirtualTradingEngine {
             is_sold: contract.is_sold,
             is_expired: contract.is_expired,
             growth_rate: contract.growth_rate,
-            sell_price: contract.is_sold ? contract.sell_price : (contract.buy_price + contract.profit),
+            sell_price: contract.is_sold ? contract.sell_price : undefined,
             bid_price: contract.buy_price,
             currency: store?.currency || 'USD',
             transaction_ids: {
@@ -334,7 +339,7 @@ class VirtualTradingEngine {
             if (!prop && req.parameters) {
                 prop = {
                     contract_type: req.parameters.contract_type || 'CALL',
-                    symbol: req.parameters.symbol || 'R_100',
+                    symbol: req.parameters.symbol || req.parameters.underlying_symbol || 'R_100',
                     duration: req.parameters.duration || 5,
                     duration_unit: req.parameters.duration_unit || 't',
                     growth_rate: req.parameters.growth_rate,
@@ -380,7 +385,7 @@ class VirtualTradingEngine {
                 growth_rate: prop.growth_rate,
                 barrier: prop.barrier != null ? String(prop.barrier) : undefined,
                 status: 'open',
-                profit: 0,
+                profit: undefined,
                 ticks_seen: 0,
                 is_sold: 0,
                 is_expired: 0,
@@ -434,7 +439,7 @@ class VirtualTradingEngine {
                         balance_after: store?.dummy_balance ?? 0,
                         contract_id: contractId,
                         reference_id: contractId,
-                        sold_for: Math.max(0, contract.buy_price + contract.profit),
+                        sold_for: Math.max(0, contract.buy_price + (contract.profit ?? 0)),
                         transaction_id: contractId,
                     },
                     echo_req: req,

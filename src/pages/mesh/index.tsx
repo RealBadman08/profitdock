@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite';
 import { isCustomLegacyOAuthDomain } from '@/components/shared/utils/config/config';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
+import { getProfitdockPublicSocketUrl } from '@/external/bot-skeleton/services/api/appId';
 import {
     getStoredProfitdockAccounts,
     getStoredProfitdockActiveCurrency,
@@ -13,15 +14,14 @@ import { MarketSymbol } from '@/features/deriv-live/types';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentState';
 import { useStore } from '@/hooks/useStore';
-import { getProfitdockPublicSocketUrl } from '@/external/bot-skeleton/services/api/appId';
+import { mirrorCopyTradingContractParameters } from '@/utils/copy-trading-execution';
 import {
     emitProfitdockTradeStatus,
     subscribeProfitdockTradeStart,
     subscribeProfitdockTradeStop,
 } from '@/utils/profitdock-trade-controller';
-import { ProposalOpenContract } from '@deriv/api-types';
 import { runVirtualTrade } from '@/utils/virtual-trade';
-import { mirrorCopyTradingContractParameters } from '@/utils/copy-trading-execution';
+import { ProposalOpenContract } from '@deriv/api-types';
 import './mesh.scss';
 
 type ApiLike = {
@@ -90,6 +90,20 @@ const DIGIT_CONTRACTS = new Set<MeshContractType>([
     'DIGITMATCH',
     'DIGITDIFF',
 ]);
+const TRADE_CATEGORIES = [
+    { label: 'Matches / Differs', value: 'matches_differs', buttons: [
+        { kind: 'matches', contractType: 'DIGITMATCH', label: 'Matches', color: '#10b981' },
+        { kind: 'differs', contractType: 'DIGITDIFF', label: 'Differs', color: '#ef4444' },
+    ]},
+    { label: 'Even / Odd', value: 'even_odd', buttons: [
+        { kind: 'even', contractType: 'DIGITEVEN', label: 'Even', color: '#10b981' },
+        { kind: 'odd', contractType: 'DIGITODD', label: 'Odd', color: '#ef4444' },
+    ]},
+    { label: 'Over / Under', value: 'over_under', buttons: [
+        { kind: 'over', contractType: 'DIGITOVER', label: 'Over', color: '#10b981' },
+        { kind: 'under', contractType: 'DIGITUNDER', label: 'Under', color: '#ef4444' },
+    ]},
+];
 const publicRequest = <T extends PublicRequestResponse>(payload: Record<string, unknown>, timeoutMs = 14000) =>
     new Promise<T>((resolve, reject) => {
         const reqId = Date.now() + Math.floor(Math.random() * 100000);
@@ -305,278 +319,169 @@ const requestDirectBuy = async ({
     return buyResponse.buy;
 };
 
-const MeshOrbit = ({
-    children,
-    historyDigits,
-    lastHit,
-    model,
-}: {
-    children?: React.ReactNode;
-    historyDigits: number[];
-    lastHit: { digit: number; nonce: number } | null;
-    model: DigitModel;
-}) => {
-    const stageRef = useRef<HTMLDivElement | null>(null);
-    const animationRef = useRef<number | null>(null);
-    const dragRef = useRef({
-        active: false,
-        lastAngle: 0,
-        lastTime: 0,
-        velocity: 0,
-    });
-    const [isDragging, setIsDragging] = useState(false);
-    const [rotation, setRotation] = useState(0);
-    const centerX = 250;
-    const centerY = 190;
-    const orbitRadius = 112;
-    const currentDigit = lastHit?.digit ?? historyDigits[historyDigits.length - 1] ?? 0;
+const COLS = 20;
 
-    const stopInertia = () => {
-        if (animationRef.current) {
-            window.cancelAnimationFrame(animationRef.current);
-            animationRef.current = null;
-        }
-    };
-
-    const getPointerAngle = (event: React.PointerEvent<HTMLDivElement>) => {
-        const rect = stageRef.current?.getBoundingClientRect();
-        if (!rect) return 0;
-        return (
-            (Math.atan2(
-                event.clientY - (rect.top + rect.height / 2),
-                event.clientX - (rect.left + rect.width / 2)
-            ) *
-                180) /
-            Math.PI
-        );
-    };
-
-    const normaliseAngleDelta = (delta: number) => ((delta + 540) % 360) - 180;
-
-    const startInertia = () => {
-        stopInertia();
-        const step = () => {
-            dragRef.current.velocity *= 0.96; // slightly less decay for smoother, longer spin
-            if (Math.abs(dragRef.current.velocity) < 0.01) {
-                animationRef.current = null;
-                return;
-            }
-            setRotation(value => value + dragRef.current.velocity * 16);
-            animationRef.current = window.requestAnimationFrame(step);
-        };
-        animationRef.current = window.requestAnimationFrame(step);
-    };
-
-    const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-        stopInertia();
-        dragRef.current = {
-            active: true,
-            lastAngle: getPointerAngle(event),
-            lastTime: performance.now(),
-            velocity: 0,
-        };
-        setIsDragging(true);
-        event.currentTarget.setPointerCapture(event.pointerId);
-    };
-
-    const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-        if (!dragRef.current.active) return;
-        const nextAngle = getPointerAngle(event);
-        const now = performance.now();
-        const delta = normaliseAngleDelta(nextAngle - dragRef.current.lastAngle);
-        const elapsed = Math.max(8, now - dragRef.current.lastTime);
-        dragRef.current.velocity = delta / elapsed;
-        dragRef.current.lastAngle = nextAngle;
-        dragRef.current.lastTime = now;
-        setRotation(value => value + delta);
-    };
-
-    const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-        if (!dragRef.current.active) return;
-        dragRef.current.active = false;
-        setIsDragging(false);
-        event.currentTarget.releasePointerCapture(event.pointerId);
-        startInertia();
-    };
-
-    useEffect(
-        () => () => {
-            stopInertia();
-        },
-        []
-    );
-
-    const points = Array.from({ length: 10 }, (_, digit) => {
-        const angle = -Math.PI / 2 + (digit / 10) * Math.PI * 2;
-        const frequency = model.frequencies[digit] || 0;
-        const count = model.counts[digit] || 0;
-        const isCurrent = digit === currentDigit;
-        const isExtremeHigh = model.total > 0 && model.rank[digit] === 0;
-        const isExtremeLow = model.total > 0 && model.rank[digit] === 9;
-        const tone = digit % 2 === 0 ? 'cool' : 'warm';
-
-        return {
-            count,
-            digit,
-            frequency,
-            isCurrent,
-            isExtremeHigh,
-            isExtremeLow,
-            radius: Math.max(18, Math.min(42, 19 + frequency * 108)),
-            tone,
-            x: centerX + Math.cos(angle) * orbitRadius,
-            y: centerY + Math.sin(angle) * orbitRadius,
-        };
-    });
-    const trailPairs = [];
-
-    for (let index = historyDigits.length - 1; index > 0; index--) {
-        const fromDigit = historyDigits[index - 1];
-        const toDigit = historyDigits[index];
-
-        if (points[fromDigit] && points[toDigit] && fromDigit !== toDigit) {
-            trailPairs.push({
-                from: points[fromDigit],
-                key: `${index}-${fromDigit}-${toDigit}`,
-                to: points[toDigit],
-            });
-        }
-    }
-
-    return (
-        <section className='mesh-page__orbit' aria-label='Mesh digit analysis animation'>
-            <div
-                className={`mesh-page__orbit-stage ${isDragging ? 'mesh-page__orbit-stage--dragging' : ''}`}
-                onPointerCancel={handlePointerUp}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                ref={stageRef}
-                style={{ transform: `rotate(${rotation}deg)` }}
-            >
-                <svg className='mesh-page__orbit-svg' viewBox='0 0 500 386' role='img'>
-                    <circle className='mesh-page__orbit-guide' cx={centerX} cy={centerY} r={orbitRadius} />
-                    {trailPairs.map((line, index) => (
-                        <line
-                            className={`mesh-page__orbit-trail-line ${
-                                index === 0 ? 'mesh-page__orbit-trail-line--current' : ''
-                            }`}
-                            key={line.key}
-                            opacity={index === 0 ? 0.95 : 0.42}
-                            x1={line.from.x}
-                            x2={line.to.x}
-                            y1={line.from.y}
-                            y2={line.to.y}
-                        />
-                    ))}
-                    {points.map(point => (
-                        <g
-                            className={`mesh-page__orbit-node ${
-                                point.isCurrent ? 'mesh-page__orbit-node--hit' : ''
-                            } ${point.isExtremeHigh ? 'mesh-page__orbit-node--extreme-high' : ''} ${point.isExtremeLow ? 'mesh-page__orbit-node--extreme-low' : ''}`}
-                            key={`${point.digit}-${point.isCurrent ? lastHit?.nonce || 0 : point.count}`}
-                            style={
-                                {
-                                    '--mesh-node-fill': point.tone === 'cool' ? '#5b6f8d' : '#a98363',
-                                    '--mesh-node-text': '#f8fafc',
-                                } as React.CSSProperties
-                            }
-                            transform={`translate(${point.x} ${point.y})`}
-                        >
-                            {point.isCurrent && (
-                                <>
-                                    <circle className='mesh-page__orbit-pulse' r={point.radius + 7} />
-                                    <circle className='mesh-page__orbit-hot-ring' r={point.radius + 4} />
-                                </>
-                            )}
-                            <circle className='mesh-page__orbit-bubble' r={point.radius} />
-                            <text className='mesh-page__orbit-digit' y='-3'>
-                                {point.digit}
-                            </text>
-                            <text className='mesh-page__orbit-percent' y='8'>
-                                {Math.round(point.frequency * 100)}%
-                            </text>
-                        </g>
-                    ))}
-                </svg>
-            </div>
-            {children}
-        </section>
-    );
-};
-const TRADE_CATEGORIES = [
-    { label: 'Matches / Differs', value: 'matches_differs', buttons: [
-        { label: 'Matches', contractType: 'DIGITMATCH', kind: 'matches', color: '#45a7a1' },
-        { label: 'Differs', contractType: 'DIGITDIFF', kind: 'differs', color: '#dd3a3c' }
-    ]},
-    { label: 'Even / Odd', value: 'even_odd', buttons: [
-        { label: 'Even', contractType: 'DIGITEVEN', kind: 'even', color: '#45a7a1' },
-        { label: 'Odd', contractType: 'DIGITODD', kind: 'odd', color: '#dd3a3c' }
-    ]},
-    { label: 'Over / Under', value: 'over_under', buttons: [
-        { label: 'Over', contractType: 'DIGITOVER', kind: 'over', color: '#45a7a1' },
-        { label: 'Under', contractType: 'DIGITUNDER', kind: 'under', color: '#dd3a3c' }
-    ]}
-];
-
-type MeshTapeEntry = {
-    digit: number;
-    key: string;
-    symbol: string;
-    tone: 'primary' | 'secondary' | 'neutral';
-};
-
-const buildMeshTape = (digits: number[], selectedTradeCategory: string, selectedDigit: number): MeshTapeEntry[] =>
-    digits.slice(-8).map((digit, index) => {
-        if (selectedTradeCategory === 'even_odd') {
-            return {
-                digit,
-                key: `${index}-${digit}`,
-                symbol: digit % 2 === 0 ? 'E' : 'O',
-                tone: digit % 2 === 0 ? 'primary' : 'secondary',
-            };
-        }
-
-        if (selectedTradeCategory === 'over_under') {
-            return {
-                digit,
-                key: `${index}-${digit}`,
-                symbol: digit > selectedDigit ? 'O' : digit < selectedDigit ? 'U' : '=',
-                tone: digit > selectedDigit ? 'primary' : digit < selectedDigit ? 'secondary' : 'neutral',
-            };
-        }
-
-        return {
-            digit,
-            key: `${index}-${digit}`,
-            symbol: digit === selectedDigit ? 'M' : 'D',
-            tone: digit === selectedDigit ? 'primary' : 'secondary',
-        };
-    });
-
-const MeshContractTape = ({
+const MeshGridBoard = ({
     digits,
     selectedDigit,
     selectedTradeCategory,
+    lastHit,
+    model,
+    onSelectDigit,
 }: {
     digits: number[];
     selectedDigit: number;
     selectedTradeCategory: string;
+    lastHit: { digit: number; nonce: number } | null;
+    model: DigitModel;
+    onSelectDigit: (digit: number) => void;
 }) => {
-    const entries = buildMeshTape(digits, selectedTradeCategory, selectedDigit);
+    const GRID_SIZE = 500;
+    const visibleDigits = digits.slice(-GRID_SIZE);
+
+    // ── Smooth drag via direct DOM mutation (no React state during drag) ──
+    const boardRef = useRef<HTMLElement>(null);
+    const overlayRef = useRef<HTMLDivElement>(null);
+    const drag = useRef({ active: false, startClientY: 0, startPx: 0, currentPx: 80 });
+
+    // Set initial overlay position once the board is measured
+    React.useEffect(() => {
+        if (boardRef.current && overlayRef.current) {
+            const h = boardRef.current.getBoundingClientRect().height;
+            const initPx = h * 0.3;
+            drag.current.currentPx = initPx;
+            overlayRef.current.style.transform = `translateX(-50%) translateY(${initPx}px)`;
+        }
+    }, []);
+
+    React.useEffect(() => {
+        const onMove = (e: MouseEvent | TouchEvent) => {
+            if (!drag.current.active || !boardRef.current || !overlayRef.current) return;
+            const clientY = 'touches' in e ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
+            const boardH = boardRef.current.getBoundingClientRect().height;
+            const rawPx = drag.current.startPx + (clientY - drag.current.startClientY);
+            const clampedPx = Math.max(0, Math.min(boardH * 0.82, rawPx));
+            drag.current.currentPx = clampedPx;
+            // Direct DOM write — zero React re-renders, 60fps smooth
+            overlayRef.current.style.transform = `translateX(-50%) translateY(${clampedPx}px)`;
+        };
+        const onUp = () => { drag.current.active = false; };
+        window.addEventListener('mousemove', onMove, { passive: true });
+        window.addEventListener('touchmove', onMove, { passive: true });
+        window.addEventListener('mouseup', onUp);
+        window.addEventListener('touchend', onUp);
+        return () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('touchmove', onMove);
+            window.removeEventListener('mouseup', onUp);
+            window.removeEventListener('touchend', onUp);
+        };
+    }, []);
+
+    const startDrag = (clientY: number) => {
+        drag.current.active = true;
+        drag.current.startClientY = clientY;
+        drag.current.startPx = drag.current.currentPx;
+    };
+
+    const getTone = (digit: number | null): string => {
+        if (digit === null) return 'skeleton';
+        if (selectedTradeCategory === 'even_odd') {
+            return digit % 2 === 0 ? 'primary' : 'secondary';
+        }
+        if (selectedTradeCategory === 'over_under') {
+            if (digit > selectedDigit) return 'primary';
+            if (digit < selectedDigit) return 'secondary';
+            return 'neutral';
+        }
+        // matches/differs: matches = bright red (secondary), differs = bright green (primary)
+        return digit === selectedDigit ? 'secondary' : 'primary';
+    };
+
+    // ── Serpentine grid with skeleton padding ──
+    const paddedDigits = [...visibleDigits];
+    while (paddedDigits.length < GRID_SIZE) {
+        paddedDigits.unshift(null as any);
+    }
+    
+    const reversed = paddedDigits.slice().reverse();
+    const rows: (number | null)[][] = [];
+    for (let i = 0; i < reversed.length; i += COLS) {
+        rows.push(reversed.slice(i, i + COLS));
+    }
 
     return (
-        <div className='mesh-page__contract-tape' aria-label='Mesh contract symbols'>
-            {entries.map(entry => (
-                <span
-                    className={`mesh-page__contract-symbol mesh-page__contract-symbol--${entry.tone}`}
-                    key={entry.key}
-                    title={`Digit ${entry.digit}`}
+        <section ref={boardRef} className='mesh-page__grid-board' aria-label='Mesh tick grid'>
+            <div className='mesh-page__grid-rows'>
+                {[...rows].reverse().map((row, displayRowIdx) => {
+                    const rowFromBottom = rows.length - 1 - displayRowIdx;
+                    const isEvenRow = rowFromBottom % 2 === 0;
+                    const displayRow = isEvenRow ? [...row].reverse() : row;
+                    return (
+                        <div key={rowFromBottom} className='mesh-page__grid-row'>
+                            {displayRow.map((digit, colIdx) => {
+                                const posInRow = isEvenRow ? row.length - 1 - colIdx : colIdx;
+                                const globalIdx = rowFromBottom * COLS + posInRow;
+                                const isNewest = digit !== null && globalIdx === 0 && rowFromBottom === 0;
+                                const tone = getTone(digit);
+                                return (
+                                    <div
+                                        key={`r${rowFromBottom}-c${colIdx}`}
+                                        className={`mesh-page__grid-cell mesh-page__grid-cell--${tone}${
+                                            isNewest ? ' mesh-page__grid-cell--new' : ''
+                                        }`}
+                                        title={digit !== null ? String(digit) : ''}
+                                    />
+                                );
+                            })}
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Floating Draggable DIGIT ANALYSIS Overlay */}
+            <div
+                ref={overlayRef}
+                className='mesh-page__digit-overlay'
+            >
+                {/* Drag handle */}
+                <div
+                    className='mesh-page__digit-overlay-handle'
+                    onMouseDown={e => { e.preventDefault(); startDrag(e.clientY); }}
+                    onTouchStart={e => startDrag(e.touches[0].clientY)}
+                    title='Drag to reposition'
                 >
-                    {entry.symbol}
-                </span>
-            ))}
-        </div>
+                    <span className='mesh-page__digit-overlay-title'>⠿ DIGIT ANALYSIS</span>
+                    <span className='mesh-page__digit-overlay-drag-hint'>↕</span>
+                </div>
+
+                {/* Digit buttons */}
+                <div className='mesh-page__digit-overlay-buttons'>
+                    {Array.from({ length: 10 }, (_, d) => {
+                        const isSelected = d === selectedDigit;
+                        const isLastHit = lastHit?.digit === d;
+                        const pct = model.total > 0
+                            ? ((model.frequencies[d] || 0) * 100).toFixed(1)
+                            : '0.0';
+                        return (
+                            <button
+                                key={d}
+                                className={`mesh-page__digit-btn${isSelected ? ' mesh-page__digit-btn--selected' : ''}`}
+                                onClick={() => onSelectDigit(d)}
+                                type='button'
+                                aria-label={`Select digit ${d}`}
+                            >
+                                {isLastHit && (
+                                    <span className='mesh-page__digit-arrow' aria-hidden='true'>▼</span>
+                                )}
+                                <span className='mesh-page__digit-btn-num'>{d}</span>
+                                <span className='mesh-page__digit-btn-pct'>{pct}%</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        </section>
     );
 };
 
@@ -915,7 +820,7 @@ const MeshPage = observer(() => {
         <div className='mesh-page'>
             <div className='mesh-page__shell'>
                 <section className='mesh-page__topbar'>
-                    <div className="mesh-page__topbar-row">
+                    <div className="mesh-page__topbar-row" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.8rem'}}>
                         <label className='mesh-page__market-field' htmlFor='mesh-market'>
                             <span className='mesh-page__input-label'>Market</span>
                             <div className='mesh-page__select-wrap' onClick={() => document.getElementById('mesh-market')?.focus()}>
@@ -951,7 +856,24 @@ const MeshPage = observer(() => {
                             </div>
                         </label>
                     </div>
-                    <div className="mesh-page__topbar-row">
+                    <div className="mesh-page__topbar-row" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.8rem'}}>
+                        <label className='mesh-page__market-field' htmlFor='mesh-prediction'>
+                            <span className='mesh-page__input-label'>Prediction</span>
+                            <div className='mesh-page__select-wrap' onClick={() => document.getElementById('mesh-prediction')?.focus()}>
+                                <select
+                                    disabled={isRunning}
+                                    id='mesh-prediction'
+                                    onChange={event => setSelectedDigitStr(event.target.value)}
+                                    value={selectedDigitStr}
+                                >
+                                    {Array.from({ length: 10 }, (_, digit) => (
+                                        <option key={digit} value={digit}>
+                                            {digit}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </label>
                         <label className='mesh-page__market-field' htmlFor='mesh-ticks'>
                             <span className='mesh-page__input-label'>Ticks</span>
                             <div className='mesh-page__select-wrap' onClick={() => document.getElementById('mesh-ticks')?.focus()}>
@@ -971,36 +893,20 @@ const MeshPage = observer(() => {
                                 />
                             </div>
                         </label>
-                        <label className='mesh-page__market-field' htmlFor='mesh-prediction'>
-                            <span className='mesh-page__input-label'>Prediction</span>
-                            <div className='mesh-page__select-wrap' onClick={() => document.getElementById('mesh-prediction')?.focus()}>
-                                <select
-                                    disabled={isRunning}
-                                    id='mesh-prediction'
-                                    onChange={event => setSelectedDigitStr(event.target.value)}
-                                    value={selectedDigitStr}
-                                >
-                                    {Array.from({ length: 10 }, (_, digit) => (
-                                        <option key={digit} value={digit}>
-                                            {digit}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        </label>
                     </div>
                 </section>
 
                 {error && <div className='mesh-page__notice'>{error}</div>}
                 {feedback && <div className='mesh-page__notice mesh-page__notice--trade'>{feedback}</div>}
 
-                <MeshOrbit historyDigits={digits} lastHit={lastHit} model={model}>
-                    <MeshContractTape
-                        digits={digits}
-                        selectedDigit={selectedDigit}
-                        selectedTradeCategory={selectedTradeCategory}
-                    />
-                </MeshOrbit>
+                <MeshGridBoard
+                    digits={digits}
+                    selectedDigit={selectedDigit}
+                    selectedTradeCategory={selectedTradeCategory}
+                    lastHit={lastHit}
+                    model={model}
+                    onSelectDigit={d => setSelectedDigitStr(String(d))}
+                />
 
                 <div className='mesh-page__bottom-controls'>
                     <div className='mesh-page__bottom-inputs'>

@@ -61,6 +61,7 @@ const ContractCardHeader = ({
         date_expiry,
         tick_count,
         tick_passed,
+        underlying_symbol,
     } = contract_info;
     const is_bot = true;
     const is_sold = !!contract_info.is_sold || is_contract_sold;
@@ -113,7 +114,7 @@ const ContractCardHeader = ({
                         'dc-contract-card__underlying-name--accumulator': is_accumulator,
                     })}
                 >
-                    <MarketIcon type={underlying ?? ''} size='md' />
+                    <MarketIcon type={underlying || underlying_symbol || ''} size='md' />
                     <Text
                         size='xxs'
                         className={classNames('dc-contract-card__symbol', {

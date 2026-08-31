@@ -18,7 +18,7 @@
     &__frame,
     &__core,
     &__pin {
-        stroke: currentColor;
+        stroke: currentcolor;
     }
 
     &__frame {
@@ -41,7 +41,7 @@
 
     &__bolt {
         stroke: var(--brand-red-coral);
-        filter: drop-shadow(0 0 2px rgb(255 68 79 / 0.4));
+        filter: drop-shadow(0 0 2px rgb(255 68 79 / 40%));
         stroke-dasharray: 8;
         stroke-dashoffset: 8;
         animation: analysis-tool-nav-bolt 1.8s ease-in-out infinite;
@@ -50,7 +50,7 @@
     &__pulse {
         fill: none;
         opacity: 0;
-        stroke: rgb(255 68 79 / 0.6);
+        stroke: rgb(255 68 79 / 60%);
         stroke-width: 1.2;
         transform-origin: center;
     }

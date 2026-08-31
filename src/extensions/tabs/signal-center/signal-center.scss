@@ -31,13 +31,13 @@
         align-items: center;
         justify-content: center;
         height: 200px;
-        background: rgba(14, 28, 47, 0.05);
-        border: 1px dashed rgba(14, 28, 47, 0.2);
+        background: rgb(14 28 47 / 5%);
+        border: 1px dashed rgb(14 28 47 / 20%);
         border-radius: 8px;
 
         [data-theme='dark'] & {
-            background: rgba(255, 255, 255, 0.05);
-            border-color: rgba(255, 255, 255, 0.2);
+            background: rgb(255 255 255 / 5%);
+            border-color: rgb(255 255 255 / 20%);
         }
     }
 }

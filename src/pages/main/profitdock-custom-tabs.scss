@@ -117,7 +117,7 @@
 .mesh-page__select-wrap select,
 .copy-trading__input-shell,
 .copy-trading__replace-row input {
-    background: #ffffff !important;
+    background: #fff !important;
     border: 1px solid rgb(15 23 42 / 10%) !important;
     box-shadow: none !important;
     color: #0f172a !important;
@@ -135,7 +135,7 @@
 .matchtool-page__field select optgroup,
 .mesh-page__select-wrap select option,
 .mesh-page__select-wrap select optgroup {
-    background: #ffffff !important;
+    background: #fff !important;
     color: #0f172a !important;
 }
 
@@ -202,18 +202,18 @@ html.theme--dark {
     .matchtool-page,
     .mesh-page,
     .profitdock-smooth-page {
-        background: #000000 !important;
+        background: #000 !important;
         color: #f5f7fb !important;
     }
 
     .profitdock-smooth-page {
-        --profitdock-smooth-page-bg: #000000 !important;
+        --profitdock-smooth-page-bg: #000 !important;
         --profitdock-smooth-surface: transparent !important;
         --profitdock-smooth-line: transparent !important;
         --profitdock-smooth-muted: #a7b0bf !important;
         --profitdock-smooth-shadow: none !important;
 
-        background: #000000 !important;
+        background: #000 !important;
     }
 
     .profitdock-smooth-section,
@@ -326,7 +326,7 @@ html.theme--dark {
     }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
     .deriv-live--analysis,
     .accumulators-page,
     .flipper-page,
@@ -346,7 +346,7 @@ html.theme--dark {
         .matchtool-page,
         .mesh-page,
         .profitdock-smooth-page {
-            background: #000000 !important;
+            background: #000 !important;
         }
     }
 }
@@ -415,7 +415,7 @@ html.theme--dark {
 .mesh-page input[type='number'],
 .copy-trading input[type='number'] {
     appearance: textfield !important;
-    -moz-appearance: textfield !important;
+    appearance: textfield !important;
 }
 
 .deriv-live--analysis input[type='number']::-webkit-inner-spin-button,
@@ -433,5 +433,5 @@ html.theme--dark {
 .copy-trading input[type='number']::-webkit-inner-spin-button,
 .copy-trading input[type='number']::-webkit-outer-spin-button {
     margin: 0 !important;
-    -webkit-appearance: none !important;
+    appearance: none !important;
 }

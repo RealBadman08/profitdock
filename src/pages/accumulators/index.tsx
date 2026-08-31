@@ -1174,7 +1174,7 @@ const useDedicatedAccumulatorFeed = ({
 
 const AccumulatorsPage = observer(() => {
     const store = useStore();
-    const { transactions } = store;
+    const { transactions, summary_card } = store;
     const { authData, connectionStatus } = useApiBase();
     const [activeTab, setActiveTab] = useProfitdockPersistentState<'manual' | 'auto'>('profitdock.accumulators.mode', 'manual');
     const [growthRatePercent, setGrowthRatePercent] = useProfitdockPersistentState<number>('profitdock.accumulators.growth', 3);
@@ -1299,7 +1299,7 @@ const AccumulatorsPage = observer(() => {
     const [manualTickError, setManualTickError] = useState<string | null>(null);
     const [isManualTickLoading, setIsManualTickLoading] = useState(true);
     const [manualBarrierFlash, setManualBarrierFlash] = useState(false);
-    const [autoMarketMode, setAutoMarketMode] = useProfitdockPersistentState<AutoMarketMode>('profitdock.accumulators.autoMode', 'single');
+    const autoMarketMode: AutoMarketMode = 'scan';
     const [autoMarketSymbol, setAutoMarketSymbol] = useProfitdockPersistentState('profitdock.accumulators.autoMarket', '');
     const [autoStake, setAutoStake] = useProfitdockPersistentState('profitdock.accumulators.autoStake', AUTO_DEFAULTS.stake);
     const [autoMartingaleMultiplier, setAutoMartingaleMultiplier] = useProfitdockPersistentState('profitdock.accumulators.autoMartingale', AUTO_DEFAULTS.martingaleMultiplier);
@@ -2686,6 +2686,11 @@ const AccumulatorsPage = observer(() => {
                 accountID: getActiveTransactionAccountId(),
             } as ProposalOpenContract);
 
+            summary_card.onBotContractEvent({
+                ...(contract as ProposalOpenContract),
+                accountID: getActiveTransactionAccountId(),
+            } as any);
+
             setAutoEngine(previous => ({
                 ...previous,
                 activeContractId: contract.contract_id,
@@ -3976,122 +3981,90 @@ const AccumulatorsPage = observer(() => {
                     </section>
                 ) : (
                     <section className='accumulators-page__auto-panel'>
-                        <div className='accumulators-page__auto-header'>
-                            <div>
-                                <span>{localize('Auto Trader')}</span>
-                            </div>
-                        </div>
 
                         <div className='accumulators-page__auto-layout'>
                             <div className='accumulators-page__auto-main'>
-                                <div className='accumulators-page__auto-grid'>
-                                    <div className='accumulators-page__field accumulators-page__field--wide'>
-                                        <span>{localize('Market mode')}</span>
-                                        <div className='accumulators-page__mode-segment' role='group'>
-                                            <button
-                                                type='button'
-                                                className={autoMarketMode === 'single' ? 'accumulators-page__mode-segment-button--active' : ''}
-                                                onClick={() => setAutoMarketMode('single')}
-                                            >
-                                                {localize('Single market')}
-                                            </button>
-                                            <button
-                                                type='button'
-                                                className={autoMarketMode === 'scan' ? 'accumulators-page__mode-segment-button--active' : ''}
-                                                onClick={() => setAutoMarketMode('scan')}
-                                            >
-                                                {localize('Multiple markets')}
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <label className='accumulators-page__field'>
-                                        <span>{localize('Auto market')}</span>
-                                        <div className='accumulators-page__input-wrap accumulators-page__input-wrap--select'>
-                                            <select
-                                                value={autoMarketSymbol}
-                                                onChange={event => setAutoMarketSymbol(event.target.value)}
-                                                disabled={autoMarketMode === 'scan'}
-                                            >
-                                                {selectableMarkets.map(market => (
-                                                    <option key={market.symbol} value={market.symbol}>
-                                                        {market.displayName}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                    </label>
-                                    <label className='accumulators-page__field'>
-                                        <span>{localize('Stake')}</span>
+                                <div className='accumulators-page__auto-grid' style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                                    <label className='accumulators-page__field' style={{ display: 'flex', flexDirection: 'column', margin: 0 }}>
+                                        <span style={{ marginBottom: '8px' }}>{localize('Stake')}</span>
                                         <div className='accumulators-page__input-wrap'>
-                                            <input value={autoStake} onChange={event => setAutoStake(event.target.value)} inputMode='decimal' />
-                                            <span>{currency}</span>
+                                            <input value={autoStake} onChange={event => setAutoStake(event.target.value)} inputMode='decimal' style={{ width: '100%' }} />
                                         </div>
                                     </label>
-                                    <label className='accumulators-page__field'>
-                                        <span>{localize('Martingale')}</span>
+                                    <label className='accumulators-page__field' style={{ display: 'flex', flexDirection: 'column', margin: 0 }}>
+                                        <span style={{ marginBottom: '8px' }}>{localize('Martingale')}</span>
                                         <div className='accumulators-page__input-wrap'>
                                             <input
                                                 value={autoMartingaleMultiplier}
                                                 onChange={event => setAutoMartingaleMultiplier(event.target.value)}
                                                 inputMode='decimal'
+                                                style={{ width: '100%' }}
                                             />
-                                            <span>x</span>
                                         </div>
                                     </label>
-                                    <label className='accumulators-page__field'>
-                                        <span>{localize('Stop loss')}</span>
+                                    <label className='accumulators-page__field' style={{ display: 'flex', flexDirection: 'column', margin: 0 }}>
+                                        <span style={{ marginBottom: '8px' }}>{localize('Stop loss')}</span>
                                         <div className='accumulators-page__input-wrap'>
                                             <input
                                                 value={autoSessionStopLoss}
                                                 onChange={event => setAutoSessionStopLoss(event.target.value)}
                                                 inputMode='decimal'
+                                                style={{ width: '100%' }}
                                             />
-                                            <span>{currency}</span>
                                         </div>
                                     </label>
-                                    <label className='accumulators-page__field'>
-                                        <span>{localize('Streaks')}</span>
+                                    <label className='accumulators-page__field' style={{ display: 'flex', flexDirection: 'column', margin: 0 }}>
+                                        <span style={{ marginBottom: '8px' }}>{localize('Streaks')}</span>
                                         <div className='accumulators-page__input-wrap'>
                                             <input
                                                 value={autoStreakLength}
                                                 onChange={event => setAutoStreakLength(event.target.value)}
                                                 inputMode='numeric'
+                                                style={{ width: '100%' }}
                                             />
-                                            <span>{localize('count')}</span>
                                         </div>
                                     </label>
-                                    <label className='accumulators-page__field'>
-                                        <span>{localize('Ticks below')}</span>
+                                    <label className='accumulators-page__field' style={{ display: 'flex', flexDirection: 'column', margin: 0 }}>
+                                        <span style={{ marginBottom: '8px' }}>{localize('Ticks below')}</span>
                                         <div className='accumulators-page__input-wrap'>
                                             <input
                                                 value={autoThresholdBelow}
                                                 onChange={event => setAutoThresholdBelow(event.target.value)}
                                                 inputMode='numeric'
+                                                style={{ width: '100%' }}
                                             />
-                                            <span>{localize('value')}</span>
                                         </div>
                                     </label>
-                                    <div className='accumulators-page__field accumulators-page__field--wide'>
-                                        <span>{localize('Instant Recovery')}</span>
-                                        <div className='accumulators-page__mode-segment' role='group'>
-                                            <button
-                                                type='button'
-                                                className={!autoInstantRecovery ? 'accumulators-page__mode-segment-button--active' : ''}
-                                                onClick={() => {
+                                    <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                                        <button
+                                            type='button'
+                                            onClick={() => {
+                                                if (autoInstantRecovery) {
                                                     autoRecoveryEntryRef.current = false;
                                                     setAutoInstantRecovery(false);
-                                                }}
-                                            >
-                                                {localize('Off')}
-                                            </button>
-                                            <button
-                                                type='button'
-                                                className={autoInstantRecovery ? 'accumulators-page__mode-segment-button--active' : ''}
-                                                onClick={() => setAutoInstantRecovery(true)}
-                                            >
-                                                {localize('On after loss')}
-                                            </button>
-                                        </div>
+                                                } else {
+                                                    setAutoInstantRecovery(true);
+                                                }
+                                            }}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                padding: '10px 16px',
+                                                borderRadius: '8px',
+                                                border: 'none',
+                                                cursor: 'pointer',
+                                                fontWeight: 600,
+                                                fontSize: '14px',
+                                                transition: 'background 0.2s ease',
+                                                background: autoInstantRecovery ? '#16a34a' : '#dc2626',
+                                                color: '#fff',
+                                                height: '4.3rem',
+                                                width: '100%',
+                                            }}
+                                        >
+                                            {autoInstantRecovery ? localize('Instant Recovery On') : localize('Instant Recovery Off')}
+                                        </button>
                                     </div>
                                 </div>
                             </div>

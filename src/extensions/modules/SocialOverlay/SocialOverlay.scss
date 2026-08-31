@@ -1,4 +1,4 @@
-﻿.social-overlay {
+.social-overlay {
     position: fixed;
     inset: 0;
     z-index: 120;
@@ -10,9 +10,9 @@
         position: absolute;
         inset: 0;
         border: 0;
-        background: rgba(2, 4, 10, 0.78);
+        background: rgb(2 4 10 / 78%);
         backdrop-filter: blur(34px) saturate(130%);
-        -webkit-backdrop-filter: blur(34px) saturate(130%);
+        backdrop-filter: blur(34px) saturate(130%);
         cursor: pointer;
     }
 
@@ -20,14 +20,14 @@
         position: relative;
         width: min(100%, 42rem);
         border-radius: 1.8rem;
-        border: 1px solid rgba(103, 113, 136, 0.24);
+        border: 1px solid rgb(103 113 136 / 24%);
         background:
-            radial-gradient(circle at top right, rgba(59, 130, 246, 0.1), transparent 42%),
-            radial-gradient(circle at top left, rgba(250, 204, 21, 0.06), transparent 45%),
-            linear-gradient(180deg, rgba(7, 10, 17, 0.96), rgba(3, 5, 10, 0.98));
-        box-shadow: 0 34px 84px rgba(0, 0, 0, 0.68);
+            radial-gradient(circle at top right, rgb(59 130 246 / 10%), transparent 42%),
+            radial-gradient(circle at top left, rgb(250 204 21 / 6%), transparent 45%),
+            linear-gradient(180deg, rgb(7 10 17 / 96%), rgb(3 5 10 / 98%));
+        box-shadow: 0 34px 84px rgb(0 0 0 / 68%);
         backdrop-filter: blur(26px) saturate(122%);
-        -webkit-backdrop-filter: blur(26px) saturate(122%);
+        backdrop-filter: blur(26px) saturate(122%);
         overflow: hidden;
         animation: socialOverlayPop 0.35s ease;
     }
@@ -50,8 +50,8 @@
         place-items: center;
         padding: 0;
         border-radius: 999px;
-        border: 1px solid rgba(148, 163, 184, 0.4);
-        background: rgba(15, 23, 42, 0.74);
+        border: 1px solid rgb(148 163 184 / 40%);
+        background: rgb(15 23 42 / 74%);
         color: #e2e8f0;
         font-size: 1.65rem;
         font-weight: 700;
@@ -62,8 +62,8 @@
 
         &:hover {
             transform: scale(1.05);
-            border-color: rgba(148, 163, 184, 0.7);
-            background: rgba(30, 41, 59, 0.92);
+            border-color: rgb(148 163 184 / 70%);
+            background: rgb(30 41 59 / 92%);
         }
     }
 
@@ -83,8 +83,8 @@
         border-radius: 1rem;
         display: grid;
         place-items: center;
-        background: linear-gradient(145deg, rgba(250, 204, 21, 0.18), rgba(217, 119, 6, 0.12));
-        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+        background: linear-gradient(145deg, rgb(250 204 21 / 18%), rgb(217 119 6 / 12%));
+        box-shadow: 0 12px 28px rgb(0 0 0 / 42%);
         overflow: hidden;
     }
 
@@ -132,8 +132,8 @@
         gap: 0.9rem;
         padding: 0.9rem 0.95rem;
         border-radius: 1.2rem;
-        border: 1px solid rgba(148, 163, 184, 0.28);
-        background: rgba(15, 23, 42, 0.38);
+        border: 1px solid rgb(148 163 184 / 28%);
+        background: rgb(15 23 42 / 38%);
         color: inherit;
         text-decoration: none;
         transition: transform 0.17s ease, border-color 0.17s ease, background 0.17s ease;
@@ -165,8 +165,8 @@
         display: grid;
         place-items: center;
         border-radius: 0.9rem;
-        background: rgba(15, 23, 42, 0.54);
-        border: 1px solid rgba(148, 163, 184, 0.26);
+        background: rgb(15 23 42 / 54%);
+        border: 1px solid rgb(148 163 184 / 26%);
 
         svg {
             width: 1.55rem;
@@ -175,8 +175,8 @@
     }
 
     &__link--whatsapp {
-        border-color: rgba(34, 197, 94, 0.35);
-        background: rgba(22, 101, 52, 0.22);
+        border-color: rgb(34 197 94 / 35%);
+        background: rgb(22 101 52 / 22%);
 
         .social-overlay__icon,
         svg {
@@ -184,14 +184,14 @@
         }
 
         &:hover {
-            border-color: rgba(34, 197, 94, 0.6);
-            background: rgba(22, 101, 52, 0.3);
+            border-color: rgb(34 197 94 / 60%);
+            background: rgb(22 101 52 / 30%);
         }
     }
 
     &__link--telegram {
-        border-color: rgba(56, 189, 248, 0.35);
-        background: rgba(30, 64, 175, 0.24);
+        border-color: rgb(56 189 248 / 35%);
+        background: rgb(30 64 175 / 24%);
 
         .social-overlay__icon,
         svg {
@@ -199,14 +199,14 @@
         }
 
         &:hover {
-            border-color: rgba(56, 189, 248, 0.62);
-            background: rgba(30, 64, 175, 0.34);
+            border-color: rgb(56 189 248 / 62%);
+            background: rgb(30 64 175 / 34%);
         }
     }
 
     &__link--tiktok {
-        border-color: rgba(148, 163, 184, 0.34);
-        background: rgba(51, 65, 85, 0.35);
+        border-color: rgb(148 163 184 / 34%);
+        background: rgb(51 65 85 / 35%);
 
         .social-overlay__icon,
         svg {
@@ -214,8 +214,8 @@
         }
 
         &:hover {
-            border-color: rgba(226, 232, 240, 0.52);
-            background: rgba(51, 65, 85, 0.5);
+            border-color: rgb(226 232 240 / 52%);
+            background: rgb(51 65 85 / 50%);
         }
     }
 
@@ -224,18 +224,18 @@
         border-radius: 1rem;
         padding: 1rem;
         width: min(100%, 35rem);
-        color: #ffffff;
+        color: #fff;
         font: inherit;
         font-size: 2rem;
         font-weight: 700;
         cursor: pointer;
         background: linear-gradient(180deg, #ff4759, #df1638);
-        box-shadow: 0 14px 30px rgba(223, 22, 56, 0.4);
+        box-shadow: 0 14px 30px rgb(223 22 56 / 40%);
         transition: transform 0.17s ease, box-shadow 0.17s ease;
 
         &:hover {
             transform: translateY(-1px);
-            box-shadow: 0 17px 34px rgba(223, 22, 56, 0.45);
+            box-shadow: 0 17px 34px rgb(223 22 56 / 45%);
         }
     }
 
@@ -254,9 +254,9 @@
         display: grid;
         place-items: center;
         border-radius: 1.05rem;
-        background: rgba(17, 24, 39, 0.88);
-        border: 1px solid rgba(100, 116, 139, 0.42);
-        box-shadow: 0 14px 26px rgba(0, 0, 0, 0.3);
+        background: rgb(17 24 39 / 88%);
+        border: 1px solid rgb(100 116 139 / 42%);
+        box-shadow: 0 14px 26px rgb(0 0 0 / 30%);
         transition: transform 0.18s ease, border-color 0.18s ease;
 
         &:hover {
@@ -282,7 +282,7 @@
     }
 }
 
-@media (max-width: 768px) {
+@media (width <= 768px) {
     .social-overlay {
         padding: 0.9rem;
 

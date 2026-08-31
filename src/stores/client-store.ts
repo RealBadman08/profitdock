@@ -15,6 +15,32 @@ import { Analytics } from '@deriv-com/analytics';
 
 const eu_shortcode_regex = /^maltainvest$/;
 const eu_excluded_regex = /^mt$/;
+
+export type TVirtualCRAccount = {
+    id: string;
+    deriv_account_id: string;
+    label: string;
+    balance: number;
+    starting_balance: number;
+    currency: string;
+    copy_trading_enabled: boolean;
+    created_at: string;
+};
+
+const VIRTUAL_CR_KEY = 'profitdock_virtual_cr_accounts';
+
+const loadVirtualCRAccounts = (): TVirtualCRAccount[] => {
+    try {
+        return JSON.parse(localStorage.getItem(VIRTUAL_CR_KEY) || '[]');
+    } catch {
+        return [];
+    }
+};
+
+const saveVirtualCRAccounts = (accounts: TVirtualCRAccount[]) => {
+    localStorage.setItem(VIRTUAL_CR_KEY, JSON.stringify(accounts));
+};
+
 export default class ClientStore {
     loginid = '';
     account_list: TAuthData['account_list'] = [];
@@ -23,6 +49,7 @@ export default class ClientStore {
     // Virtual mode is disabled until properly re-implemented — always boot as false
     is_dummy_active = false;
     currency = 'AUD';
+    virtual_cr_accounts: TVirtualCRAccount[] = loadVirtualCRAccounts();
 
     // We now use global keys so Virtual Mode state persists across account switches
     private _dummyActiveKey = () => `profitdock_dummy_active_global`;
@@ -117,7 +144,19 @@ export default class ClientStore {
             is_trading_experience_incomplete: computed,
             is_cr_account: computed,
             account_open_date: computed,
+            virtual_cr_accounts: observable,
+            addVirtualCRAccount: action,
+            removeVirtualCRAccount: action,
+            toggleVirtualCRAccount: action,
+            applyTradeResultToVirtualCRAccounts: action,
         });
+
+        // Listen for settled trade results and apply to enabled virtual CR accounts
+        if (typeof window !== 'undefined') {
+            window.addEventListener('profitdock:trade-result', ((e: CustomEvent<{ profit: number; stake: number }>) => {
+                this.applyTradeResultToVirtualCRAccounts(e.detail.profit);
+            }) as EventListener);
+        }
     }
 
     get active_accounts() {
@@ -365,6 +404,44 @@ export default class ClientStore {
         // Write to both per-account key AND legacy generic key for backwards compat
         localStorage.setItem(this._dummyBalanceKey(), balance.toString());
         localStorage.setItem('profitdock_dummy_balance', balance.toString());
+    };
+
+    addVirtualCRAccount = (derivAccountId: string, label: string, startingBalance: number, currency: string) => {
+        const id = `vc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+        const account: TVirtualCRAccount = {
+            id,
+            deriv_account_id: derivAccountId.trim().toUpperCase(),
+            label: label.trim() || derivAccountId.trim().toUpperCase(),
+            balance: startingBalance,
+            starting_balance: startingBalance,
+            currency: currency || this.currency || 'USD',
+            copy_trading_enabled: false,
+            created_at: new Date().toISOString(),
+        };
+        this.virtual_cr_accounts = [...this.virtual_cr_accounts, account];
+        saveVirtualCRAccounts(this.virtual_cr_accounts);
+    };
+
+    removeVirtualCRAccount = (id: string) => {
+        this.virtual_cr_accounts = this.virtual_cr_accounts.filter(a => a.id !== id);
+        saveVirtualCRAccounts(this.virtual_cr_accounts);
+    };
+
+    toggleVirtualCRAccount = (id: string, enabled: boolean) => {
+        this.virtual_cr_accounts = this.virtual_cr_accounts.map(a =>
+            a.id === id ? { ...a, copy_trading_enabled: enabled } : a
+        );
+        saveVirtualCRAccounts(this.virtual_cr_accounts);
+    };
+
+    applyTradeResultToVirtualCRAccounts = (profit: number) => {
+        let changed = false;
+        this.virtual_cr_accounts = this.virtual_cr_accounts.map(a => {
+            if (!a.copy_trading_enabled) return a;
+            changed = true;
+            return { ...a, balance: Math.max(0, +(a.balance + profit).toFixed(2)) };
+        });
+        if (changed) saveVirtualCRAccounts(this.virtual_cr_accounts);
     };
 
     /** Key used to store the real account loginid before virtual mode swap */

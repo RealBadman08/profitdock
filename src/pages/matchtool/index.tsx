@@ -1,9 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { observer } from 'mobx-react-lite';
 import { MarketIcon } from '@/components/market/market-icon';
 import { isCustomLegacyOAuthDomain } from '@/components/shared/utils/config/config';
 import { TradeTypeIcon } from '@/components/trade-type/trade-type-icon';
 import { api_base } from '@/external/bot-skeleton/services/api/api-base';
+import { getProfitdockPublicSocketUrl } from '@/external/bot-skeleton/services/api/appId';
 import {
     getStoredProfitdockAccounts,
     getStoredProfitdockActiveCurrency,
@@ -15,16 +17,15 @@ import { MarketSymbol } from '@/features/deriv-live/types';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentState';
 import { useStore } from '@/hooks/useStore';
+import { mirrorCopyTradingContractParameters } from '@/utils/copy-trading-execution';
 import {
     emitProfitdockTradeStatus,
     subscribeProfitdockTradeStart,
     subscribeProfitdockTradeStop,
 } from '@/utils/profitdock-trade-controller';
-import { getProfitdockPublicSocketUrl } from '@/external/bot-skeleton/services/api/appId';
+import { runVirtualTrade } from '@/utils/virtual-trade';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { localize } from '@deriv-com/translations';
-import { runVirtualTrade } from '@/utils/virtual-trade';
-import { mirrorCopyTradingContractParameters } from '@/utils/copy-trading-execution';
 import './matchtool.scss';
 
 type ApiLike = {
@@ -335,7 +336,7 @@ const ResultBadge = ({ result }: { result: RoundRow['result'] }) => (
 
 const MatchtoolPage = observer(() => {
     const { accountList, activeLoginid, authData, connectionStatus } = useApiBase();
-    const { transactions, client } = useStore();
+    const { transactions, client, summary_card } = useStore();
     const [markets, setMarkets] = useState<MatchMarket[]>([]);
     const [selectedMarket, setSelectedMarket] = useProfitdockPersistentState('profitdock.matchtool.market', '');
     const [analysisTicks, setAnalysisTicks] = useProfitdockPersistentState('profitdock.matchtool.ticks', '1000');
@@ -622,7 +623,10 @@ const MatchtoolPage = observer(() => {
                             symbol: selectedMarketInfo.symbol,
                             displayName: selectedMarketInfo.display_name || selectedMarketInfo.symbol,
                             duration: 1,
-                            onUpdate: contract => transactions.pushTransaction(contract as any),
+                            onUpdate: contract => {
+                                transactions.pushTransaction(contract as any);
+                                summary_card.onBotContractEvent(contract as any);
+                            },
                             getDummyBalance: () => client.dummy_balance,
                             setDummyBalance: val => client.setDummyBalance(val),
                         });
@@ -659,11 +663,13 @@ const MatchtoolPage = observer(() => {
                     const contractId = Number(buy.contract_id);
                     try {
                         const profit = await waitForSettlement(api, contractId, contract => {
-                            transactions.pushTransaction({
+                            const enriched = {
                                 ...contract,
                                 accountID: getActiveTransactionAccountId(),
                                 source: 'matchtool',
-                            } as ProposalOpenContract & { accountID?: string; source?: string });
+                            } as ProposalOpenContract & { accountID?: string; source?: string };
+                            transactions.pushTransaction(enriched);
+                            summary_card.onBotContractEvent(enriched as any);
                         });
                         const result = profit > 0 ? 'won' : 'lost';
                         console.log('[MATCHTOOL RESULT]', 'digit=', pick.digit, 'profit=', profit);
@@ -708,79 +714,82 @@ const MatchtoolPage = observer(() => {
         <div className='matchtool-page'>
             <div className='matchtool-page__shell'>
                 <section className='matchtool-page__controls'>
-                    <label className='matchtool-page__field matchtool-page__field--market' htmlFor='matchtool-market'>
-                        <div className='matchtool-page__select-wrap'>
-                            <MarketIcon type={selectedMarketInfo?.symbol || selectedMarket || 'unknown'} size='sm' />
-                            <select
-                                disabled={isLoadingMarkets || !markets.length || isRunning}
-                                id='matchtool-market'
-                                onChange={event => setSelectedMarket(event.target.value)}
-                                value={selectedMarket}
-                            >
-                                {markets.map(market => (
-                                    <option key={market.symbol} value={market.symbol}>
-                                        {market.display_name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                        <label className='matchtool-page__field matchtool-page__field--market' htmlFor='matchtool-market' style={{ display: 'flex', flexDirection: 'column', margin: 0 }}>
+                            <span style={{ marginBottom: '8px' }}>{localize('Market')}</span>
+                            <div className='matchtool-page__select-wrap'>
+                                <MarketIcon type={selectedMarketInfo?.symbol || selectedMarket || 'unknown'} size='sm' />
+                                <select
+                                    disabled={isLoadingMarkets || !markets.length || isRunning}
+                                    id='matchtool-market'
+                                    onChange={event => setSelectedMarket(event.target.value)}
+                                    value={selectedMarket}
+                                    style={{ width: '100%' }}
+                                >
+                                    {markets.map(market => (
+                                        <option key={market.symbol} value={market.symbol}>
+                                            {market.display_name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </label>
 
-                    <label className='matchtool-page__field' htmlFor='matchtool-analysis-ticks'>
-                        <span>Number of ticks</span>
-                        <input
-                            disabled={isRunning}
-                            id='matchtool-analysis-ticks'
-                            inputMode='numeric'
-                            max='1000'
-                            min='0'
-                            onChange={event => {
-                                const next = event.target.value;
-                                if (next === '' || Number(next) <= 1000) setAnalysisTicks(next);
-                            }}
-                            placeholder='0-1000'
-                            type='number'
-                            value={analysisTicks}
-                        />
-                    </label>
+                        <label className='matchtool-page__field' htmlFor='matchtool-stake' style={{ display: 'flex', flexDirection: 'column', margin: 0 }}>
+                            <span style={{ marginBottom: '8px' }}>{localize('Stake')}</span>
+                            <input
+                                disabled={isRunning}
+                                id='matchtool-stake'
+                                inputMode='decimal'
+                                onChange={event => setStake(event.target.value)}
+                                placeholder='Enter stake'
+                                type='number'
+                                value={stake}
+                                style={{ width: '100%' }}
+                            />
+                        </label>
 
-                    <label className='matchtool-page__field' htmlFor='matchtool-stake'>
-                        <span>Stake</span>
-                        <input
-                            disabled={isRunning}
-                            id='matchtool-stake'
-                            inputMode='decimal'
-                            onChange={event => setStake(event.target.value)}
-                            placeholder='Enter stake'
-                            type='number'
-                            value={stake}
-                        />
-                    </label>
+                        <label className='matchtool-page__field' htmlFor='matchtool-analysis-ticks' style={{ display: 'flex', flexDirection: 'column', margin: 0 }}>
+                            <span style={{ marginBottom: '8px' }}>{localize('Ticks')}</span>
+                            <input
+                                disabled={isRunning}
+                                id='matchtool-analysis-ticks'
+                                inputMode='numeric'
+                                max='1000'
+                                min='0'
+                                onChange={event => {
+                                    const next = event.target.value;
+                                    if (next === '' || Number(next) <= 1000) setAnalysisTicks(next);
+                                }}
+                                placeholder='0-1000'
+                                type='number'
+                                value={analysisTicks}
+                                style={{ width: '100%' }}
+                            />
+                        </label>
 
-                    <label className='matchtool-page__field' htmlFor='matchtool-predictions'>
-                        <span>Predictions</span>
-                        <input
-                            disabled={isRunning}
-                            id='matchtool-predictions'
-                            inputMode='numeric'
-                            max='9'
-                            min='1'
-                            onChange={event => {
-                                const next = event.target.value;
-                                if (next === '' || Number(next) <= 9) setPredictionCount(next);
-                            }}
-                            placeholder='1-9'
-                            type='number'
-                            value={predictionCount}
-                        />
-                    </label>
+                        <label className='matchtool-page__field' htmlFor='matchtool-predictions' style={{ display: 'flex', flexDirection: 'column', margin: 0 }}>
+                            <span style={{ marginBottom: '8px' }}>{localize('Predictions')}</span>
+                            <input
+                                disabled={isRunning}
+                                id='matchtool-predictions'
+                                inputMode='numeric'
+                                max='9'
+                                min='1'
+                                onChange={event => {
+                                    const next = event.target.value;
+                                    if (next === '' || Number(next) <= 9) setPredictionCount(next);
+                                }}
+                                placeholder='1-9'
+                                type='number'
+                                value={predictionCount}
+                                style={{ width: '100%' }}
+                            />
+                        </label>
+                    </div>
 
-                    <div className='matchtool-page__run-container'>
-                        <button className='matchtool-page__run' disabled={isRunning || !markets.length} onClick={handleRun} type='button'>
-                            <span className='matchtool-page__play' />
-                            {isRunning ? 'Running' : 'Run'}
-                        </button>
-                        <div className='matchtool-page__top-digits'>
+                    <div className='matchtool-page__run-container' style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px', width: '100%' }}>
+                        <div className='matchtool-page__top-digits' style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
                             {Array.from({ length: 10 }, (_, digit) => (
                                 <div
                                     key={digit}
@@ -790,54 +799,44 @@ const MatchtoolPage = observer(() => {
                                 </div>
                             ))}
                         </div>
+                        <button className='matchtool-page__run' disabled={isRunning || !markets.length} onClick={handleRun} type='button' style={{ width: '100%' }}>
+                            <span className='matchtool-page__play' />
+                            {isRunning ? 'Running' : 'Run'}
+                        </button>
                     </div>
                 </section>
 
                 {feedback && <div className='matchtool-page__notice'>{feedback}</div>}
 
                 <section className='matchtool-page__analysis'>
-                    <div className='matchtool-page__chart' aria-busy={isLoadingAnalysis}>
-                        {model.counts.map((count, digit) => {
-                            const height = Math.max(6, (count / maxCount) * 100);
-                            return (
+                    <div className='matchtool-page__chart' aria-busy={isLoadingAnalysis} style={{ background: 'transparent' }}>
+                        {isLoadingAnalysis
+                            ? Array.from({ length: 10 }).map((_, digit) => (
                                 <div className='matchtool-page__bar-cell' key={digit}>
-                                    <span>{formatPercent(model.frequencies[digit] || 0)}</span>
-                                    <div className='matchtool-page__bar-track'>
-                                        <div className='matchtool-page__bar' style={{ height: `${height}%`, backgroundColor: getBarColor(count) }} />
+                                    <span style={{ background: 'rgba(128,128,128,0.3)', borderRadius: '4px', width: '100%', height: '12px', display: 'block', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                                    <div className='matchtool-page__bar-track' style={{ background: 'transparent' }}>
+                                        <div className='matchtool-page__bar' style={{ height: '60%', background: 'rgba(128,128,128,0.2)', borderRadius: '4px', animation: 'pulse 1.5s ease-in-out infinite' }} />
                                     </div>
                                     <b>{digit}</b>
                                 </div>
-                            );
-                        })}
+                              ))
+                            : model.counts.map((count, digit) => {
+                                const height = Math.max(6, (count / maxCount) * 100);
+                                return (
+                                    <div className='matchtool-page__bar-cell' key={digit}>
+                                        <span>{formatPercent(model.frequencies[digit] || 0)}</span>
+                                        <div className='matchtool-page__bar-track' style={{ background: 'transparent' }}>
+                                            <div className='matchtool-page__bar' style={{ height: `${height}%`, backgroundColor: getBarColor(count) }} />
+                                        </div>
+                                        <b>{digit}</b>
+                                    </div>
+                                );
+                              })
+                        }
                     </div>
                 </section>
 
-                <section className='matchtool-page__round'>
-                    <div className='matchtool-page__table' role='table'>
-                        <div className='matchtool-page__table-row matchtool-page__table-row--head' role='row'>
-                            <span>Digit</span>
-                            <span>Frequency</span>
-                            <span>Result</span>
-                            <span>P&L</span>
-                        </div>
-                        {roundRows.length ? (
-                            roundRows.map(row => (
-                                <div className='matchtool-page__table-row' key={`${row.digit}`} role='row'>
-                                    <strong>{row.digit}</strong>
-                                    <span>
-                                        {row.count} / {formatPercent(row.frequency)}
-                                    </span>
-                                    <ResultBadge result={row.result} />
-                                    <span className={row.profit === undefined ? '' : row.profit >= 0 ? 'matchtool-page__profit' : 'matchtool-page__loss'}>
-                                        {row.profit === undefined ? '-' : formatMoney(row.profit, currency)}
-                                    </span>
-                                </div>
-                            ))
-                        ) : (
-                            <div className='matchtool-page__empty'></div>
-                        )}
-                    </div>
-                </section>
+
             </div>
         </div>
     );

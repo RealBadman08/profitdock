@@ -10,10 +10,12 @@
                 font-size: var(--text-size-xxs);
             }
         }
+
         &-container {
             display: flex;
             align-items: center;
         }
+
         &-message {
             margin-left: 8px;
             font-size: var(--text-size-xxs);

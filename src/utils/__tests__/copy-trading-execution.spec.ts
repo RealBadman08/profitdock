@@ -6,7 +6,12 @@ import {
     normalizeCopyTradingContractParameters,
 } from '../copy-trading-execution';
 
-const { normalizeBulkPurchaseContractParameters } = require('../../../server/copy-trading-store.cjs');
+const {
+    groupRecipientPairsByCurrency,
+    normalizeBulkPurchaseContractParameters,
+    stripBulkPurchaseAccountMetadata,
+    summarizeBulkPurchaseResult,
+} = require('../../../server/copy-trading-store.cjs');
 const mockGetProfitdockOAuthToken = jest.fn(() => 'owner-oauth-token');
 
 jest.mock('@/external/bot-skeleton/services/api/profitdock-oauth-session', () => ({
@@ -289,6 +294,197 @@ describe('copy-trading-execution', () => {
             duration: 1,
             duration_unit: 't',
             symbol: '1HZ100V',
+        });
+    });
+
+    it('summarizes Deriv bulk-purchase recipient outcomes', () => {
+        expect(
+            summarizeBulkPurchaseResult({
+                data: {
+                    transactions: [
+                        {
+                            account_id: 'CR111',
+                            contract_id: '123',
+                        },
+                        {
+                            account_id: 'CR222',
+                            error: {
+                                code: 'InsufficientBalance',
+                                message: 'Insufficient balance.',
+                            },
+                        },
+                    ],
+                },
+            })
+        ).toEqual({
+            copied_count: 1,
+            errors: [
+                {
+                    account_id: 'CR222',
+                    code: 'InsufficientBalance',
+                    message: 'Insufficient balance.',
+                },
+            ],
+            failed_count: 1,
+            transactions: [
+                {
+                    account_id: 'CR111',
+                    contract_id: '123',
+                    error: undefined,
+                    ok: true,
+                },
+                {
+                    account_id: 'CR222',
+                    contract_id: '',
+                    error: {
+                        account_id: 'CR222',
+                        code: 'InsufficientBalance',
+                        message: 'Insufficient balance.',
+                    },
+                    ok: false,
+                },
+            ],
+        });
+    });
+
+    it('treats flexible Deriv bulk-purchase success shapes as copied trades', () => {
+        expect(
+            summarizeBulkPurchaseResult({
+                data: {
+                    transactions: [
+                        {
+                            account_id: 'CR111',
+                            transaction_id: 'txn-123',
+                            status: 'succeeded',
+                        },
+                        {
+                            account_id: 'CR222',
+                            result: {
+                                id: 'result-456',
+                            },
+                        },
+                        {
+                            account_id: 'CR333',
+                            ok: true,
+                        },
+                    ],
+                },
+            })
+        ).toEqual({
+            copied_count: 3,
+            errors: [],
+            failed_count: 0,
+            transactions: [
+                {
+                    account_id: 'CR111',
+                    contract_id: 'txn-123',
+                    error: undefined,
+                    ok: true,
+                },
+                {
+                    account_id: 'CR222',
+                    contract_id: 'result-456',
+                    error: undefined,
+                    ok: true,
+                },
+                {
+                    account_id: 'CR333',
+                    contract_id: '',
+                    error: undefined,
+                    ok: true,
+                },
+            ],
+        });
+    });
+
+    it('keeps Deriv validation and unknown recipient rejection details visible', () => {
+        expect(
+            summarizeBulkPurchaseResult({
+                errors: [
+                    {
+                        code: 'BadInputRequest',
+                        field: 'accounts[0].account_id',
+                        message: 'Token or account validation failed for account "CR0000000"',
+                    },
+                ],
+                meta: {},
+            }).errors[0]
+        ).toEqual({
+            account_id: '',
+            code: 'BadInputRequest',
+            field: 'accounts[0].account_id',
+            message: 'accounts[0].account_id: Token or account validation failed for account "CR0000000"',
+        });
+
+        expect(
+            summarizeBulkPurchaseResult({
+                data: {
+                    transactions: [
+                        {
+                            account_id: 'CR222',
+                            status: 'failed',
+                            reason: 'Trading is disabled for this account.',
+                            token: 'must-not-leak',
+                        },
+                    ],
+                },
+            }).errors[0]
+        ).toEqual({
+            account_id: 'CR222',
+            code: 'copy_trade_failed',
+            message: 'Trading is disabled for this account.',
+        });
+    });
+
+    it('groups copy-trading recipients by currency without leaking metadata into Deriv accounts', () => {
+        const accounts = [
+            {
+                account_id: 'CR111',
+                currency: 'USD',
+                token: 'token-1',
+            },
+            {
+                account_id: 'CR222',
+                currency: 'AUD',
+                token: 'token-2',
+            },
+            {
+                account_id: 'CR333',
+                currency: '',
+                token: 'token-3',
+            },
+        ];
+
+        expect(groupRecipientPairsByCurrency({ accounts, fallbackCurrency: 'USD' })).toEqual([
+            {
+                accounts: [
+                    {
+                        account_id: 'CR111',
+                        currency: 'USD',
+                        token: 'token-1',
+                    },
+                    {
+                        account_id: 'CR333',
+                        currency: '',
+                        token: 'token-3',
+                    },
+                ],
+                currency: 'USD',
+            },
+            {
+                accounts: [
+                    {
+                        account_id: 'CR222',
+                        currency: 'AUD',
+                        token: 'token-2',
+                    },
+                ],
+                currency: 'AUD',
+            },
+        ]);
+        expect(stripBulkPurchaseAccountMetadata(accounts[0])).toEqual({
+            account_id: 'CR111',
+            token: 'token-1',
         });
     });
 });

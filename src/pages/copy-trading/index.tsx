@@ -4,6 +4,7 @@ import { ProfitDockSmoothPage, ProfitDockSmoothSection } from '@/components/prof
 import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observables/connection-status-stream';
 import { getProfitdockOAuthToken } from '@/external/bot-skeleton/services/api/profitdock-oauth-session';
 import { useApiBase } from '@/hooks/useApiBase';
+import { useStore } from '@/hooks/useStore';
 import './copy-trading.scss';
 
 type TAccountType = 'real' | 'demo' | 'virtual' | 'unknown';
@@ -93,6 +94,7 @@ const getAccountBalance = (account: TConnectedAccount) => {
 
 const CopyTrading = observer(() => {
     const { connectionStatus, isAuthorized, isAuthorizing } = useApiBase();
+    const { client } = useStore();
     const tokenInputRef = useRef<HTMLInputElement>(null);
     const menuRefs = useRef<Record<string, HTMLDivElement | null>>({});
     const [accounts, setAccounts] = useState<TConnectedAccount[]>([]);
@@ -166,6 +168,27 @@ const CopyTrading = observer(() => {
 
     useEffect(() => {
         void loadAccounts();
+    }, [loadAccounts]);
+
+    // Refresh balances every 30 seconds
+    useEffect(() => {
+        if (!canManageAccounts) return undefined;
+
+        const interval = window.setInterval(() => {
+            void loadAccounts();
+        }, 30_000);
+
+        return () => window.clearInterval(interval);
+    }, [canManageAccounts, loadAccounts]);
+
+    // Refresh immediately after each copy trade completes
+    useEffect(() => {
+        const onCopyTradingResult = () => {
+            void loadAccounts();
+        };
+
+        window.addEventListener('profitdock:copy-trading-result', onCopyTradingResult);
+        return () => window.removeEventListener('profitdock:copy-trading-result', onCopyTradingResult);
     }, [loadAccounts]);
 
     const updateAccountInState = (updatedAccount: TConnectedAccount) => {
@@ -382,106 +405,164 @@ const CopyTrading = observer(() => {
                 ) : null}
 
                 <div className='copy-trading__account-list'>
-                    {isLoading ? (
-                        <div className='copy-trading__empty'>Refreshing accounts...</div>
-                    ) : realAccounts.length ? (
-                        realAccounts.map((account, index) => {
-                            const isPending = pendingAction?.endsWith(account.id);
-                            const isEnabled = account.copy_trading_enabled && account.connection_status === 'connected';
-                            const avatarTone = index % 5;
-
-                            return (
-                                <article className='copy-trading__account-card' key={account.id}>
-                                    <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
-                                        {getAvatarInitials(account)}
-                                    </div>
-                                    <div className='copy-trading__account-text'>
-                                        <strong>{account.deriv_account_id}</strong>
-                                        <span>{getAccountBalance(account)}</span>
-                                    </div>
-                                    <label
-                                        className={`copy-trading__switch ${isEnabled ? 'copy-trading__switch--enabled' : 'copy-trading__switch--disabled'}`}
-                                    >
-                                        <input
-                                            checked={isEnabled}
-                                            disabled={account.connection_status !== 'connected' || isPending}
-                                            onChange={event =>
-                                                void handleToggleCopying(account, event.currentTarget.checked)
-                                            }
-                                            type='checkbox'
-                                        />
-                                        <span />
-                                    </label>
-                                    <div
-                                        className='copy-trading__menu-anchor'
-                                        ref={element => {
-                                            menuRefs.current[account.id] = element;
-                                        }}
-                                    >
-                                        <button
-                                            aria-expanded={menuAccountId === account.id}
-                                            aria-label='Account actions'
-                                            className='copy-trading__menu-button'
-                                            disabled={isPending}
-                                            onClick={() =>
-                                                setMenuAccountId(previous => (previous === account.id ? null : account.id))
-                                            }
-                                            type='button'
+                    {isLoading && realAccounts.length === 0 && client.virtual_cr_accounts.length === 0 ? (
+                        <div className='copy-trading__empty'>Loading accounts...</div>
+                    ) : (realAccounts.length > 0 || client.virtual_cr_accounts.length > 0) ? (
+                        [...realAccounts.map(a => ({ isVirtual: false, acc: a, id: a.id })), ...client.virtual_cr_accounts.map(a => ({ isVirtual: true, acc: a as any, id: a.id }))].map((item, index) => {
+                            if (item.isVirtual) {
+                                const acc = item.acc as any; // TVirtualCRAccount
+                                const isEnabled = acc.copy_trading_enabled;
+                                const avatarTone = index % 5;
+                                return (
+                                    <article className='copy-trading__account-card' key={acc.id} style={{ opacity: 1 }}>
+                                        <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
+                                            {acc.deriv_account_id.slice(0, 2).toUpperCase()}
+                                        </div>
+                                        <div className='copy-trading__account-text'>
+                                            <strong>{acc.deriv_account_id}</strong>
+                                            <span>{acc.label !== acc.deriv_account_id ? `${acc.label} · ` : ''}{acc.balance.toFixed(2)} {acc.currency}</span>
+                                        </div>
+                                        <label className={`copy-trading__switch ${isEnabled ? 'copy-trading__switch--enabled' : 'copy-trading__switch--disabled'}`}>
+                                            <input
+                                                checked={isEnabled}
+                                                onChange={e => client.toggleVirtualCRAccount(acc.id, e.currentTarget.checked)}
+                                                type='checkbox'
+                                            />
+                                            <span />
+                                        </label>
+                                        <div
+                                            className='copy-trading__menu-anchor'
+                                            ref={element => {
+                                                menuRefs.current[acc.id] = element;
+                                            }}
                                         >
+                                            <button
+                                                aria-expanded={menuAccountId === acc.id}
+                                                aria-label='Account actions'
+                                                className='copy-trading__menu-button'
+                                                onClick={() => setMenuAccountId(previous => (previous === acc.id ? null : acc.id))}
+                                                type='button'
+                                            >
+                                                <span />
+                                                <span />
+                                                <span />
+                                            </button>
+                                            {menuAccountId === acc.id ? (
+                                                <div className='copy-trading__menu' role='menu'>
+                                                    <div style={{ padding: '8px 16px', fontSize: '12px', color: '#818cf8', fontWeight: 600, borderBottom: '1px solid #333' }}>
+                                                        Virtual Account
+                                                    </div>
+                                                    <button
+                                                        className='copy-trading__menu-danger'
+                                                        onClick={() => { if (window.confirm(`Delete ${acc.deriv_account_id}?`)) { client.removeVirtualCRAccount(acc.id); setMenuAccountId(null); } }}
+                                                        type='button'
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    </article>
+                                );
+                            } else {
+                                const account = item.acc as TConnectedAccount;
+                                const isPending = pendingAction?.endsWith(account.id);
+                                const isEnabled = account.copy_trading_enabled && account.connection_status === 'connected';
+                                const avatarTone = index % 5;
+
+                                return (
+                                    <article className='copy-trading__account-card' key={account.id}>
+                                        <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
+                                            {getAvatarInitials(account)}
+                                        </div>
+                                        <div className='copy-trading__account-text'>
+                                            <strong>{account.deriv_account_id}</strong>
+                                            <span>{getAccountBalance(account)}</span>
+                                        </div>
+                                        <label
+                                            className={`copy-trading__switch ${isEnabled ? 'copy-trading__switch--enabled' : 'copy-trading__switch--disabled'}`}
+                                        >
+                                            <input
+                                                checked={isEnabled}
+                                                disabled={account.connection_status !== 'connected' || isPending}
+                                                onChange={event =>
+                                                    void handleToggleCopying(account, event.currentTarget.checked)
+                                                }
+                                                type='checkbox'
+                                            />
                                             <span />
-                                            <span />
-                                            <span />
-                                        </button>
-                                        {menuAccountId === account.id ? (
-                                            <div className='copy-trading__menu' role='menu'>
-                                                <button onClick={() => handleStartEditAccount(account)} type='button'>
-                                                    Edit token
-                                                </button>
+                                        </label>
+                                        <div
+                                            className='copy-trading__menu-anchor'
+                                            ref={element => {
+                                                menuRefs.current[account.id] = element;
+                                            }}
+                                        >
+                                            <button
+                                                aria-expanded={menuAccountId === account.id}
+                                                aria-label='Account actions'
+                                                className='copy-trading__menu-button'
+                                                disabled={isPending}
+                                                onClick={() =>
+                                                    setMenuAccountId(previous => (previous === account.id ? null : account.id))
+                                                }
+                                                type='button'
+                                            >
+                                                <span />
+                                                <span />
+                                                <span />
+                                            </button>
+                                            {menuAccountId === account.id ? (
+                                                <div className='copy-trading__menu' role='menu'>
+                                                    <button onClick={() => handleStartEditAccount(account)} type='button'>
+                                                        Edit token
+                                                    </button>
+                                                    <button
+                                                        className='copy-trading__menu-danger'
+                                                        onClick={() => void handleDisconnectAccount(account)}
+                                                        type='button'
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            ) : null}
+                                        </div>
+
+                                        {editingAccountId === account.id ? (
+                                            <div className='copy-trading__replace-row'>
+                                                <input
+                                                    autoComplete='off'
+                                                    disabled={isPending}
+                                                    onChange={event => setReplacementToken(event.currentTarget.value)}
+                                                    placeholder='Paste replacement Deriv API token'
+                                                    type='password'
+                                                    value={replacementToken}
+                                                />
                                                 <button
-                                                    className='copy-trading__menu-danger'
-                                                    onClick={() => void handleDisconnectAccount(account)}
+                                                    disabled={isPending}
+                                                    onClick={() => void handleReplaceAccountToken(account)}
                                                     type='button'
                                                 >
-                                                    Delete
+                                                    Save
+                                                </button>
+                                                <button
+                                                    disabled={isPending}
+                                                    onClick={() => {
+                                                        setEditingAccountId(null);
+                                                        setReplacementToken('');
+                                                    }}
+                                                    type='button'
+                                                >
+                                                    Cancel
                                                 </button>
                                             </div>
                                         ) : null}
-                                    </div>
-
-                                    {editingAccountId === account.id ? (
-                                        <div className='copy-trading__replace-row'>
-                                            <input
-                                                autoComplete='off'
-                                                disabled={isPending}
-                                                onChange={event => setReplacementToken(event.currentTarget.value)}
-                                                placeholder='Paste replacement Deriv API token'
-                                                type='password'
-                                                value={replacementToken}
-                                            />
-                                            <button
-                                                disabled={isPending}
-                                                onClick={() => void handleReplaceAccountToken(account)}
-                                                type='button'
-                                            >
-                                                Save
-                                            </button>
-                                            <button
-                                                disabled={isPending}
-                                                onClick={() => {
-                                                    setEditingAccountId(null);
-                                                    setReplacementToken('');
-                                                }}
-                                                type='button'
-                                            >
-                                                Cancel
-                                            </button>
-                                        </div>
-                                    ) : null}
-                                </article>
-                            );
+                                    </article>
+                                );
+                            }
                         })
                     ) : (
-                        <div className='copy-trading__empty'>No real accounts connected yet. Add a Deriv API token to begin.</div>
+                        <div className='copy-trading__empty'>No accounts connected yet. Add a Deriv API token or Virtual Account to begin.</div>
                     )}
                 </div>
 

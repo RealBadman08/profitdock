@@ -8,7 +8,7 @@
     &__loop,
     &__spark {
         fill: none;
-        stroke: currentColor;
+        stroke: currentcolor;
         stroke-linecap: round;
         stroke-linejoin: round;
         stroke-width: 1.55;
@@ -30,13 +30,13 @@
     }
 
     &__blend {
-        fill: rgb(255 68 79 / 0.18);
+        fill: rgb(255 68 79 / 18%);
         stroke: var(--brand-red-coral);
         stroke-width: 1.2;
         opacity: 0.92;
         transform-box: fill-box;
         transform-origin: center;
-        filter: drop-shadow(0 0 4px rgb(255 68 79 / 0.32));
+        filter: drop-shadow(0 0 4px rgb(255 68 79 / 32%));
         animation: copy-trading-nav-blend 2.35s ease-in-out infinite;
     }
 
@@ -65,7 +65,7 @@
         fill: var(--brand-red-coral);
         opacity: 0;
         transform-origin: center;
-        filter: drop-shadow(0 0 3px rgb(255 68 79 / 0.45));
+        filter: drop-shadow(0 0 3px rgb(255 68 79 / 45%));
     }
 
     &__orb--one {

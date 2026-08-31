@@ -39,6 +39,15 @@ export default Engine =>
 
                         this.store.dispatch(sell());
 
+                        // Notify virtual CR accounts of the settled result
+                        try {
+                            const profit = Number(contract.profit ?? 0);
+                            const stake = Number(contract.buy_price ?? 0);
+                            window.dispatchEvent(new CustomEvent('profitdock:trade-result', {
+                                detail: { profit, stake },
+                            }));
+                        } catch (_) { /* non-critical */ }
+
                         // A per-tick strategy must re-enter BEFORE_PURCHASE after
                         // settlement. The generated interpreter loop then waits
                         // for the next real tick before placing the next contract.

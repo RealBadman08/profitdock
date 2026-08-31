@@ -6,7 +6,7 @@
     vertical-align: middle;
 
     &__tile {
-        fill: currentColor;
+        fill: currentcolor;
         opacity: 0.34;
         transform-box: fill-box;
         transform-origin: center;
@@ -38,7 +38,7 @@
         opacity: 0;
         transform-box: fill-box;
         transform-origin: center;
-        filter: drop-shadow(0 0 4px rgb(255 68 79 / 0.35));
+        filter: drop-shadow(0 0 4px rgb(255 68 79 / 35%));
     }
 
     &__glow--1 {
