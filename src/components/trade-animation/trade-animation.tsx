@@ -314,7 +314,7 @@ const TradeAnimation = observer(({ className, should_show_overlay }: TTradeAnima
                 </div>
             ) : (
                 <Button
-                    is_disabled={(is_disabled && !is_unavailable_for_payment_agent) || display_contract_stage === 3}
+                    is_disabled={is_disabled && !is_unavailable_for_payment_agent}
                     className={button_props.class}
                     id={button_props.id}
                     icon={button_props.icon}

@@ -298,14 +298,40 @@ const resolveOwner = async req => {
         throw new PublicError(401, 'login_required', 'Log in to ProfitDock before managing Copy Trading accounts.');
     }
 
-    const accounts = await loadDerivOptionsAccounts(sessionToken);
-    const ownerAccount = accounts.find(account => account.account_type === 'real') || accounts[0];
+    // Prefer the loginid supplied directly by the authenticated client — this avoids
+    // calling the Deriv Options API with a legacy Deriv token (which is not a valid
+    // OAuth JWT bearer token and causes 400/401 errors from that endpoint).
+    const headerLoginid = String(req.headers['x-deriv-loginid'] || '').trim();
+    if (headerLoginid && /^[A-Z]{2,6}\d+$/i.test(headerLoginid)) {
+        return {
+            owner_deriv_account_id: headerLoginid.toUpperCase(),
+            owner_accounts: [],
+            session_access_token: sessionToken,
+        };
+    }
 
-    return {
-        owner_deriv_account_id: ownerAccount.deriv_account_id,
-        owner_accounts: accounts,
-        session_access_token: sessionToken,
-    };
+    // Fallback: try the Deriv Options API (works when authToken is a real OAuth JWT)
+    try {
+        const accounts = await loadDerivOptionsAccounts(sessionToken);
+        const ownerAccount = accounts.find(account => account.account_type === 'real') || accounts[0];
+
+        return {
+            owner_deriv_account_id: ownerAccount.deriv_account_id,
+            owner_accounts: accounts,
+            session_access_token: sessionToken,
+        };
+    } catch (err) {
+        // If the Options API rejects the token (legacy API key), we have no owner to identify
+        const status = Number(err?.status) || 0;
+        if (status === 400 || status === 401 || status === 403) {
+            throw new PublicError(
+                401,
+                'login_required',
+                'Your session could not be verified. Please log out and log back in to use Copy Trading.'
+            );
+        }
+        throw err;
+    }
 };
 
 const sanitizeAccount = account => ({

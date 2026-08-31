@@ -41,6 +41,10 @@ const MAX_CONNECTED_ACCOUNTS = 20;
 const requestCopyTrading = async (path: string, init: RequestInit = {}) => {
     const headers = new Headers(init.headers);
     const sessionToken = getProfitdockOAuthToken();
+    const activeLoginid =
+        localStorage.getItem('active_loginid') ||
+        (window as any).__profitdockActiveLoginid ||
+        '';
 
     if (init.body && !headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
@@ -48,6 +52,10 @@ const requestCopyTrading = async (path: string, init: RequestInit = {}) => {
 
     if (sessionToken && !headers.has('Authorization')) {
         headers.set('Authorization', `Bearer ${sessionToken}`);
+    }
+
+    if (activeLoginid && !headers.has('X-Deriv-Loginid')) {
+        headers.set('X-Deriv-Loginid', activeLoginid);
     }
 
     const response = await fetch(path, {
