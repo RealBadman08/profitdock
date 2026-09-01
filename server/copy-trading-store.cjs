@@ -641,6 +641,14 @@ const normalizeBulkPurchaseContractParameters = (contractParameters, mode = 'sym
         }
     }
 
+    if (normalized.barrier !== undefined && normalized.barrier !== null) {
+        normalized.barrier = String(normalized.barrier);
+    }
+
+    if (normalized.barrier2 !== undefined && normalized.barrier2 !== null) {
+        normalized.barrier2 = String(normalized.barrier2);
+    }
+
     return normalized;
 };
 

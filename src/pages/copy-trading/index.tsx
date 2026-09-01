@@ -388,62 +388,6 @@ const CopyTrading = observer(() => {
                     </button>
                 </div>
 
-                {client.is_virtual && (
-                    <div className='copy-trading__section-heading' style={{ marginTop: '2.4rem' }}>
-                        <div className='copy-trading__token-section'>
-                            <div className='copy-trading__input-shell'>
-                                <input
-                                    autoComplete='off'
-                                    id='copy-trading-virtual-cr-input'
-                                    placeholder='Enter virtual CR (e.g. CR12345)'
-                                    type='text'
-                                    style={{ flex: 1 }}
-                                />
-                                <input
-                                    autoComplete='off'
-                                    id='copy-trading-virtual-balance-input'
-                                    placeholder='Balance'
-                                    type='number'
-                                    style={{ width: '100px', marginLeft: '8px' }}
-                                />
-                            </div>
-                            <button
-                                className='copy-trading__add-button'
-                                onClick={() => {
-                                    const crInput = document.getElementById(
-                                        'copy-trading-virtual-cr-input'
-                                    ) as HTMLInputElement;
-                                    const balanceInput = document.getElementById(
-                                        'copy-trading-virtual-balance-input'
-                                    ) as HTMLInputElement;
-                                    const cr = crInput?.value.trim().toUpperCase();
-                                    const balance = parseFloat(balanceInput?.value);
-                                    if (cr && !isNaN(balance)) {
-                                        client.addVirtualCRAccount({
-                                            balance,
-                                            copy_trading_enabled: true,
-                                            created_at: new Date().toISOString(),
-                                            currency: 'USD',
-                                            deriv_account_id: cr,
-                                            id: `virtual-${cr}-${Date.now()}`,
-                                            label: cr,
-                                            starting_balance: balance,
-                                        });
-                                        crInput.value = '';
-                                        balanceInput.value = '';
-                                        setNotice({ message: 'Virtual CR account added.', tone: 'success' });
-                                    } else {
-                                        setNotice({ message: 'Please enter a valid CR and balance.', tone: 'error' });
-                                    }
-                                }}
-                                type='button'
-                            >
-                                Add Virtual
-                            </button>
-                        </div>
-                    </div>
-                )}
-
                 <div className='copy-trading__section-heading' style={{ marginTop: '2.4rem' }}>
                     <button
                         aria-label='Refresh connected accounts'
