@@ -430,7 +430,10 @@ const CopyTrading = observer(() => {
                                 return (
                                     <article className='copy-trading__account-card' key={acc.id} style={{ opacity: 1 }}>
                                         <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
-                                            {acc.deriv_account_id.slice(0, 2).toUpperCase()}
+                                            <svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+                                                <path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' fill='currentColor'></path>
+                                                <circle cx='12' cy='7' r='4'></circle>
+                                            </svg>
                                         </div>
                                         <div className='copy-trading__account-text'>
                                             <strong>{acc.deriv_account_id}</strong>
@@ -510,7 +513,10 @@ const CopyTrading = observer(() => {
                                 return (
                                     <article className='copy-trading__account-card' key={account.id}>
                                         <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
-                                            {getAvatarInitials(account)}
+                                            <svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+                                                <path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' fill='currentColor'></path>
+                                                <circle cx='12' cy='7' r='4'></circle>
+                                            </svg>
                                         </div>
                                         <div className='copy-trading__account-text'>
                                             <strong>{account.deriv_account_id}</strong>
@@ -605,7 +611,7 @@ const CopyTrading = observer(() => {
                         })
                     ) : (
                         <div className='copy-trading__empty'>
-                            No accounts connected yet. Add a Deriv API token or Virtual Account to begin.
+                            No accounts connected yet.
                         </div>
                     )}
                 </div>
