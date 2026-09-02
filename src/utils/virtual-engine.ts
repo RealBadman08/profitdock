@@ -242,7 +242,7 @@ class VirtualTradingEngine {
             const durUnit = contract.duration_unit;
             const elapsed = epoch - (contract.date_start ?? epoch);
 
-            if (durUnit === 't' && contract.ticks_seen > contract.duration) {
+            if (durUnit === 't' && contract.ticks_seen >= contract.duration) {
                 this._settle(contract, spot, epoch, pipSize);
             } else if (durUnit === 's' && elapsed >= contract.duration) {
                 this._settle(contract, spot, epoch, pipSize);
