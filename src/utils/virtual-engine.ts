@@ -29,6 +29,8 @@ interface FakeContract {
     entry_spot?: number;
     entry_tick_display_value?: string;
     entry_tick_time?: number;
+    high_barrier?: string;
+    low_barrier?: string;
     current_spot?: number;
     current_spot_display_value?: string;
     current_spot_time?: number;
@@ -124,39 +126,62 @@ class VirtualTradingEngine {
         const barrierDigit = parseInt(contract.barrier ?? '0');
 
         switch (type) {
-            case 'CALL': 
-                return contract.barrier ? currentSpot > (entry + Number(contract.barrier)) : currentSpot > entry;
-            case 'PUT': 
-                return contract.barrier ? currentSpot < (entry + Number(contract.barrier)) : currentSpot < entry;
-            case 'CALLE': return currentSpot >= entry;
-            case 'PUTE':  return currentSpot <= entry;
+            case 'CALL':
+                return contract.barrier ? currentSpot > entry + Number(contract.barrier) : currentSpot > entry;
+            case 'PUT':
+                return contract.barrier ? currentSpot < entry + Number(contract.barrier) : currentSpot < entry;
+            case 'CALLE':
+                return currentSpot >= entry;
+            case 'PUTE':
+                return currentSpot <= entry;
             case 'ONETOUCH':
                 // In a real engine, ONETOUCH wins instantly if touched. Here we evaluate at expiry for simplicity,
                 // but ideally it should check if the spot ever touched the barrier.
                 // We can approximate by checking if the barrier is between entry and exit, but since it's just virtual,
                 // a simple check if it crossed or touched is better.
-                return contract.barrier && Number(contract.barrier) > 0 
-                    ? currentSpot >= (entry + Number(contract.barrier)) 
-                    : currentSpot <= (entry + Number(contract.barrier));
+                return contract.barrier && Number(contract.barrier) > 0
+                    ? currentSpot >= entry + Number(contract.barrier)
+                    : currentSpot <= entry + Number(contract.barrier);
             case 'NOTOUCH':
-                return contract.barrier && Number(contract.barrier) > 0 
-                    ? currentSpot < (entry + Number(contract.barrier)) 
-                    : currentSpot > (entry + Number(contract.barrier));
+                return contract.barrier && Number(contract.barrier) > 0
+                    ? currentSpot < entry + Number(contract.barrier)
+                    : currentSpot > entry + Number(contract.barrier);
             case 'RUNHIGH': // Only Ups
                 // Real Only Ups requires every tick to be strictly higher than the previous.
                 // For virtual approximation, we just ensure the exit is higher than entry.
                 return currentSpot > entry;
             case 'RUNLOW': // Only Downs
                 return currentSpot < entry;
-            case 'DIGITEVEN':  return lastDigit % 2 === 0;
-            case 'DIGITODD':   return lastDigit % 2 !== 0;
-            case 'DIGITMATCH': return lastDigit === barrierDigit;
-            case 'DIGITDIFF':  return lastDigit !== barrierDigit;
-            case 'DIGITOVER':  return lastDigit > barrierDigit;
-            case 'DIGITUNDER': return lastDigit < barrierDigit;
-            case 'ASIANU': return currentSpot > entry;
-            case 'ASIAND': return currentSpot < entry;
-            default: return currentSpot > entry;
+            case 'DIGITEVEN':
+                return lastDigit % 2 === 0;
+            case 'DIGITODD':
+                return lastDigit % 2 !== 0;
+            case 'DIGITMATCH':
+                return lastDigit === barrierDigit;
+            case 'DIGITDIFF':
+                return lastDigit !== barrierDigit;
+            case 'DIGITOVER':
+                return lastDigit > barrierDigit;
+            case 'DIGITUNDER':
+                return lastDigit < barrierDigit;
+            case 'ASIANU':
+                return currentSpot > entry;
+            case 'ASIAND':
+                return currentSpot < entry;
+            case 'EXPIRYMISS':
+            case 'UPORDOWN':
+                if (contract.high_barrier && contract.low_barrier) {
+                    return currentSpot > Number(contract.high_barrier) || currentSpot < Number(contract.low_barrier);
+                }
+                return false;
+            case 'RANGE':
+            case 'EXPIRYRANGE':
+                if (contract.high_barrier && contract.low_barrier) {
+                    return currentSpot < Number(contract.high_barrier) && currentSpot > Number(contract.low_barrier);
+                }
+                return false;
+            default:
+                return currentSpot > entry;
         }
     }
 
@@ -172,6 +197,15 @@ class VirtualTradingEngine {
                 contract.entry_tick_display_value = fmt;
                 contract.entry_tick_time = epoch;
                 contract.ticks_seen = 1;
+
+                const resolveBarrier = (b?: string) => {
+                    if (!b) return b;
+                    if (b.startsWith('+')) return String(spot + Number(b.substring(1)));
+                    if (b.startsWith('-')) return String(spot - Number(b.substring(1)));
+                    return b;
+                };
+                contract.high_barrier = resolveBarrier(contract.high_barrier);
+                contract.low_barrier = resolveBarrier(contract.low_barrier);
             } else {
                 contract.ticks_seen++;
             }
@@ -182,9 +216,7 @@ class VirtualTradingEngine {
             contract.pip_size = pipSize;
 
             const winning = this._isWin(contract, spot);
-            contract.profit = winning
-                ? +(contract.payout - contract.buy_price).toFixed(2)
-                : -contract.buy_price;
+            contract.profit = winning ? +(contract.payout - contract.buy_price).toFixed(2) : -contract.buy_price;
 
             this._emit({
                 msg_type: 'proposal_open_contract',
@@ -197,7 +229,7 @@ class VirtualTradingEngine {
                 if (contract.ticks_seen > 0) {
                     const accumulatedPayout = contract.buy_price * Math.pow(1 + rate, contract.ticks_seen);
                     contract.profit = +(accumulatedPayout - contract.buy_price).toFixed(2);
-                    
+
                     this._emit({
                         msg_type: 'proposal_open_contract',
                         proposal_open_contract: this._contractPayload(contract),
@@ -210,7 +242,7 @@ class VirtualTradingEngine {
             const durUnit = contract.duration_unit;
             const elapsed = epoch - (contract.date_start ?? epoch);
 
-            if (durUnit === 't' && contract.ticks_seen >= contract.duration) {
+            if (durUnit === 't' && contract.ticks_seen > contract.duration) {
                 this._settle(contract, spot, epoch, pipSize);
             } else if (durUnit === 's' && elapsed >= contract.duration) {
                 this._settle(contract, spot, epoch, pipSize);
@@ -235,9 +267,7 @@ class VirtualTradingEngine {
         contract.status = won ? 'won' : 'lost';
         contract.sell_price = won ? contract.payout : 0;
         contract.sell_time = epoch;
-        contract.profit = won
-            ? +(contract.payout - contract.buy_price).toFixed(2)
-            : -contract.buy_price;
+        contract.profit = won ? +(contract.payout - contract.buy_price).toFixed(2) : -contract.buy_price;
 
         // Update virtual balance
         const store = (window as any)._clientStore;
@@ -246,9 +276,11 @@ class VirtualTradingEngine {
         }
 
         // Notify virtual CR accounts
-        window.dispatchEvent(new CustomEvent('profitdock:trade-result', {
-            detail: { profit: contract.profit ?? 0, stake: contract.buy_price },
-        }));
+        window.dispatchEvent(
+            new CustomEvent('profitdock:trade-result', {
+                detail: { profit: contract.profit ?? 0, stake: contract.buy_price },
+            })
+        );
 
         this._emit({
             msg_type: 'proposal_open_contract',
@@ -267,8 +299,14 @@ class VirtualTradingEngine {
             current_spot: contract.current_spot,
             current_spot_time: contract.current_spot_time,
             current_spot_display_value: contract.current_spot_display_value,
-            high_barrier: contract.contract_type === 'ACCU' && contract.current_spot ? String(contract.current_spot * 1.001) : undefined,
-            low_barrier: contract.contract_type === 'ACCU' && contract.current_spot ? String(contract.current_spot * 0.999) : undefined,
+            high_barrier:
+                contract.contract_type === 'ACCU' && contract.current_spot
+                    ? String(contract.current_spot * 1.001)
+                    : undefined,
+            low_barrier:
+                contract.contract_type === 'ACCU' && contract.current_spot
+                    ? String(contract.current_spot * 0.999)
+                    : undefined,
             status: contract.status,
             profit: contract.profit,
             is_valid_to_sell: contract.is_sold ? 0 : 1,
@@ -282,7 +320,7 @@ class VirtualTradingEngine {
                 buy: contract.contract_id,
                 sell: contract.is_sold ? contract.contract_id + 1 : undefined,
             },
-            audit_details: { all_ticks: [] }
+            audit_details: { all_ticks: [] },
         };
     }
 
@@ -295,7 +333,6 @@ class VirtualTradingEngine {
     // -------- Public request handler --------
 
     async handleRequest(req: Record<string, any>): Promise<any> {
-
         // ---- PROPOSAL: fetch REAL payout from Deriv (bypasses interceptor via _vrtc_skip) ----
         if (req.proposal) {
             const apiBase = getApiBase();
@@ -318,7 +355,9 @@ class VirtualTradingEngine {
                         duration: req.duration,
                         duration_unit: req.duration_unit || 't',
                         growth_rate: req.growth_rate,
-                        barrier: req.barrier,
+                        barrier: res.proposal.barrier || req.barrier,
+                        high_barrier: res.proposal.high_barrier || req.barrier,
+                        low_barrier: res.proposal.low_barrier || req.barrier2,
                         display_name: res.proposal.display_name,
                     });
                     if (resolvedSymbol) this._requestTicks(resolvedSymbol);
@@ -334,7 +373,7 @@ class VirtualTradingEngine {
             const propId = String(req.buy);
             const price = Number(req.price);
             let prop = this.proposalStore.get(propId);
-            
+
             // If propId wasn't found (e.g. buy: 1 with parameters), use parameters
             if (!prop && req.parameters) {
                 prop = {
@@ -350,12 +389,15 @@ class VirtualTradingEngine {
                     display_name: 'Virtual',
                 };
             }
-            
+
             // Fallback if neither exists
             prop = prop ?? {
-                contract_type: 'CALL', symbol: 'R_100',
-                duration: 5, duration_unit: 't',
-                payout: price * 1.95, longcode: 'Virtual Contract',
+                contract_type: 'CALL',
+                symbol: 'R_100',
+                duration: 5,
+                duration_unit: 't',
+                payout: price * 1.95,
+                longcode: 'Virtual Contract',
             };
 
             const store = (window as any)._clientStore;
@@ -364,8 +406,8 @@ class VirtualTradingEngine {
                     return {
                         error: {
                             code: 'InsufficientBalance',
-                            message: 'Insufficient balance.'
-                        }
+                            message: 'Insufficient balance.',
+                        },
                     };
                 }
                 store.setDummyBalance(store.dummy_balance - price);
@@ -384,6 +426,8 @@ class VirtualTradingEngine {
                 duration_unit: prop.duration_unit || 't',
                 growth_rate: prop.growth_rate,
                 barrier: prop.barrier != null ? String(prop.barrier) : undefined,
+                high_barrier: prop.high_barrier != null ? String(prop.high_barrier) : undefined,
+                low_barrier: prop.low_barrier != null ? String(prop.low_barrier) : undefined,
                 status: 'open',
                 profit: undefined,
                 ticks_seen: 0,
@@ -430,7 +474,7 @@ class VirtualTradingEngine {
             const contractId = Number(req.sell);
             const contract = this.contracts.get(contractId);
             if (contract && !contract.is_sold) {
-                const spot = this.lastSpots.get(contract.symbol) ?? (contract.current_spot ?? 0);
+                const spot = this.lastSpots.get(contract.symbol) ?? contract.current_spot ?? 0;
                 this._settle(contract, spot, Math.floor(Date.now() / 1000), contract.pip_size ?? 2);
                 const store = (window as any)._clientStore;
                 return {
@@ -451,7 +495,9 @@ class VirtualTradingEngine {
         // ---- PROPOSAL_OPEN_CONTRACT: polling fallback ----
         if (req.proposal_open_contract !== undefined) {
             // API sends { proposal_open_contract: 1, contract_id: 12345 }
-            const contractId = Number(req.contract_id || (req.proposal_open_contract !== 1 ? req.proposal_open_contract : undefined));
+            const contractId = Number(
+                req.contract_id || (req.proposal_open_contract !== 1 ? req.proposal_open_contract : undefined)
+            );
             if (contractId) {
                 const contract = this.contracts.get(contractId);
                 if (contract) {
@@ -475,7 +521,13 @@ class VirtualTradingEngine {
     }
 
     private _emit(msg: any) {
-        this.eventSubscribers.forEach(cb => { try { cb(msg); } catch { /* ignore */ } });
+        this.eventSubscribers.forEach(cb => {
+            try {
+                cb(msg);
+            } catch {
+                /* ignore */
+            }
+        });
     }
 }
 

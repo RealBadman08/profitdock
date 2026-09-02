@@ -12,19 +12,18 @@ import {
 import { getMarketsWithoutStepBoomCrashRange, normalizeApiMessage } from '@/features/deriv-live/api';
 import { MarketSymbol } from '@/features/deriv-live/types';
 import { useApiBase } from '@/hooks/useApiBase';
+import { normalizeMartingaleMultiplier, roundMartingaleStake } from '@/hooks/useMartingale';
 import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentState';
 import { useStore } from '@/hooks/useStore';
-import { normalizeMartingaleMultiplier, roundMartingaleStake } from '@/hooks/useMartingale';
-
 import {
     emitProfitdockTradeStatus,
     subscribeProfitdockTradeStart,
     subscribeProfitdockTradeStop,
 } from '@/utils/profitdock-trade-controller';
+import { virtualEngine } from '@/utils/virtual-engine';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { localize } from '@deriv-com/translations';
-import { virtualEngine } from '@/utils/virtual-engine';
-import { mirrorCopyTradingContractParameters } from '@/utils/copy-trading-execution';
+// copy-trading-execution used via appId.js interceptor (mirrorCopyTradingBuyFromRequest)
 import './flipper-switcher.scss';
 
 type ApiLike = {
@@ -176,6 +175,14 @@ const STRATEGY_PAIRS: StrategyPair[] = [
             { contractType: 'RUNLOW', label: 'Only Downs' },
         ],
     },
+    {
+        key: 'ends_outside_stays_between',
+        label: 'Ends Outside / Stays Between',
+        legs: [
+            { contractType: 'EXPIRYMISS', label: 'Ends Outside', predictionMode: 'barrier' },
+            { contractType: 'RANGE', label: 'Stays Between', predictionMode: 'barrier' },
+        ],
+    },
 ];
 
 const BUTTONS = STRATEGY_PAIRS.flatMap(pair => pair.legs);
@@ -191,10 +198,7 @@ const isSelectedProfitdockAccountSocket = () => {
     const activeLoginId = localStorage.getItem('active_loginid') || '';
     return !activeLoginId || !api_base.account_id || api_base.account_id === activeLoginId;
 };
-const getDerivErrorMessage = (
-    error: { code?: string; message?: string } | undefined,
-    fallbackMessage: string
-) => {
+const getDerivErrorMessage = (error: { code?: string; message?: string } | undefined, fallbackMessage: string) => {
     if (!error) {
         return fallbackMessage;
     }
@@ -205,24 +209,9 @@ const getDerivErrorMessage = (
 const hasTradingSession = () =>
     Boolean(
         isDerivSocketOpen() &&
-            isSelectedProfitdockAccountSocket() &&
-            (isCustomLegacyOAuthDomain() ? api_base.has_authenticated_profitdock_socket : api_base.is_authorized)
+        isSelectedProfitdockAccountSocket() &&
+        (isCustomLegacyOAuthDomain() ? api_base.has_authenticated_profitdock_socket : api_base.is_authorized)
     );
-
-const isRecoverableFlipperAuthError = (error: unknown) => {
-    const code = String((error as { code?: string })?.code || '').toLowerCase();
-    const message = String((error as Error)?.message || '').toLowerCase();
-
-    return (
-        ['authorizationrequired', 'unauthorized', 'unauthorizedaccess', 'invalidtoken', 'accessdenied'].includes(code) ||
-        message.includes('please log in') ||
-        message.includes('not logged in') ||
-        message.includes('authorize') ||
-        message.includes('authorization') ||
-        message.includes('invalid token') ||
-        message.includes('session')
-    );
-};
 
 const toPositiveNumber = (value: string | number, fallback = 0) => {
     const parsed = Number(value);
@@ -253,7 +242,8 @@ const getLastDigit = (quote: number, pipSize = 2) => {
     return Number(digits.charAt(digits.length - 1)) || 0;
 };
 
-const formatMoney = (value: number, currency: string) => `${value >= 0 ? '+' : '-'}${Math.abs(value).toFixed(2)} ${currency}`;
+const formatMoney = (value: number, currency: string) =>
+    `${value >= 0 ? '+' : '-'}${Math.abs(value).toFixed(2)} ${currency}`;
 
 const toggleMarketSymbol = (symbols: string[], symbol: string) =>
     symbols.includes(symbol) ? symbols.filter(item => item !== symbol) : [...symbols, symbol];
@@ -273,22 +263,28 @@ const CONTRACT_TICK_LIMITS: Record<string, { min: number; max?: number }> = {
     DIGITDIFF: { min: 1 },
     DIGITOVER: { min: 1 },
     DIGITUNDER: { min: 1 },
+    EXPIRYMISS: { min: 2 }, // minutes
+    RANGE: { min: 2 }, // minutes
+    EXPIRYRANGE: { min: 2 },
+    UPORDOWN: { min: 2 },
 };
 
-const validateDurationTicks = (contractType: string, duration: number) => {
+const validateDuration = (contractType: string, duration: number) => {
     const finalDuration = Number.isFinite(duration) && duration > 0 ? Math.trunc(duration) : 1;
     const limits = CONTRACT_TICK_LIMITS[contractType] ?? { min: 1 };
-    const minTicks = limits.min;
+    const minVal = limits.min;
+    const isMinutes = ['EXPIRYMISS', 'EXPIRYRANGE', 'RANGE', 'UPORDOWN'].includes(contractType);
+    const unitLabel = isMinutes ? 'minutes' : 'ticks';
 
-    if (finalDuration < minTicks) {
-        throw new Error(`${contractType} requires at least ${minTicks} ticks.`);
+    if (finalDuration < minVal) {
+        throw new Error(`${contractType} requires at least ${minVal} ${unitLabel}.`);
     }
 
     if (limits.max && finalDuration > limits.max) {
-        throw new Error(`${contractType} requires ${minTicks} to ${limits.max} ticks.`);
+        throw new Error(`${contractType} requires ${minVal} to ${limits.max} ${unitLabel}.`);
     }
 
-    return finalDuration;
+    return { finalDuration, finalDurationUnit: isMinutes ? 'm' : 't' };
 };
 
 const createProposalPayload = ({
@@ -308,8 +304,7 @@ const createProposalPayload = ({
     predictionMode?: 'barrier' | 'selected_tick' | 'none';
     symbol: string;
 }) => {
-    const finalDurationUnit = 't';
-    const finalDuration = validateDurationTicks(contractType, duration);
+    const { finalDuration, finalDurationUnit } = validateDuration(contractType, duration);
 
     const payload: Record<string, unknown> = {
         amount,
@@ -325,9 +320,21 @@ const createProposalPayload = ({
 
     if (predictionMode === 'barrier') {
         const isDigitContract = ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'].includes(contractType);
+        const isTwoBarrierContract = ['EXPIRYMISS', 'EXPIRYRANGE', 'RANGE', 'UPORDOWN'].includes(contractType);
+
         if (isDigitContract) {
             // DIGIT contracts require barrier as a plain integer 0–9
             payload.barrier = Math.max(0, Math.min(9, Math.trunc(Number(prediction))));
+        } else if (isTwoBarrierContract) {
+            const val = String(prediction).trim();
+            const num = Number(val);
+            if (!isNaN(num) && num > 0) {
+                payload.barrier = `+${num}`;
+                payload.barrier2 = `-${num}`;
+            } else {
+                payload.barrier = val;
+                payload.barrier2 = `-${val.replace(/[+-]/g, '')}`;
+            }
         } else {
             let barrierValue = String(prediction).trim();
             if (barrierValue && !barrierValue.startsWith('+') && !barrierValue.startsWith('-')) {
@@ -358,10 +365,7 @@ const requestQuote = async (api: ApiLike, payload: Record<string, unknown>) => {
         const message = getDerivErrorMessage(response.error, 'Unable to fetch a quote.');
         const durationValue = payload.duration;
         const durationUnit = payload.duration_unit;
-        if (
-            String(message).toLowerCase().includes('duration') ||
-            String(message).toLowerCase().includes('tick')
-        ) {
+        if (String(message).toLowerCase().includes('duration') || String(message).toLowerCase().includes('tick')) {
             throw new Error(
                 `Invalid ticks for ${String(payload.contract_type || 'contract')}: ${durationValue}${durationUnit}. ${message}`
             );
@@ -398,12 +402,6 @@ const buyQuote = async (api: ApiLike, quote: FlipperQuote) => {
     if (!response?.buy?.contract_id) {
         throw new Error('Deriv accepted the buy request but did not return a contract id.');
     }
-
-    void mirrorCopyTradingContractParameters(
-        quote.contractParameters,
-        undefined,
-        `auto:${response.buy.contract_id}`
-    );
 
     return response.buy;
 };
@@ -459,11 +457,6 @@ const subscribeToContract = async (
     };
 };
 
-const getNextPairKey = (key: string) => {
-    const index = STRATEGY_PAIRS.findIndex(pair => pair.key === key);
-    return STRATEGY_PAIRS[(index + 1) % STRATEGY_PAIRS.length].key;
-};
-
 const getSelectedLegs = (legs: SelectedStrategyLegs): [StrategyLeg, StrategyLeg] | null =>
     legs[0] && legs[1] ? [legs[0], legs[1]] : null;
 
@@ -488,17 +481,21 @@ const getPairLabelFromLegs = (legs: SelectedStrategyLegs) => {
     return selectedLegs ? selectedLegs.map(leg => leg.label).join(' / ') : 'Select two contracts';
 };
 
-
-
 const FlipperSwitcherPage = observer(() => {
     const store = useStore();
     const { transactions } = store;
     const { authData, connectionStatus } = useApiBase();
     const currency = authData?.currency || getStoredProfitdockActiveCurrency() || 'USD';
-    const hasRecoverableSession = useCallback(() => isCustomLegacyOAuthDomain() && hasUsableProfitdockStoredSession(), []);
+    const hasRecoverableSession = useCallback(
+        () => isCustomLegacyOAuthDomain() && hasUsableProfitdockStoredSession(),
+        []
+    );
     const [markets, setMarkets] = useState<MarketSymbol[]>(() => getMarketsWithoutStepBoomCrashRange([]));
     const [selectedMarket, setSelectedMarket] = useProfitdockPersistentState('profitdock.flipper.market', '1HZ10V');
-    const [customLegs, setCustomLegs] = useProfitdockPersistentState<SelectedStrategyLegs>('profitdock.flipper.legs', [null, null]);
+    const [customLegs, setCustomLegs] = useProfitdockPersistentState<SelectedStrategyLegs>('profitdock.flipper.legs', [
+        null,
+        null,
+    ]);
     const [stakeOne, setStakeOne] = useProfitdockPersistentState('profitdock.flipper.stakeOne', '');
     const [stakeTwo, setStakeTwo] = useProfitdockPersistentState('profitdock.flipper.stakeTwo', '');
     const [martingaleOne, setMartingaleOne] = useProfitdockPersistentState('profitdock.flipper.martingaleOne', '2');
@@ -509,7 +506,10 @@ const FlipperSwitcherPage = observer(() => {
     const [predictionTwo, setPredictionTwo] = useProfitdockPersistentState('profitdock.flipper.predictionTwo', '');
     const [switchMarket, setSwitchMarket] = useProfitdockPersistentState('profitdock.flipper.switchMarket', false);
     const [isSwitchMarketPickerOpen, setIsSwitchMarketPickerOpen] = useState(false);
-    const [switchMarketSymbols, setSwitchMarketSymbols] = useProfitdockPersistentState<string[]>('profitdock.flipper.switchMarketSymbols', []);
+    const [switchMarketSymbols, setSwitchMarketSymbols] = useProfitdockPersistentState<string[]>(
+        'profitdock.flipper.switchMarketSymbols',
+        []
+    );
     const [switchOnLoss, setSwitchOnLoss] = useProfitdockPersistentState('profitdock.flipper.switchOnLoss', true);
     const [turbo, setTurbo] = useProfitdockPersistentState('profitdock.flipper.turbo', false);
     const [lossesToSwitch, setLossesToSwitch] = useProfitdockPersistentState('profitdock.flipper.lossesToSwitch', '1');
@@ -527,19 +527,17 @@ const FlipperSwitcherPage = observer(() => {
     const processedRunIdsRef = useRef<Set<number>>(new Set());
     const runCountRef = useRef(0);
     const sessionPnlRef = useRef(0);
-    const batchInFlightRef = useRef(false);
+
     const lossStreakRef = useRef(0);
     const nextLegSlotRef = useRef<0 | 1>(0);
     const selectedMarketInfoRef = useRef<MarketSymbol | null>(null);
     const martingaleOneRef = useRef(martingaleOne);
     const martingaleTwoRef = useRef(martingaleTwo);
-    const executePairRef = useRef<(() => void) | null>(null);
     // Direct ref-based martingale tracking — bypasses the store entirely
     const stakeOneRef = useRef(0);
     const stakeTwoRef = useRef(0);
     const baseStakeOneRef = useRef(0);
     const baseStakeTwoRef = useRef(0);
-    const waitingForEntryDigitRef = useRef(false);
     const entryPointRef = useRef(entryPoint);
     const turboRef = useRef(turbo);
     const durationTicksRef = useRef(durationTicks);
@@ -557,18 +555,42 @@ const FlipperSwitcherPage = observer(() => {
     const [quoteOne, setQuoteOne] = useState<{ askPrice: number; payout: number; error?: string } | null>(null);
     const [quoteTwo, setQuoteTwo] = useState<{ askPrice: number; payout: number; error?: string } | null>(null);
 
-    useEffect(() => { turboRef.current = turbo; }, [turbo]);
-    useEffect(() => { durationTicksRef.current = durationTicks; }, [durationTicks]);
-    useEffect(() => { predictionOneRef.current = predictionOne; }, [predictionOne]);
-    useEffect(() => { predictionTwoRef.current = predictionTwo; }, [predictionTwo]);
-    useEffect(() => { switchMarketRef.current = switchMarket; }, [switchMarket]);
-    useEffect(() => { switchMarketSymbolsRef.current = switchMarketSymbols; }, [switchMarketSymbols]);
-    useEffect(() => { switchOnLossRef.current = switchOnLoss; }, [switchOnLoss]);
-    useEffect(() => { lossesToSwitchRef.current = lossesToSwitch; }, [lossesToSwitch]);
-    useEffect(() => { roundsRef.current = rounds; }, [rounds]);
-    useEffect(() => { takeProfitRef.current = takeProfit; }, [takeProfit]);
-    useEffect(() => { stopLossRef.current = stopLoss; }, [stopLoss]);
-    useEffect(() => { customLegsRef.current = customLegs; }, [customLegs]);
+    useEffect(() => {
+        turboRef.current = turbo;
+    }, [turbo]);
+    useEffect(() => {
+        durationTicksRef.current = durationTicks;
+    }, [durationTicks]);
+    useEffect(() => {
+        predictionOneRef.current = predictionOne;
+    }, [predictionOne]);
+    useEffect(() => {
+        predictionTwoRef.current = predictionTwo;
+    }, [predictionTwo]);
+    useEffect(() => {
+        switchMarketRef.current = switchMarket;
+    }, [switchMarket]);
+    useEffect(() => {
+        switchMarketSymbolsRef.current = switchMarketSymbols;
+    }, [switchMarketSymbols]);
+    useEffect(() => {
+        switchOnLossRef.current = switchOnLoss;
+    }, [switchOnLoss]);
+    useEffect(() => {
+        lossesToSwitchRef.current = lossesToSwitch;
+    }, [lossesToSwitch]);
+    useEffect(() => {
+        roundsRef.current = rounds;
+    }, [rounds]);
+    useEffect(() => {
+        takeProfitRef.current = takeProfit;
+    }, [takeProfit]);
+    useEffect(() => {
+        stopLossRef.current = stopLoss;
+    }, [stopLoss]);
+    useEffect(() => {
+        customLegsRef.current = customLegs;
+    }, [customLegs]);
 
     const selectedLegs = useMemo(() => getSelectedLegs(customLegs), [customLegs]);
     const selectedPair = useMemo(
@@ -586,7 +608,9 @@ const FlipperSwitcherPage = observer(() => {
     const selectedSwitchMarkets = useMemo(
         () =>
             markets.filter(market =>
-                switchMarketSymbols.length ? switchMarketSymbols.includes(market.symbol) : market.symbol === selectedMarket
+                switchMarketSymbols.length
+                    ? switchMarketSymbols.includes(market.symbol)
+                    : market.symbol === selectedMarket
             ),
         [markets, selectedMarket, switchMarketSymbols]
     );
@@ -595,30 +619,37 @@ const FlipperSwitcherPage = observer(() => {
         selectedMarketInfoRef.current = selectedMarketInfo || null;
     }, [selectedMarketInfo]);
 
-    useEffect(() => { martingaleOneRef.current = martingaleOne; }, [martingaleOne]);
-    useEffect(() => { martingaleTwoRef.current = martingaleTwo; }, [martingaleTwo]);
+    useEffect(() => {
+        martingaleOneRef.current = martingaleOne;
+    }, [martingaleOne]);
+    useEffect(() => {
+        martingaleTwoRef.current = martingaleTwo;
+    }, [martingaleTwo]);
 
     useEffect(() => {
         entryPointRef.current = entryPoint;
     }, [entryPoint]);
 
-    const ensureTradingApi = useCallback(async (forceReconnect = false) => {
-        if (!forceReconnect && hasTradingSession()) {
-            return getDerivApi() || null;
-        }
+    const ensureTradingApi = useCallback(
+        async (forceReconnect = false) => {
+            if (!forceReconnect && hasTradingSession()) {
+                return getDerivApi() || null;
+            }
 
-        if (!hasRecoverableSession()) {
-            return null;
-        }
+            if (!hasRecoverableSession()) {
+                return null;
+            }
 
-        try {
-            await api_base.init(true);
-            return hasTradingSession() ? getDerivApi() || null : null;
-        } catch (error) {
-            console.warn('[Flipper Switcher] Trading session recovery failed.', error);
-            return null;
-        }
-    }, [hasRecoverableSession]);
+            try {
+                await api_base.init(true);
+                return hasTradingSession() ? getDerivApi() || null : null;
+            } catch (error) {
+                console.warn('[Flipper Switcher] Trading session recovery failed.', error);
+                return null;
+            }
+        },
+        [hasRecoverableSession]
+    );
 
     useEffect(() => {
         let isCancelled = false;
@@ -637,31 +668,43 @@ const FlipperSwitcherPage = observer(() => {
 
                 let val = pred;
                 if (!val) {
-                    val = leg.predictionMode === 'barrier' ? '+0.25' : (entryPoint || '0');
+                    if (leg.predictionMode === 'barrier') {
+                        val = leg.contractType.includes('DIGIT') ? '5' : '0.1';
+                    } else {
+                        val = entryPoint || '0';
+                    }
                 }
 
-                const parsedPred = leg.contractType.includes('DIGIT') ? Math.max(0, Math.min(9, Math.trunc(Number(val)))) : val;
+                const parsedPred = leg.contractType.includes('DIGIT')
+                    ? Math.max(0, Math.min(9, Math.trunc(Number(val))))
+                    : val;
 
                 try {
-                    const quote = await requestQuote(api, createProposalPayload({
-                        amount: currentStake,
-                        contractType: leg.contractType,
-                        currency,
-                        duration,
-                        prediction: parsedPred,
-                        predictionMode: leg.predictionMode,
-                        symbol: selectedMarketInfoRef.current.symbol
-                    }));
+                    const quote = await requestQuote(
+                        api,
+                        createProposalPayload({
+                            amount: currentStake,
+                            contractType: leg.contractType,
+                            currency,
+                            duration,
+                            prediction: parsedPred,
+                            predictionMode: leg.predictionMode,
+                            symbol: selectedMarketInfoRef.current.symbol,
+                        })
+                    );
                     return { askPrice: quote.askPrice, payout: quote.payout || 0 };
                 } catch (error: any) {
-                    const msg = error?.error?.message || error?.message || (typeof error === 'string' ? error : 'Error fetching quote');
+                    const msg =
+                        error?.error?.message ||
+                        error?.message ||
+                        (typeof error === 'string' ? error : 'Error fetching quote');
                     return { askPrice: 0, payout: 0, error: msg };
                 }
             };
 
             const [q1, q2] = await Promise.all([
                 fetchLegQuote(selectedLegs?.[0] || null, stakeOne, predictionOne),
-                fetchLegQuote(selectedLegs?.[1] || null, stakeTwo, predictionTwo)
+                fetchLegQuote(selectedLegs?.[1] || null, stakeTwo, predictionTwo),
             ]);
 
             if (!isCancelled) {
@@ -676,8 +719,18 @@ const FlipperSwitcherPage = observer(() => {
             clearTimeout(timer);
         };
     }, [
-        selectedLegs, stakeOne, stakeTwo, predictionOne, predictionTwo,
-        entryPoint, turbo, durationTicks, selectedMarket, currency, isRunning, ensureTradingApi
+        selectedLegs,
+        stakeOne,
+        stakeTwo,
+        predictionOne,
+        predictionTwo,
+        entryPoint,
+        turbo,
+        durationTicks,
+        selectedMarket,
+        currency,
+        isRunning,
+        ensureTradingApi,
     ]);
 
     useEffect(() => {
@@ -696,7 +749,9 @@ const FlipperSwitcherPage = observer(() => {
                 setSelectedMarket(previous =>
                     orderedMarkets.some(market => market.symbol === previous)
                         ? previous
-                        : orderedMarkets.find(market => market.symbol === '1HZ10V')?.symbol || orderedMarkets[0]?.symbol || previous
+                        : orderedMarkets.find(market => market.symbol === '1HZ10V')?.symbol ||
+                          orderedMarkets[0]?.symbol ||
+                          previous
                 );
                 setSwitchMarketSymbols(previous =>
                     previous.filter(symbol => orderedMarkets.some(market => market.symbol === symbol))
@@ -719,14 +774,18 @@ const FlipperSwitcherPage = observer(() => {
         };
     }, []);
 
-    const waitForSettlement = (api: ApiLike, contractId: number, onUpdate: (contract: any) => void): Promise<{ profit: number; won: boolean }> => {
+    const waitForSettlement = (
+        api: ApiLike,
+        contractId: number,
+        onUpdate: (contract: any) => void
+    ): Promise<{ profit: number; won: boolean }> => {
         return new Promise((resolve, reject) => {
             let cleanup = null;
             let resolved = false;
             subscribeToContract(
                 api,
                 contractId,
-                (contract) => {
+                contract => {
                     onUpdate(contract);
                     const status = contract.status;
                     if (!resolved && (status === 'won' || status === 'lost')) {
@@ -736,17 +795,19 @@ const FlipperSwitcherPage = observer(() => {
                         resolve({ profit: Number(contract.profit ?? 0), won: status === 'won' });
                     }
                 },
-                (errorMsg) => {
+                errorMsg => {
                     if (!resolved) {
                         resolved = true;
                         if (cleanup) cleanup();
                         reject(new Error(errorMsg));
                     }
                 }
-            ).then(fn => {
-                cleanup = fn;
-                if (resolved) cleanup();
-            }).catch(reject);
+            )
+                .then(fn => {
+                    cleanup = fn;
+                    if (resolved) cleanup();
+                })
+                .catch(reject);
         });
     };
 
@@ -793,33 +854,54 @@ const FlipperSwitcherPage = observer(() => {
                 setPositions(prev => {
                     const existing = prev.find(p => p.contractId === contract.contract_id);
                     if (existing) {
-                        return prev.map(p => p.contractId === contract.contract_id ? {
-                            ...p,
-                            entrySpot: contract.entry_tick_display_value || contract.entry_tick || p.entrySpot,
-                            exitSpot: contract.exit_tick_display_value || contract.exit_tick || (isSettled ? liveContract.current_spot_display_value || liveContract.current_spot : p.exitSpot),
-                            profit: contract.profit != null ? Number(contract.profit) : p.profit,
-                            status: isSettled ? 'closed' : 'live'
-                        } : p);
+                        return prev.map(p =>
+                            p.contractId === contract.contract_id
+                                ? {
+                                      ...p,
+                                      entrySpot:
+                                          contract.entry_tick_display_value || contract.entry_tick || p.entrySpot,
+                                      exitSpot:
+                                          contract.exit_tick_display_value ||
+                                          contract.exit_tick ||
+                                          (isSettled
+                                              ? liveContract.current_spot_display_value || liveContract.current_spot
+                                              : p.exitSpot),
+                                      profit: contract.profit != null ? Number(contract.profit) : p.profit,
+                                      status: isSettled ? 'closed' : 'live',
+                                  }
+                                : p
+                        );
                     } else {
-                        return [...prev, {
-                            buyPrice: Number(contract.buy_price) || 0,
-                            contractId: contract.contract_id,
-                            contractType: contract.contract_type,
-                            entrySpot: contract.entry_tick_display_value || contract.entry_tick,
-                            exitSpot: contract.exit_tick_display_value || contract.exit_tick || liveContract.current_spot_display_value || liveContract.current_spot,
-                            label: activeLegs[legIndex].label,
-                            legIndex,
-                            market: contract.underlying,
-                            profit: Number(contract.profit || 0),
-                            runId: currentRunIdRef.current,
-                            stake: Number(contract.buy_price) || 0,
-                            status: isSettled ? 'closed' : 'live'
-                        }];
+                        return [
+                            ...prev,
+                            {
+                                buyPrice: Number(contract.buy_price) || 0,
+                                contractId: contract.contract_id,
+                                contractType: contract.contract_type,
+                                entrySpot: contract.entry_tick_display_value || contract.entry_tick,
+                                exitSpot:
+                                    contract.exit_tick_display_value ||
+                                    contract.exit_tick ||
+                                    liveContract.current_spot_display_value ||
+                                    liveContract.current_spot,
+                                label: activeLegs[legIndex].label,
+                                legIndex,
+                                market: contract.underlying,
+                                profit: Number(contract.profit || 0),
+                                runId: currentRunIdRef.current,
+                                stake: Number(contract.buy_price) || 0,
+                                status: isSettled ? 'closed' : 'live',
+                            },
+                        ];
                     }
                 });
             };
 
-            const waitForEntryTrigger = async (marketSymbol: string, api: ApiLike, activeLegs: [StrategyLeg, StrategyLeg]) => {
+            const waitForEntryTrigger = async (
+                marketSymbol: string,
+                api: ApiLike,
+                activeLegs: [StrategyLeg, StrategyLeg]
+            ) => {
                 const hasEntryDigit = entryPointRef.current !== '';
                 const shouldWaitForDigitEntry = activeLegs.some(isDigitEntryContract);
                 if (!hasEntryDigit || !shouldWaitForDigitEntry) {
@@ -827,9 +909,8 @@ const FlipperSwitcherPage = observer(() => {
                     return;
                 }
 
-                return new Promise<void>((resolve) => {
-                    let sub;
-                    sub = api.onMessage().subscribe((message) => {
+                return new Promise<void>(resolve => {
+                    const sub = api.onMessage().subscribe(message => {
                         const data = normalizeApiMessage(message);
                         if (data.msg_type === 'tick' && data.tick?.symbol === marketSymbol) {
                             const digit = getLastDigit(Number(data.tick.quote), Number(data.tick.pip_size || 2));
@@ -859,11 +940,15 @@ const FlipperSwitcherPage = observer(() => {
                     break;
                 }
 
-                let api: any = await ensureTradingApi();
+                const api: any = await ensureTradingApi();
 
-                const marketCandidates = switchMarketRef.current && switchMarketSymbolsRef.current.length > 0
-                    ? selectedSwitchMarkets : [selectedMarketInfoRef.current];
-                const currentMarketIndex = marketCandidates.findIndex(m => m.symbol === selectedMarketInfoRef.current.symbol);
+                const marketCandidates =
+                    switchMarketRef.current && switchMarketSymbolsRef.current.length > 0
+                        ? selectedSwitchMarkets
+                        : [selectedMarketInfoRef.current];
+                const currentMarketIndex = marketCandidates.findIndex(
+                    m => m.symbol === selectedMarketInfoRef.current.symbol
+                );
                 const orderedCandidates = [
                     ...marketCandidates.slice(Math.max(currentMarketIndex, 0)),
                     ...marketCandidates.slice(0, Math.max(currentMarketIndex, 0)),
@@ -899,7 +984,7 @@ const FlipperSwitcherPage = observer(() => {
                 const getPredictionValue = (refValue: string, leg: StrategyLeg) => {
                     let val = refValue;
                     if (!val) {
-                        val = leg.predictionMode === 'barrier' ? '+0.25' : (entryPointRef.current || '0');
+                        val = leg.predictionMode === 'barrier' ? '+0.25' : entryPointRef.current || '0';
                     }
                     if (leg.contractType.includes('DIGIT')) {
                         return Math.max(0, Math.min(9, Math.trunc(Number(val))));
@@ -914,8 +999,30 @@ const FlipperSwitcherPage = observer(() => {
                 for (const marketInfo of orderedCandidates) {
                     try {
                         const [firstQuote, secondQuote] = await Promise.all([
-                            requestQuote(api, createProposalPayload({ amount: currentStakeOne, contractType: activeLegs[0].contractType, currency, duration, prediction: predOne, predictionMode: activeLegs[0].predictionMode, symbol: marketInfo.symbol })),
-                            requestQuote(api, createProposalPayload({ amount: currentStakeTwo, contractType: activeLegs[1].contractType, currency, duration, prediction: predTwo, predictionMode: activeLegs[1].predictionMode, symbol: marketInfo.symbol }))
+                            requestQuote(
+                                api,
+                                createProposalPayload({
+                                    amount: currentStakeOne,
+                                    contractType: activeLegs[0].contractType,
+                                    currency,
+                                    duration,
+                                    prediction: predOne,
+                                    predictionMode: activeLegs[0].predictionMode,
+                                    symbol: marketInfo.symbol,
+                                })
+                            ),
+                            requestQuote(
+                                api,
+                                createProposalPayload({
+                                    amount: currentStakeTwo,
+                                    contractType: activeLegs[1].contractType,
+                                    currency,
+                                    duration,
+                                    prediction: predTwo,
+                                    predictionMode: activeLegs[1].predictionMode,
+                                    symbol: marketInfo.symbol,
+                                })
+                            ),
                         ]);
                         quoteBundle = { firstQuote, marketInfo, secondQuote };
                         break;
@@ -940,7 +1047,7 @@ const FlipperSwitcherPage = observer(() => {
                 try {
                     const [b1, b2] = await Promise.all([
                         buyQuote(api, quoteBundle.firstQuote),
-                        buyQuote(api, quoteBundle.secondQuote)
+                        buyQuote(api, quoteBundle.secondQuote),
                     ]);
                     firstId = b1.contract_id;
                     secondId = b2.contract_id;
@@ -950,8 +1057,8 @@ const FlipperSwitcherPage = observer(() => {
                 }
 
                 const [r1, r2] = await Promise.all([
-                    waitForSettlement(api, firstId, (c) => updatePositionsUi(c, 0, activeLegs)),
-                    waitForSettlement(api, secondId, (c) => updatePositionsUi(c, 1, activeLegs))
+                    waitForSettlement(api, firstId, c => updatePositionsUi(c, 0, activeLegs)),
+                    waitForSettlement(api, secondId, c => updatePositionsUi(c, 1, activeLegs)),
                 ]);
 
                 const netProfit = r1.profit + r2.profit;
@@ -959,10 +1066,22 @@ const FlipperSwitcherPage = observer(() => {
                 sessionPnlRef.current = currentSessionPnl;
                 currentRunCount++;
 
-                console.log('[FLIPPER]',
-                    'round', currentRunCount,
-                    '| leg1:', r1.won ? 'WON' : 'LOST', 'profit=', r1.profit, '→ nextStake=', currentStakeOne,
-                    '| leg2:', r2.won ? 'WON' : 'LOST', 'profit=', r2.profit, '→ nextStake=', currentStakeTwo
+                console.log(
+                    '[FLIPPER]',
+                    'round',
+                    currentRunCount,
+                    '| leg1:',
+                    r1.won ? 'WON' : 'LOST',
+                    'profit=',
+                    r1.profit,
+                    '→ nextStake=',
+                    currentStakeOne,
+                    '| leg2:',
+                    r2.won ? 'WON' : 'LOST',
+                    'profit=',
+                    r2.profit,
+                    '→ nextStake=',
+                    currentStakeTwo
                 );
 
                 // Each leg reacts ONLY to its own settlement status from the API
@@ -984,7 +1103,16 @@ const FlipperSwitcherPage = observer(() => {
                     currentStakeTwo = roundMartingaleStake(currentStakeTwo * normMult);
                 }
 
-                console.log('[FLIPPER] after update — stake1=', currentStakeOne, 'streak1=', currentLossStreakOne, 'stake2=', currentStakeTwo, 'streak2=', currentLossStreakTwo);
+                console.log(
+                    '[FLIPPER] after update — stake1=',
+                    currentStakeOne,
+                    'streak1=',
+                    currentLossStreakOne,
+                    'stake2=',
+                    currentStakeTwo,
+                    'streak2=',
+                    currentLossStreakTwo
+                );
 
                 const won = r1.won || r2.won;
                 const lostBatch = !won;
@@ -1017,11 +1145,12 @@ const FlipperSwitcherPage = observer(() => {
                         const nextM = marketCandidates[(cIdx + 1) % marketCandidates.length];
                         selectedMarketInfoRef.current = nextM;
                         setSelectedMarket(nextM.symbol);
-                        setFeedback(`Switched market to ${nextM.display_name || nextM.symbol} after ${lossesT} losses on a leg.`);
+                        setFeedback(
+                            `Switched market to ${nextM.display_name || nextM.symbol} after ${lossesT} losses on a leg.`
+                        );
                         if (!turboRef.current) await new Promise(r => setTimeout(r, 1000));
                     }
                 }
-
             }
         } catch (error) {
             console.error('[FlipperLoop Error]', error);
@@ -1183,13 +1312,19 @@ const FlipperSwitcherPage = observer(() => {
                     const quote = index === 0 ? quoteOne : quoteTwo;
                     return (
                         <div className='flipper-page__active-row' key={leg?.contractType || `empty-${index}`}>
-                            <strong>#{index + 1} - {leg?.label || localize('Select contract')}</strong>
+                            <strong>
+                                #{index + 1} - {leg?.label || localize('Select contract')}
+                            </strong>
                             <label className='flipper-page__stake-label'>
                                 <span>{localize('Stake')}</span>
                                 <div className='flipper-page__stake-input-wrapper'>
                                     <input
                                         value={index === 0 ? stakeOne : stakeTwo}
-                                        onChange={event => (index === 0 ? setStakeOne(event.target.value) : setStakeTwo(event.target.value))}
+                                        onChange={event =>
+                                            index === 0
+                                                ? setStakeOne(event.target.value)
+                                                : setStakeTwo(event.target.value)
+                                        }
                                         inputMode='decimal'
                                     />
                                     {quote && (
@@ -1210,7 +1345,11 @@ const FlipperSwitcherPage = observer(() => {
                                 {localize('Mult x')}
                                 <input
                                     value={index === 0 ? martingaleOne : martingaleTwo}
-                                    onChange={event => (index === 0 ? setMartingaleOne(event.target.value) : setMartingaleTwo(event.target.value))}
+                                    onChange={event =>
+                                        index === 0
+                                            ? setMartingaleOne(event.target.value)
+                                            : setMartingaleTwo(event.target.value)
+                                    }
                                     inputMode='decimal'
                                 />
                             </label>
@@ -1219,7 +1358,11 @@ const FlipperSwitcherPage = observer(() => {
                                     {leg?.predictionMode === 'barrier' ? localize('Barrier') : localize('Prediction')}
                                     <input
                                         value={index === 0 ? predictionOne : predictionTwo}
-                                        onChange={event => (index === 0 ? setPredictionOne(event.target.value) : setPredictionTwo(event.target.value))}
+                                        onChange={event =>
+                                            index === 0
+                                                ? setPredictionOne(event.target.value)
+                                                : setPredictionTwo(event.target.value)
+                                        }
                                         inputMode='text'
                                     />
                                 </label>
@@ -1245,11 +1388,19 @@ const FlipperSwitcherPage = observer(() => {
                 </label>
                 <label className='flipper-page__field'>
                     {localize('Ticks')}
-                    <input value={durationTicks} onChange={event => setDurationTicks(event.target.value)} inputMode='numeric' />
+                    <input
+                        value={durationTicks}
+                        onChange={event => setDurationTicks(event.target.value)}
+                        inputMode='numeric'
+                    />
                 </label>
                 <label className='flipper-page__field flipper-page__field--wide'>
                     {localize('Entry Point (digit)')}
-                    <input value={entryPoint} onChange={event => setEntryPoint(event.target.value)} inputMode='numeric' />
+                    <input
+                        value={entryPoint}
+                        onChange={event => setEntryPoint(event.target.value)}
+                        inputMode='numeric'
+                    />
                 </label>
                 <button
                     type='button'
@@ -1259,7 +1410,8 @@ const FlipperSwitcherPage = observer(() => {
                         setIsSwitchMarketPickerOpen(true);
                     }}
                 >
-                    {localize('Switch Mark\'t')}: {switchMarket ? `${switchMarketCount} ${localize('market(s)')}` : 'OFF'}
+                    {localize("Switch Mark't")}:{' '}
+                    {switchMarket ? `${switchMarketCount} ${localize('market(s)')}` : 'OFF'}
                 </button>
                 <button
                     type='button'
@@ -1270,7 +1422,11 @@ const FlipperSwitcherPage = observer(() => {
                 </button>
                 <label className='flipper-page__field'>
                     {localize('Losses to switch')}
-                    <input value={lossesToSwitch} onChange={event => setLossesToSwitch(event.target.value)} inputMode='numeric' />
+                    <input
+                        value={lossesToSwitch}
+                        onChange={event => setLossesToSwitch(event.target.value)}
+                        inputMode='numeric'
+                    />
                 </label>
                 <button
                     type='button'
@@ -1285,7 +1441,11 @@ const FlipperSwitcherPage = observer(() => {
                 </label>
                 <label className='flipper-page__field flipper-page__field--wide'>
                     {localize('Take Profit ($)')}
-                    <input value={takeProfit} onChange={event => setTakeProfit(event.target.value)} inputMode='decimal' />
+                    <input
+                        value={takeProfit}
+                        onChange={event => setTakeProfit(event.target.value)}
+                        inputMode='decimal'
+                    />
                 </label>
                 <label className='flipper-page__field'>
                     {localize('Stop Loss ($)')}
@@ -1295,7 +1455,9 @@ const FlipperSwitcherPage = observer(() => {
                     <span className='flipper-page__play' />
                     {isRunning ? localize('Stop') : localize('Run')}
                 </button>
-                <div className={`flipper-page__status ${isRunning ? 'flipper-page__status--on' : ''}`}>{isRunning ? 'ON' : 'OFF'}</div>
+                <div className={`flipper-page__status ${isRunning ? 'flipper-page__status--on' : ''}`}>
+                    {isRunning ? 'ON' : 'OFF'}
+                </div>
 
                 <div className='flipper-page__positions'>
                     <div>{localize('Type|Market')}</div>
@@ -1310,7 +1472,9 @@ const FlipperSwitcherPage = observer(() => {
                                 <span>
                                     {position.entrySpot ?? '--'} | {position.exitSpot ?? '--'}
                                 </span>
-                                <span>{position.buyPrice.toFixed(2)} - {formatMoney(position.profit, currency)}</span>
+                                <span>
+                                    {position.buyPrice.toFixed(2)} - {formatMoney(position.profit, currency)}
+                                </span>
                             </React.Fragment>
                         ))
                     ) : (
@@ -1334,10 +1498,14 @@ const FlipperSwitcherPage = observer(() => {
                     >
                         <header>
                             <div>
-                                <span>{localize('Switch Mark\'t')}</span>
+                                <span>{localize("Switch Mark't")}</span>
                                 <h3>{localize('Markets used after loss threshold')}</h3>
                             </div>
-                            <button type='button' onClick={() => setIsSwitchMarketPickerOpen(false)} aria-label={localize('Close')}>
+                            <button
+                                type='button'
+                                onClick={() => setIsSwitchMarketPickerOpen(false)}
+                                aria-label={localize('Close')}
+                            >
                                 x
                             </button>
                         </header>
@@ -1370,13 +1538,21 @@ const FlipperSwitcherPage = observer(() => {
                                     <button
                                         type='button'
                                         key={market.symbol}
-                                        className={isSelected ? 'flipper-page__market-row flipper-page__market-row--selected' : 'flipper-page__market-row'}
+                                        className={
+                                            isSelected
+                                                ? 'flipper-page__market-row flipper-page__market-row--selected'
+                                                : 'flipper-page__market-row'
+                                        }
                                         onClick={() => {
                                             setSwitchMarket(true);
-                                            setSwitchMarketSymbols(previous => toggleMarketSymbol(previous, market.symbol));
+                                            setSwitchMarketSymbols(previous =>
+                                                toggleMarketSymbol(previous, market.symbol)
+                                            );
                                         }}
                                     >
-                                        <span className='flipper-page__market-check'>{isSelected ? localize('On') : ''}</span>
+                                        <span className='flipper-page__market-check'>
+                                            {isSelected ? localize('On') : ''}
+                                        </span>
                                         <MarketIcon type={market.symbol} size='sm' />
                                         <span>{market.display_name}</span>
                                     </button>
@@ -1443,7 +1619,14 @@ class FlipperErrorBoundary extends Component<{ children: React.ReactNode }, { ha
                     <p style={{ fontWeight: 600, marginBottom: 8 }}>⚠️ Flipper Switcher hit an error and stopped.</p>
                     <p style={{ fontSize: 12, opacity: 0.6, marginBottom: 16 }}>{this.state.errorMsg}</p>
                     <button
-                        style={{ padding: '8px 16px', background: '#6c47ff', color: 'white', border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                        style={{
+                            padding: '8px 16px',
+                            background: '#6c47ff',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: 4,
+                            cursor: 'pointer',
+                        }}
                         onClick={() => this.setState({ hasError: false, errorMsg: '' })}
                     >
                         Reload this tab
@@ -1462,4 +1645,3 @@ const FlipperSwitcherPageWithBoundary = () => (
 );
 
 export default FlipperSwitcherPageWithBoundary;
-

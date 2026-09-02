@@ -77,19 +77,24 @@
         border: 1px solid #cfd9e5;
         border-radius: 0.8rem;
         display: grid;
-        gap: 0.8rem;
         grid-template-columns: auto minmax(0, 1fr);
+        gap: 0.8rem;
         height: 4.3rem;
         min-width: 0;
         padding: 0 1rem;
         overflow: hidden;
+        width: 100%;
 
         select {
-            align-self: center;
+            align-self: stretch;
             background: transparent;
             border: 0;
             color: #102033;
-            height: auto;
+            font-size: 1.35rem;
+            font-weight: 850;
+            height: 100%;
+            min-width: 0;
+            outline: none;
             padding: 0;
             white-space: nowrap;
             overflow: hidden;
@@ -145,7 +150,10 @@
         justify-content: center;
         min-width: 11rem;
         padding: 0 1.6rem;
-        transition: filter 160ms ease, opacity 160ms ease, transform 160ms ease;
+        transition:
+            filter 160ms ease,
+            opacity 160ms ease,
+            transform 160ms ease;
 
         &:hover:not(:disabled) {
             filter: brightness(1.06);
@@ -251,7 +259,10 @@
         background: #cbd5e1;
         border-radius: 0.3rem 0.3rem 0 0;
         min-height: 0.6rem;
-        transition: height 220ms ease, background-color 180ms ease, box-shadow 180ms ease;
+        transition:
+            height 220ms ease,
+            background-color 180ms ease,
+            box-shadow 180ms ease;
         width: 100%;
     }
 
