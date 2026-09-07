@@ -679,7 +679,7 @@ const shouldRetryBulkPurchaseWithAlternateSymbol = payload => {
     return transactions.every(transaction => !hasBulkPurchaseSuccess(transaction));
 };
 
-const executeBulkPurchase = async ({ ownerDerivAccountId, contractParameters, sourceAccountType = 'real' }) => {
+const executeBulkPurchase = async ({ ownerDerivAccountId, contractParameters, sourceAccountType = 'real', sourceLoginid }) => {
     const sourceType = String(sourceAccountType || 'real').toLowerCase();
     if (!['real', 'demo', 'virtual'].includes(sourceType)) {
         throw new PublicError(400, 'invalid_source_account_type', 'Source account type must be real, demo, or virtual.');
@@ -689,7 +689,17 @@ const executeBulkPurchase = async ({ ownerDerivAccountId, contractParameters, so
         throw new PublicError(400, 'missing_contract_parameters', 'Missing copied trade contract parameters.');
     }
 
-    const recipients = await listEligibleRealRecipients(ownerDerivAccountId);
+    const allRecipients = await listEligibleRealRecipients(ownerDerivAccountId);
+
+    // Exclude the source account itself from recipients so that if the owner's
+    // own real account is in the connected list and has copy_trading_enabled, it
+    // doesn't receive a duplicate purchase on top of the one already placed by
+    // the bot (satisfies "nothing more, nothing less").
+    const normalizedSourceId = String(sourceLoginid || '').trim().toUpperCase();
+    const recipients = normalizedSourceId
+        ? allRecipients.filter(r => String(r.deriv_account_id || '').toUpperCase() !== normalizedSourceId)
+        : allRecipients;
+
     if (!recipients.length) {
         return {
             skipped: true,

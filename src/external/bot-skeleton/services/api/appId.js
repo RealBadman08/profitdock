@@ -1,18 +1,15 @@
 import { getSocketAppId, getSocketURL } from '@/components/shared';
 import { isCustomLegacyOAuthDomain } from '@/components/shared/utils/config/config';
+import { cacheCopyTradingProposalFromRequest, mirrorCopyTradingBuyFromRequest } from '@/utils/copy-trading-execution';
 import { website_name } from '@/utils/site-config';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import { getInitialLanguage } from '@deriv-com/translations';
+import APIMiddleware from './api-middleware';
 import {
     fetchProfitdockAuthenticatedWebSocketUrl,
     getActiveProfitdockLoginId,
     getProfitdockOAuthToken,
 } from './profitdock-oauth-session';
-import APIMiddleware from './api-middleware';
-import {
-    cacheCopyTradingProposalFromRequest,
-    mirrorCopyTradingBuyFromRequest,
-} from '@/utils/copy-trading-execution';
 
 const PROFITDOCK_PUBLIC_SOCKET_URL = 'wss://api.derivws.com/trading/v1/options/ws/public';
 
@@ -112,6 +109,18 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
         return response;
     };
 
+    // Detect source account type from the authenticated socket URL so that
+    // copy trading correctly mirrors real vs demo trades regardless of which
+    // Deriv loginid is currently active in the UI.
+    let socket_source_type;
+    if (/\/trading\/v1\/options\/ws\/real\b/i.test(socket_url)) {
+        socket_source_type = 'real';
+    } else if (/\/trading\/v1\/options\/ws\/demo\b/i.test(socket_url)) {
+        socket_source_type = 'demo';
+    }
+    // For public/legacy sockets, leave socket_source_type undefined so
+    // getCurrentSourceAccountType() falls back to loginid-based detection.
+
     deriv_api.send = async request => {
         if (typeof window !== 'undefined' && window._profitdock_dummy_interceptor) {
             const interceptRes = window._profitdock_dummy_interceptor(request, deriv_api);
@@ -121,7 +130,7 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
         }
 
         const cleaned_request = cleanupProfitdockRequest(request);
-        return process_profitdock_trade_response(cleaned_request, original_send(cleaned_request));
+        return process_profitdock_trade_response(cleaned_request, original_send(cleaned_request), socket_source_type);
     };
 
     return deriv_api;

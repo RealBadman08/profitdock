@@ -80,7 +80,7 @@ export default class ClientStore {
                 this.setUpgradeableLandingCompanies(authData.upgradeable_landing_companies);
             }
         });
-        
+
         // is_dummy_active and dummy_balance are already restored from localStorage above
         // No auto-toggle needed — flag and balance persist across reloads naturally
 
@@ -166,7 +166,8 @@ export default class ClientStore {
     }
 
     get balance() {
-        const hasCustomBalance = typeof window !== 'undefined' && localStorage.getItem(this._dummyBalanceKey()) !== null;
+        const hasCustomBalance =
+            typeof window !== 'undefined' && localStorage.getItem(this._dummyBalanceKey()) !== null;
         if (this.is_dummy_active && hasCustomBalance) {
             return this.dummy_balance.toFixed(2);
         }
@@ -184,8 +185,8 @@ export default class ClientStore {
                         [this.loginid]: {
                             ...real_all.accounts[this.loginid],
                             balance: this.dummy_balance,
-                        }
-                    }
+                        },
+                    },
                 };
             } else {
                 return {
@@ -195,7 +196,7 @@ export default class ClientStore {
                     loginid: this.loginid,
                     total: {
                         deriv: { amount: this.dummy_balance, currency: this.currency },
-                        ...(real_all?.total || {})
+                        ...(real_all?.total || {}),
                     },
                     accounts: {
                         ...(real_all?.accounts || {}),
@@ -203,9 +204,9 @@ export default class ClientStore {
                             balance: this.dummy_balance,
                             currency: this.currency,
                             demo_account: 0,
-                            status: 1
-                        }
-                    }
+                            status: 1,
+                        },
+                    },
                 } as any;
             }
         }
@@ -336,7 +337,7 @@ export default class ClientStore {
     }
 
     get is_cr_account() {
-        return this.loginid?.startsWith('CR');
+        return this.loginid?.startsWith('CR') || this.loginid?.startsWith('ROT');
     }
 
     get should_hide_header() {
@@ -362,7 +363,7 @@ export default class ClientStore {
         // Reload per-account dummy state whenever the active account changes
         if (loginid) {
             const storedBalance = localStorage.getItem(this._dummyBalanceKey(loginid));
-            const storedActive  = localStorage.getItem(this._dummyActiveKey(loginid));
+            const storedActive = localStorage.getItem(this._dummyActiveKey(loginid));
             runInAction(() => {
                 if (storedBalance !== null) {
                     this.dummy_balance = Number(storedBalance) || 0;
@@ -392,7 +393,8 @@ export default class ClientStore {
         if (!this.is_dummy_active) {
             const newRealBalance = parseFloat(balance) || 0;
             // Only set dummy_balance to real if no custom balance was ever set
-            const hasCustomBalance = typeof window !== 'undefined' && localStorage.getItem(this._dummyBalanceKey()) !== null;
+            const hasCustomBalance =
+                typeof window !== 'undefined' && localStorage.getItem(this._dummyBalanceKey()) !== null;
             if (!hasCustomBalance) {
                 this.dummy_balance = newRealBalance;
             }
@@ -620,4 +622,3 @@ export default class ClientStore {
             });
     };
 }
-

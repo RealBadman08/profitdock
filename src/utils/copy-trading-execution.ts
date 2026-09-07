@@ -59,8 +59,7 @@ const unwrapApiPayload = (value: unknown) => {
 };
 
 const hasApiError = (value: unknown) =>
-    isPlainObject(value) &&
-    (Boolean(value.error) || (Array.isArray(value.errors) && value.errors.length > 0));
+    isPlainObject(value) && (Boolean(value.error) || (Array.isArray(value.errors) && value.errors.length > 0));
 
 const pickString = (...values: unknown[]) => {
     const value = values.find(candidate => typeof candidate === 'string' || typeof candidate === 'number');
@@ -178,7 +177,8 @@ export const normalizeCopyTradingContractParameters = (request: unknown): TContr
 
 export const cacheCopyTradingProposalFromRequest = (request: unknown, response: unknown) => {
     const parsed_response = unwrapApiPayload(response);
-    const proposal = isPlainObject(parsed_response) && isPlainObject(parsed_response.proposal) ? parsed_response.proposal : null;
+    const proposal =
+        isPlainObject(parsed_response) && isPlainObject(parsed_response.proposal) ? parsed_response.proposal : null;
     const proposal_id = typeof proposal?.id === 'string' ? proposal.id : '';
 
     if (!proposal_id) return;
@@ -230,20 +230,33 @@ export const mirrorCopyTradingContractParameters = async (
             headers.Authorization = `Bearer ${token}`;
         }
 
-        // Send the active loginid so the server can resolve the owner account
+        // Send the real loginid so the server can resolve the owner account
         // without calling the Deriv Options API (which rejects legacy Deriv tokens).
-        const active_loginid =
-            typeof window !== 'undefined'
-                ? (window.localStorage.getItem('active_loginid') || '')
-                : '';
-        if (active_loginid) {
-            headers['X-Deriv-Loginid'] = active_loginid;
+        let ownerLoginid = '';
+        if (typeof window !== 'undefined') {
+            try {
+                const clientAccounts = JSON.parse(window.localStorage.getItem('clientAccounts') || '{}');
+                ownerLoginid =
+                    Object.keys(clientAccounts).find(key => key.startsWith('CR') || key.startsWith('ROT')) || '';
+            } catch (_e) {
+                /* ignore */
+            }
+            if (!ownerLoginid) {
+                ownerLoginid = window.localStorage.getItem('active_loginid') || '';
+            }
+        }
+        if (ownerLoginid) {
+            headers['X-Deriv-Loginid'] = ownerLoginid;
         }
 
         const response = await fetch(COPY_TRADING_BULK_PURCHASE_URL, {
             body: JSON.stringify({
                 contract_parameters: normalized_parameters,
                 source_account_type: source_type,
+                // Tell the server which Deriv account placed the original trade
+                // so it can exclude that account from the recipients list and
+                // avoid a double purchase ("nothing more, nothing less").
+                source_loginid: ownerLoginid || undefined,
             }),
             credentials: 'include',
             headers,
@@ -281,11 +294,7 @@ export const mirrorCopyTradingContractParameters = async (
     }
 };
 
-export const mirrorCopyTradingBuyFromRequest = (
-    request: unknown,
-    response: unknown,
-    source_account_type?: string
-) => {
+export const mirrorCopyTradingBuyFromRequest = (request: unknown, response: unknown, source_account_type?: string) => {
     if (!isPlainObject(request)) return undefined;
 
     const passthrough = isPlainObject(request.passthrough) ? request.passthrough : null;
@@ -304,7 +313,11 @@ export const mirrorCopyTradingBuyFromRequest = (
 
     if ((request.buy === 1 || request.buy === '1') && isPlainObject(request.parameters)) {
         const direct_key = contract_id || request_id || `direct:${Date.now()}`;
-        return mirrorCopyTradingContractParameters(request.parameters, source_account_type, `${source_account_type || 'auto'}:${direct_key}`);
+        return mirrorCopyTradingContractParameters(
+            request.parameters,
+            source_account_type,
+            `${source_account_type || 'auto'}:${direct_key}`
+        );
     }
 
     const proposal_id = typeof request.buy === 'string' || typeof request.buy === 'number' ? String(request.buy) : '';

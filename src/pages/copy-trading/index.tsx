@@ -41,7 +41,20 @@ const MAX_CONNECTED_ACCOUNTS = 20;
 const requestCopyTrading = async (path: string, init: RequestInit = {}) => {
     const headers = new Headers(init.headers);
     const sessionToken = getProfitdockOAuthToken();
-    const activeLoginid = localStorage.getItem('active_loginid') || (window as any).__profitdockActiveLoginid || '';
+
+    let ownerLoginid = '';
+    if (typeof window !== 'undefined') {
+        try {
+            const clientAccounts = JSON.parse(window.localStorage.getItem('clientAccounts') || '{}');
+            ownerLoginid = Object.keys(clientAccounts).find(key => key.startsWith('CR') || key.startsWith('ROT')) || '';
+        } catch (_e) {
+            /* ignore */
+        }
+        if (!ownerLoginid) {
+            ownerLoginid =
+                window.localStorage.getItem('active_loginid') || (window as any).__profitdockActiveLoginid || '';
+        }
+    }
 
     if (init.body && !headers.has('Content-Type')) {
         headers.set('Content-Type', 'application/json');
@@ -51,8 +64,8 @@ const requestCopyTrading = async (path: string, init: RequestInit = {}) => {
         headers.set('Authorization', `Bearer ${sessionToken}`);
     }
 
-    if (activeLoginid && !headers.has('X-Deriv-Loginid')) {
-        headers.set('X-Deriv-Loginid', activeLoginid);
+    if (ownerLoginid && !headers.has('X-Deriv-Loginid')) {
+        headers.set('X-Deriv-Loginid', ownerLoginid);
     }
 
     const response = await fetch(path, {
@@ -79,17 +92,7 @@ const requestCopyTrading = async (path: string, init: RequestInit = {}) => {
 const keepRealAccounts = (accounts: TConnectedAccount[] = []) =>
     accounts.filter(account => account.account_type === 'real' && account.connection_status !== 'deleted');
 
-const getAvatarInitials = (account: TConnectedAccount) => {
-    const displayName = String(account.account_name || account.deriv_account_id || '').trim();
-    const initials = displayName
-        .replace(/[^a-z0-9 ]/gi, ' ')
-        .split(/\s+/)
-        .filter(Boolean)
-        .map(part => part[0])
-        .join('');
-
-    return (initials || account.deriv_account_id || 'RA').slice(0, 2).toUpperCase();
-};
+// getAvatarInitials reserved for future use
 
 const getAccountBalance = (account: TConnectedAccount) => {
     const balance = Number(account.balance);
@@ -418,10 +421,14 @@ const CopyTrading = observer(() => {
                 <div className='copy-trading__account-list'>
                     {!hasLoadedOnce && isLoading ? (
                         <div className='copy-trading__empty'>Loading accounts...</div>
-                    ) : realAccounts.length > 0 || client.virtual_cr_accounts.length > 0 ? (
+                    ) : realAccounts.length > 0 || (client.is_dummy_active && client.virtual_cr_accounts.length > 0) ? (
                         [
                             ...realAccounts.map(a => ({ isVirtual: false, acc: a, id: a.id })),
-                            ...client.virtual_cr_accounts.map(a => ({ isVirtual: true, acc: a as any, id: a.id })),
+                            ...(client.is_dummy_active ? client.virtual_cr_accounts : []).map(a => ({
+                                isVirtual: true,
+                                acc: a as any,
+                                id: a.id,
+                            })),
                         ].map((item, index) => {
                             if (item.isVirtual) {
                                 const acc = item.acc as any; // TVirtualCRAccount
@@ -430,8 +437,21 @@ const CopyTrading = observer(() => {
                                 return (
                                     <article className='copy-trading__account-card' key={acc.id} style={{ opacity: 1 }}>
                                         <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
-                                            <svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
-                                                <path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' fill='currentColor'></path>
+                                            <svg
+                                                xmlns='http://www.w3.org/2000/svg'
+                                                width='20'
+                                                height='20'
+                                                viewBox='0 0 24 24'
+                                                fill='none'
+                                                stroke='currentColor'
+                                                strokeWidth='2'
+                                                strokeLinecap='round'
+                                                strokeLinejoin='round'
+                                            >
+                                                <path
+                                                    d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'
+                                                    fill='currentColor'
+                                                ></path>
                                                 <circle cx='12' cy='7' r='4'></circle>
                                             </svg>
                                         </div>
@@ -513,8 +533,21 @@ const CopyTrading = observer(() => {
                                 return (
                                     <article className='copy-trading__account-card' key={account.id}>
                                         <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
-                                            <svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
-                                                <path d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2' fill='currentColor'></path>
+                                            <svg
+                                                xmlns='http://www.w3.org/2000/svg'
+                                                width='20'
+                                                height='20'
+                                                viewBox='0 0 24 24'
+                                                fill='none'
+                                                stroke='currentColor'
+                                                strokeWidth='2'
+                                                strokeLinecap='round'
+                                                strokeLinejoin='round'
+                                            >
+                                                <path
+                                                    d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'
+                                                    fill='currentColor'
+                                                ></path>
                                                 <circle cx='12' cy='7' r='4'></circle>
                                             </svg>
                                         </div>
@@ -610,9 +643,7 @@ const CopyTrading = observer(() => {
                             }
                         })
                     ) : (
-                        <div className='copy-trading__empty'>
-                            No accounts connected yet.
-                        </div>
+                        <div className='copy-trading__empty'>No accounts connected yet.</div>
                     )}
                 </div>
 

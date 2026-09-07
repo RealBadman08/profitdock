@@ -233,7 +233,8 @@ export const checkSwitcherType = async account_data => {
 
         if (account.loginid.startsWith('VR')) virtual_accounts.push({ ...stored_account, account });
         if (account.loginid.startsWith('MF')) eu_accounts.push({ ...stored_account, account });
-        if (account.loginid.startsWith('CR')) non_eu_accounts.push({ ...stored_account, account });
+        if (account.loginid.startsWith('CR') || account.loginid.startsWith('ROT'))
+            non_eu_accounts.push({ ...stored_account, account });
     });
 
     const real_accounts = eu_accounts.length + non_eu_accounts.length;
@@ -256,4 +257,3 @@ export const checkSwitcherType = async account_data => {
         renderCountryIsLowRiskAndHasOnlyRealAccount,
     };
 };
-

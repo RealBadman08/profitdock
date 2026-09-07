@@ -23,6 +23,7 @@ module.exports = async (req, res) => {
             contractParameters,
             ownerDerivAccountId: owner.owner_deriv_account_id,
             sourceAccountType: body.source_account_type || body.source_type || 'real',
+            sourceLoginid: body.source_loginid,
         });
 
         sendJson(res, 200, { result });
