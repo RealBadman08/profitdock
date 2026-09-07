@@ -508,10 +508,7 @@ const FlipperSwitcherPage = observer(() => {
     const [predictionOne, setPredictionOne] = useProfitdockPersistentState('profitdock.flipper.predictionOne', '');
     const [predictionTwo, setPredictionTwo] = useProfitdockPersistentState('profitdock.flipper.predictionTwo', '');
     const [switchMarket, setSwitchMarket] = useProfitdockPersistentState('profitdock.flipper.switchMarket', false);
-    const [isMultiMarketOn, setIsMultiMarketOn] = useProfitdockPersistentState(
-        'profitdock.flipper.isMultiMarketOn',
-        false
-    );
+    const [isSmartRiskOn, setIsSmartRiskOn] = useProfitdockPersistentState('profitdock.flipper.isSmartRiskOn', false);
     const [isAnalysisOn, setIsAnalysisOn] = useProfitdockPersistentState('profitdock.flipper.isAnalysisOn', false);
     const [isSwitchMarketPickerOpen, setIsSwitchMarketPickerOpen] = useState(false);
     const [switchMarketSymbols, setSwitchMarketSymbols] = useProfitdockPersistentState<string[]>(
@@ -561,7 +558,7 @@ const FlipperSwitcherPage = observer(() => {
     const customLegsRef = useRef(customLegs);
     const [quoteOne, setQuoteOne] = useState<{ askPrice: number; payout: number; error?: string } | null>(null);
     const [quoteTwo, setQuoteTwo] = useState<{ askPrice: number; payout: number; error?: string } | null>(null);
-    const isMultiMarketOnRef = useRef(isMultiMarketOn);
+    const isSmartRiskOnRef = useRef(isSmartRiskOn);
     const isAnalysisOnRef = useRef(isAnalysisOn);
 
     useEffect(() => {
@@ -601,8 +598,8 @@ const FlipperSwitcherPage = observer(() => {
         customLegsRef.current = customLegs;
     }, [customLegs]);
     useEffect(() => {
-        isMultiMarketOnRef.current = isMultiMarketOn;
-    }, [isMultiMarketOn]);
+        isSmartRiskOnRef.current = isSmartRiskOn;
+    }, [isSmartRiskOn]);
     useEffect(() => {
         isAnalysisOnRef.current = isAnalysisOn;
     }, [isAnalysisOn]);
@@ -616,9 +613,13 @@ const FlipperSwitcherPage = observer(() => {
         }),
         [customLegs]
     );
+    // 'ALL_MARKETS' is a virtual sentinel value meaning "scan all markets"
+    const ALL_MARKETS_VALUE = '__ALL_MARKETS__';
+    const isAllMarketsSelected = selectedMarket === ALL_MARKETS_VALUE;
+
     const selectedMarketInfo = useMemo(
-        () => markets.find(market => market.symbol === selectedMarket) || markets[0],
-        [markets, selectedMarket]
+        () => (isAllMarketsSelected ? markets[0] : markets.find(market => market.symbol === selectedMarket) || markets[0]),
+        [markets, selectedMarket, isAllMarketsSelected]
     );
     const selectedSwitchMarkets = useMemo(
         () =>
@@ -1062,18 +1063,22 @@ const FlipperSwitcherPage = observer(() => {
                     break;
                 }
 
-                // orderedCandidates moved above Virtual Mode logic
-
-                const candidateSymbols = isMultiMarketOnRef.current
-                    ? orderedCandidates.map(m => m.symbol)
-                    : [orderedCandidates[0].symbol];
+                // If 'All Markets' is selected, scan every available market for the best entry
+                const allMarketsSelected = selectedMarket === '__ALL_MARKETS__';
+                const candidateSymbols = allMarketsSelected
+                    ? markets.map(m => m.symbol)
+                    : orderedCandidates.map(m => m.symbol);
 
                 const winningSymbol = await waitForEntryTrigger(candidateSymbols, api, activeLegs);
                 if (!runningRef.current) break;
 
                 // Rearrange orderedCandidates so the winning symbol is first for execution
                 const winningMarketIndex = orderedCandidates.findIndex(m => m.symbol === winningSymbol);
-                if (winningMarketIndex > 0) {
+                if (winningMarketIndex < 0) {
+                    // Winning market came from all-markets scan, inject it at front
+                    const winningMarketInfo = markets.find(m => m.symbol === winningSymbol);
+                    if (winningMarketInfo) orderedCandidates.unshift(winningMarketInfo);
+                } else if (winningMarketIndex > 0) {
                     const temp = orderedCandidates[0];
                     orderedCandidates[0] = orderedCandidates[winningMarketIndex];
                     orderedCandidates[winningMarketIndex] = temp;
@@ -1186,22 +1191,44 @@ const FlipperSwitcherPage = observer(() => {
                 );
 
                 // Each leg reacts ONLY to its own settlement status from the API
+                const isDigitTrade = activeLegs.some(l => l.contractType.includes('DIGIT'));
+                const smartRisk = isSmartRiskOnRef.current;
+
                 if (r1.won) {
                     currentLossStreakOne = 0;
-                    currentStakeOne = baseStakeOneRef.current;
+                    // Smart Risk: on a win, always reset stake to base (especially for digit trades)
+                    if (smartRisk && isDigitTrade) {
+                        currentStakeOne = baseStakeOneRef.current;
+                    } else {
+                        currentStakeOne = baseStakeOneRef.current;
+                    }
                 } else {
                     currentLossStreakOne++;
                     const normMult = normalizeMartingaleMultiplier(toPositiveNumber(martingaleOneRef.current, 1), 1);
-                    currentStakeOne = roundMartingaleStake(currentStakeOne * normMult);
+                    // Smart Risk: Only escalate stake on consecutive losses (never escalate after a reset)
+                    if (smartRisk && isDigitTrade && currentLossStreakOne === 1) {
+                        // First loss after a win — keep stake at base, don't martingale yet
+                        currentStakeOne = baseStakeOneRef.current;
+                    } else {
+                        currentStakeOne = roundMartingaleStake(currentStakeOne * normMult);
+                    }
                 }
 
                 if (r2.won) {
                     currentLossStreakTwo = 0;
-                    currentStakeTwo = baseStakeTwoRef.current;
+                    if (smartRisk && isDigitTrade) {
+                        currentStakeTwo = baseStakeTwoRef.current;
+                    } else {
+                        currentStakeTwo = baseStakeTwoRef.current;
+                    }
                 } else {
                     currentLossStreakTwo++;
                     const normMult = normalizeMartingaleMultiplier(toPositiveNumber(martingaleTwoRef.current, 1), 1);
-                    currentStakeTwo = roundMartingaleStake(currentStakeTwo * normMult);
+                    if (smartRisk && isDigitTrade && currentLossStreakTwo === 1) {
+                        currentStakeTwo = baseStakeTwoRef.current;
+                    } else {
+                        currentStakeTwo = roundMartingaleStake(currentStakeTwo * normMult);
+                    }
                 }
 
                 console.log(
@@ -1477,8 +1504,9 @@ const FlipperSwitcherPage = observer(() => {
                 <label className='flipper-page__field flipper-page__field--wide'>
                     {localize('Market')}
                     <div className='flipper-page__select-wrap'>
-                        <MarketIcon type={selectedMarketInfo?.symbol || selectedMarket} size='sm' />
+                        <MarketIcon type={isAllMarketsSelected ? '1HZ10V' : (selectedMarketInfo?.symbol || selectedMarket)} size='sm' />
                         <select value={selectedMarket} onChange={event => setSelectedMarket(event.target.value)}>
+                            <option value='__ALL_MARKETS__'>🌐 All Markets (Auto-scan)</option>
                             {markets.map(market => (
                                 <option key={market.symbol} value={market.symbol}>
                                     {market.display_name}
@@ -1490,10 +1518,10 @@ const FlipperSwitcherPage = observer(() => {
 
                 <button
                     type='button'
-                    className={`flipper-page__toggle ${isMultiMarketOn ? 'flipper-page__toggle--on' : ''}`}
-                    onClick={() => setIsMultiMarketOn(prev => !prev)}
+                    className={`flipper-page__toggle ${isSmartRiskOn ? 'flipper-page__toggle--on' : ''}`}
+                    onClick={() => setIsSmartRiskOn(prev => !prev)}
                 >
-                    {localize('MultiMarket (Auto-scan)')}
+                    {localize('Smart Risk')}
                     <div className='flipper-page__toggle-slider' />
                 </button>
 
