@@ -18,6 +18,7 @@ import { useStore } from '@/hooks/useStore';
 import { DigitsAnalyzer } from '@/utils/analysis/digits-analyzer';
 import { evaluateTechnicalStrategy } from '@/utils/analysis/technical-analyzer';
 import { fetchHistoricalTicks } from '@/utils/analysis/tick-fetcher';
+import { startKeepAlive, stopKeepAlive } from '@/utils/keep-alive';
 import {
     emitProfitdockTradeStatus,
     subscribeProfitdockTradeStart,
@@ -527,6 +528,9 @@ const FlipperSwitcherPage = observer(() => {
     const [stats, setStats] = useState({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
     const cleanupRef = useRef<Map<number, () => void>>(new Map());
     const runningRef = useRef(false);
+    // Stores the market the user had selected before the bot started running
+    // so we can restore it when the bot stops (especially for All Markets mode)
+    const marketBeforeRunRef = useRef<string | null>(null);
     const currentRoundRef = useRef(0);
     const currentRunIdRef = useRef(0);
     const processedRunIdsRef = useRef<Set<number>>(new Set());
@@ -1286,6 +1290,12 @@ const FlipperSwitcherPage = observer(() => {
         } finally {
             setIsRunning(false);
             runningRef.current = false;
+            // Always restore the market the user had before running and stop keep-alive
+            if (marketBeforeRunRef.current) {
+                setSelectedMarket(marketBeforeRunRef.current);
+                marketBeforeRunRef.current = null;
+            }
+            stopKeepAlive();
         }
     };
 
@@ -1307,6 +1317,12 @@ const FlipperSwitcherPage = observer(() => {
             setIsRunning(false);
             resetStakeInputsToInitial();
             setFeedback(localize('Flipper Switcher will stop after the current contracts settle.'));
+            // Restore market selection to what the user had before starting
+            if (marketBeforeRunRef.current) {
+                setSelectedMarket(marketBeforeRunRef.current);
+                marketBeforeRunRef.current = null;
+            }
+            stopKeepAlive();
             return;
         }
 
@@ -1352,7 +1368,11 @@ const FlipperSwitcherPage = observer(() => {
         setStakeTwo(roundStakeValue(secondStake));
         runningRef.current = true;
         setIsRunning(true);
+        // Store current market selection so we can restore it after stopping
+        marketBeforeRunRef.current = selectedMarket;
         setStats({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
+        // Start keep-alive to prevent page sleep during overnight trading
+        void startKeepAlive();
         // runFlipperLoop handles entry-digit waiting internally via waitForEntryTrigger.
         // Always start the loop — never hang here with the ref set but nothing running.
         if (entryPoint !== '') {
@@ -1379,6 +1399,12 @@ const FlipperSwitcherPage = observer(() => {
                 setIsRunning(false);
                 resetStakeInputsToInitial();
                 setFeedback(localize('Flipper Switcher will stop after the current contracts settle.'));
+                // Restore market selection
+                if (marketBeforeRunRef.current) {
+                    setSelectedMarket(marketBeforeRunRef.current);
+                    marketBeforeRunRef.current = null;
+                }
+                stopKeepAlive();
             }),
         [resetStakeInputsToInitial]
     );
@@ -1506,7 +1532,7 @@ const FlipperSwitcherPage = observer(() => {
                     <div className='flipper-page__select-wrap'>
                         <MarketIcon type={isAllMarketsSelected ? '1HZ10V' : (selectedMarketInfo?.symbol || selectedMarket)} size='sm' />
                         <select value={selectedMarket} onChange={event => setSelectedMarket(event.target.value)}>
-                            <option value='__ALL_MARKETS__'>🌐 All Markets (Auto-scan)</option>
+                            <option value='__ALL_MARKETS__'>All Markets (Auto-scan)</option>
                             {markets.map(market => (
                                 <option key={market.symbol} value={market.symbol}>
                                     {market.display_name}
