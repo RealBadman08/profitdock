@@ -15,6 +15,9 @@ import { useApiBase } from '@/hooks/useApiBase';
 import { normalizeMartingaleMultiplier, roundMartingaleStake } from '@/hooks/useMartingale';
 import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentState';
 import { useStore } from '@/hooks/useStore';
+import { DigitsAnalyzer } from '@/utils/analysis/digits-analyzer';
+import { evaluateTechnicalStrategy } from '@/utils/analysis/technical-analyzer';
+import { fetchHistoricalTicks } from '@/utils/analysis/tick-fetcher';
 import {
     emitProfitdockTradeStatus,
     subscribeProfitdockTradeStart,
@@ -505,6 +508,11 @@ const FlipperSwitcherPage = observer(() => {
     const [predictionOne, setPredictionOne] = useProfitdockPersistentState('profitdock.flipper.predictionOne', '');
     const [predictionTwo, setPredictionTwo] = useProfitdockPersistentState('profitdock.flipper.predictionTwo', '');
     const [switchMarket, setSwitchMarket] = useProfitdockPersistentState('profitdock.flipper.switchMarket', false);
+    const [isMultiMarketOn, setIsMultiMarketOn] = useProfitdockPersistentState(
+        'profitdock.flipper.isMultiMarketOn',
+        false
+    );
+    const [isAnalysisOn, setIsAnalysisOn] = useProfitdockPersistentState('profitdock.flipper.isAnalysisOn', false);
     const [isSwitchMarketPickerOpen, setIsSwitchMarketPickerOpen] = useState(false);
     const [switchMarketSymbols, setSwitchMarketSymbols] = useProfitdockPersistentState<string[]>(
         'profitdock.flipper.switchMarketSymbols',
@@ -551,9 +559,10 @@ const FlipperSwitcherPage = observer(() => {
     const takeProfitRef = useRef(takeProfit);
     const stopLossRef = useRef(stopLoss);
     const customLegsRef = useRef(customLegs);
-
     const [quoteOne, setQuoteOne] = useState<{ askPrice: number; payout: number; error?: string } | null>(null);
     const [quoteTwo, setQuoteTwo] = useState<{ askPrice: number; payout: number; error?: string } | null>(null);
+    const isMultiMarketOnRef = useRef(isMultiMarketOn);
+    const isAnalysisOnRef = useRef(isAnalysisOn);
 
     useEffect(() => {
         turboRef.current = turbo;
@@ -591,6 +600,12 @@ const FlipperSwitcherPage = observer(() => {
     useEffect(() => {
         customLegsRef.current = customLegs;
     }, [customLegs]);
+    useEffect(() => {
+        isMultiMarketOnRef.current = isMultiMarketOn;
+    }, [isMultiMarketOn]);
+    useEffect(() => {
+        isAnalysisOnRef.current = isAnalysisOn;
+    }, [isAnalysisOn]);
 
     const selectedLegs = useMemo(() => getSelectedLegs(customLegs), [customLegs]);
     const selectedPair = useMemo(
@@ -898,30 +913,103 @@ const FlipperSwitcherPage = observer(() => {
             };
 
             const waitForEntryTrigger = async (
-                marketSymbol: string,
+                candidateMarkets: string[],
                 api: ApiLike,
                 activeLegs: [StrategyLeg, StrategyLeg]
-            ) => {
+            ): Promise<string> => {
                 const hasEntryDigit = entryPointRef.current !== '';
                 const shouldWaitForDigitEntry = activeLegs.some(isDigitEntryContract);
-                if (!hasEntryDigit || !shouldWaitForDigitEntry) {
+                const isAnalysisOn = isAnalysisOnRef.current;
+
+                // If no analysis and no entry digit required, just return the first candidate
+                if (!isAnalysisOn && (!hasEntryDigit || !shouldWaitForDigitEntry)) {
                     if (!turboRef.current) await new Promise(r => setTimeout(r, 500));
-                    return;
+                    return candidateMarkets[0];
                 }
 
-                return new Promise<void>(resolve => {
-                    const sub = api.onMessage().subscribe(message => {
-                        const data = normalizeApiMessage(message);
-                        if (data.msg_type === 'tick' && data.tick?.symbol === marketSymbol) {
-                            const digit = getLastDigit(Number(data.tick.quote), Number(data.tick.pip_size || 2));
-                            const target = Math.max(0, Math.min(9, Math.trunc(Number(entryPointRef.current || 0))));
-                            if (digit === target) {
-                                sub.unsubscribe();
-                                resolve();
-                            }
+                return new Promise<string>(resolve => {
+                    const subs: { unsubscribe: () => void }[] = [];
+                    let resolved = false;
+
+                    const handleResolve = (symbol: string, reason?: string) => {
+                        if (resolved) return;
+                        resolved = true;
+                        subs.forEach(s => s.unsubscribe());
+                        if (reason) setFeedback(`[Analysis] Triggered on ${symbol}: ${reason}`);
+                        resolve(symbol);
+                    };
+
+                    const isOverUnder = activeLegs.some(
+                        l => l.contractType === 'DIGITOVER' || l.contractType === 'DIGITUNDER'
+                    );
+
+                    // Subscribe to all candidate markets (MultiMarket or Single)
+                    for (const marketSymbol of candidateMarkets) {
+                        if (resolved) break;
+
+                        let tickHistoryPromise: Promise<any> | null = null;
+
+                        // If Analysis is ON, fetch 1000 ticks first for this market
+                        if (isAnalysisOn) {
+                            tickHistoryPromise = fetchHistoricalTicks(marketSymbol, 1000);
                         }
-                    });
-                    api.send({ subscribe: 1, ticks: marketSymbol }).catch(() => {});
+
+                        const sub = api.onMessage().subscribe(async (message: any) => {
+                            if (resolved) return;
+                            const data = normalizeApiMessage(message);
+
+                            if (data.msg_type === 'tick' && data.tick?.symbol === marketSymbol) {
+                                // 1. Base Logic: Entry Digit Matching
+                                if (!isAnalysisOn && shouldWaitForDigitEntry && hasEntryDigit) {
+                                    const digit = getLastDigit(
+                                        Number(data.tick.quote),
+                                        Number(data.tick.pip_size || 2)
+                                    );
+                                    const target = Math.max(
+                                        0,
+                                        Math.min(9, Math.trunc(Number(entryPointRef.current || 0)))
+                                    );
+                                    if (digit === target) {
+                                        handleResolve(marketSymbol);
+                                    }
+                                    return;
+                                }
+
+                                // 2. Advanced Analysis Logic
+                                if (isAnalysisOn && tickHistoryPromise) {
+                                    const history = await tickHistoryPromise;
+                                    if (!history) return;
+
+                                    // Append live tick to history to keep it updated
+                                    history.push({ epoch: data.tick.epoch, quote: data.tick.quote });
+                                    if (history.length > 1000) history.shift();
+
+                                    // Over/Under Sequence Strategy
+                                    if (isOverUnder) {
+                                        const result = DigitsAnalyzer.evaluateOverUnderSequence(history);
+                                        if (result.trigger) {
+                                            handleResolve(marketSymbol, result.reason);
+                                        } else {
+                                            setFeedback(`[Analysis ${marketSymbol}]: ${result.reason}`);
+                                        }
+                                    }
+                                    // Other Technical Strategies (Rise/Fall, Higher/Lower, etc.)
+                                    else if (!shouldWaitForDigitEntry) {
+                                        // Evaluate strategy for the primary leg
+                                        const result = evaluateTechnicalStrategy(activeLegs[0].contractType, history);
+                                        if (result.trigger) {
+                                            handleResolve(marketSymbol, result.reason);
+                                        } else {
+                                            setFeedback(`[Analysis ${marketSymbol}]: ${result.reason}`);
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        subs.push(sub);
+                        api.send({ subscribe: 1, ticks: marketSymbol }).catch(() => {});
+                    }
                 });
             };
 
@@ -976,7 +1064,20 @@ const FlipperSwitcherPage = observer(() => {
 
                 // orderedCandidates moved above Virtual Mode logic
 
-                await waitForEntryTrigger(orderedCandidates[0].symbol, api, activeLegs);
+                const candidateSymbols = isMultiMarketOnRef.current
+                    ? orderedCandidates.map(m => m.symbol)
+                    : [orderedCandidates[0].symbol];
+
+                const winningSymbol = await waitForEntryTrigger(candidateSymbols, api, activeLegs);
+                if (!runningRef.current) break;
+
+                // Rearrange orderedCandidates so the winning symbol is first for execution
+                const winningMarketIndex = orderedCandidates.findIndex(m => m.symbol === winningSymbol);
+                if (winningMarketIndex > 0) {
+                    const temp = orderedCandidates[0];
+                    orderedCandidates[0] = orderedCandidates[winningMarketIndex];
+                    orderedCandidates[winningMarketIndex] = temp;
+                }
                 if (!runningRef.current) break;
 
                 const duration = toPositiveInteger(durationTicksRef.current, 1);
@@ -1386,6 +1487,25 @@ const FlipperSwitcherPage = observer(() => {
                         </select>
                     </div>
                 </label>
+
+                <button
+                    type='button'
+                    className={`flipper-page__toggle ${isMultiMarketOn ? 'flipper-page__toggle--on' : ''}`}
+                    onClick={() => setIsMultiMarketOn(prev => !prev)}
+                >
+                    {localize('MultiMarket (Auto-scan)')}
+                    <div className='flipper-page__toggle-slider' />
+                </button>
+
+                <button
+                    type='button'
+                    className={`flipper-page__toggle ${isAnalysisOn ? 'flipper-page__toggle--on' : ''}`}
+                    onClick={() => setIsAnalysisOn(prev => !prev)}
+                >
+                    {localize('Analysis (AI Trading)')}
+                    <div className='flipper-page__toggle-slider' />
+                </button>
+
                 <label className='flipper-page__field'>
                     {localize('Ticks')}
                     <input
