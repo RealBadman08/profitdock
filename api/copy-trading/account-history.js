@@ -31,10 +31,35 @@ const decryptCredential = secretRow => {
 
 const DERIV_CLIENT_ID = process.env.DERIV_CLIENT_ID || '339iXSWkH7NEGne7sMdQT';
 
-// Fetch profit table via WebSocket
-const fetchProfitTable = async (token, limit = 25) => {
+// Fetch profit table via WebSocket using the OTP authentication flow
+const fetchProfitTable = async (token, loginid, limit = 25) => {
+    // 1. Get authenticated WebSocket URL
+    let wsUrl;
+    try {
+        const response = await fetch(`https://api.derivws.com/trading/v1/options/accounts/${encodeURIComponent(loginid)}/otp`, {
+            headers: {
+                Accept: 'application/json',
+                Authorization: `Bearer ${token}`,
+                'Deriv-App-ID': DERIV_CLIENT_ID,
+            },
+            method: 'POST',
+            signal: AbortSignal.timeout(10000),
+        });
+
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || (!payload.data?.url && !payload.url)) {
+            const apiError = Array.isArray(payload?.errors) ? payload.errors[0] : payload?.error;
+            throw new Error(apiError?.message || payload?.message || 'Failed to start authenticated trading session.');
+        }
+
+        wsUrl = payload.data?.url || payload.url;
+    } catch (err) {
+        throw new Error(err.message || 'Failed to request secure WebSocket URL.');
+    }
+
+    // 2. Fetch profit table using the secure URL
     return new Promise((resolve, reject) => {
-        const ws = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${DERIV_CLIENT_ID === '339iXSWkH7NEGne7sMdQT' ? 1089 : 1089}`);
+        const ws = new WebSocket(wsUrl);
         
         const timeout = setTimeout(() => {
             ws.close();
@@ -42,7 +67,12 @@ const fetchProfitTable = async (token, limit = 25) => {
         }, 15000);
 
         ws.onopen = () => {
-            ws.send(JSON.stringify({ authorize: token }));
+            ws.send(JSON.stringify({
+                profit_table: 1,
+                description: 1,
+                limit: limit,
+                sort: 'DESC'
+            }));
         };
 
         ws.onmessage = (msg) => {
@@ -58,15 +88,6 @@ const fetchProfitTable = async (token, limit = 25) => {
                 ws.close();
                 reject(new Error(data.error.message || 'Deriv API error.'));
                 return;
-            }
-
-            if (data.msg_type === 'authorize') {
-                ws.send(JSON.stringify({
-                    profit_table: 1,
-                    description: 1,
-                    limit: limit,
-                    sort: 'DESC'
-                }));
             }
 
             if (data.msg_type === 'profit_table') {
@@ -161,7 +182,7 @@ module.exports = async (req, res) => {
         });
 
         const token = decryptCredential(secret);
-        const payload = await fetchProfitTable(token, limit);
+        const payload = await fetchProfitTable(token, account.deriv_account_id, limit);
 
         const rawItems =
             Array.isArray(payload?.data) ? payload.data :
