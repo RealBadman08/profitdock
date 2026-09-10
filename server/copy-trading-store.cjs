@@ -355,7 +355,6 @@ const listConnectedAccounts = async ownerDerivAccountId => {
 
     const rawRows = Array.isArray(rows) ? rows : [];
 
-    // Refresh live balances from Deriv in parallel; fall back to stored balance on any error
     const refreshed = await Promise.all(
         rawRows.map(async rawRow => {
             try {
@@ -387,7 +386,7 @@ const listConnectedAccounts = async ownerDerivAccountId => {
         })
     );
 
-    return refreshed;
+    return refreshed.sort((a, b) => (b.balance || 0) - (a.balance || 0));
 };
 
 const upsertSecret = async ({ ownerDerivAccountId, account, credential }) => {

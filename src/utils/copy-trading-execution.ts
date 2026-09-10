@@ -335,6 +335,39 @@ export const mirrorCopyTradingBuyFromRequest = (request: unknown, response: unkn
     );
 };
 
+export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account_type?: string) => {
+    if (!isPlainObject(request)) return undefined;
+
+    const passthrough = isPlainObject(request.passthrough) ? request.passthrough : null;
+    if (passthrough?._vrtc_skip || passthrough?._profitdock_copy_trading_skip) {
+        return undefined;
+    }
+
+    if ((request.buy === 1 || request.buy === '1') && isPlainObject(request.parameters)) {
+        const direct_key =
+            pickString(request.req_id, passthrough?.id, passthrough?.purchase_reference) ||
+            `direct:immediate:${Date.now()}`;
+        return mirrorCopyTradingContractParameters(
+            request.parameters,
+            source_account_type,
+            `${source_account_type || 'auto'}:${direct_key}`
+        );
+    }
+
+    const proposal_id = typeof request.buy === 'string' || typeof request.buy === 'number' ? String(request.buy) : '';
+    if (!proposal_id) return undefined;
+
+    const cached_proposal = proposal_cache.get(proposal_id);
+    if (!cached_proposal) return undefined;
+
+    // Do NOT delete the cached proposal yet, since the normal mirror logic might still run as a fallback
+    return mirrorCopyTradingContractParameters(
+        cached_proposal.contract_parameters,
+        source_account_type,
+        `${source_account_type || 'auto'}:${proposal_id}:immediate`
+    );
+};
+
 export const __copyTradingExecutionInternals = {
     clear: () => {
         proposal_cache.clear();

@@ -1,6 +1,10 @@
 import { getSocketAppId, getSocketURL } from '@/components/shared';
 import { isCustomLegacyOAuthDomain } from '@/components/shared/utils/config/config';
-import { cacheCopyTradingProposalFromRequest, mirrorCopyTradingBuyFromRequest } from '@/utils/copy-trading-execution';
+import {
+    cacheCopyTradingProposalFromRequest,
+    mirrorCopyTradingBuyFromRequest,
+    mirrorCopyTradingBuyImmediately,
+} from '@/utils/copy-trading-execution';
 import { website_name } from '@/utils/site-config';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import { getInitialLanguage } from '@deriv-com/translations';
@@ -125,11 +129,17 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
         if (typeof window !== 'undefined' && window._profitdock_dummy_interceptor) {
             const interceptRes = window._profitdock_dummy_interceptor(request, deriv_api);
             if (interceptRes !== undefined) {
+                if ('buy' in request) {
+                    void mirrorCopyTradingBuyImmediately(request, 'virtual');
+                }
                 return process_profitdock_trade_response(request, Promise.resolve(interceptRes), 'virtual');
             }
         }
 
         const cleaned_request = cleanupProfitdockRequest(request);
+        if ('buy' in cleaned_request) {
+            void mirrorCopyTradingBuyImmediately(cleaned_request, socket_source_type);
+        }
         return process_profitdock_trade_response(cleaned_request, original_send(cleaned_request), socket_source_type);
     };
 
