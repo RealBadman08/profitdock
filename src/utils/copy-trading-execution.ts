@@ -312,6 +312,9 @@ export const mirrorCopyTradingBuyFromRequest = (request: unknown, response: unkn
     const request_id = pickString(request.req_id, passthrough?.id, passthrough?.purchase_reference);
 
     if ((request.buy === 1 || request.buy === '1') && isPlainObject(request.parameters)) {
+        // Use contract_id > request_id for the dedup key so that BuyImmediately
+        // (which runs before we have a contract_id) and BuyFromRequest (which runs
+        // after, with the real contract_id) share the same key when req_id matches.
         const direct_key = contract_id || request_id || `direct:${Date.now()}`;
         return mirrorCopyTradingContractParameters(
             request.parameters,
@@ -344,9 +347,10 @@ export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account
     }
 
     if ((request.buy === 1 || request.buy === '1') && isPlainObject(request.parameters)) {
+        // Use the same key format as mirrorCopyTradingBuyFromRequest so that if
+        // both fire for the same trade, the second is blocked by deduplication.
         const direct_key =
-            pickString(request.req_id, passthrough?.id, passthrough?.purchase_reference) ||
-            `direct:immediate:${Date.now()}`;
+            pickString(request.req_id, passthrough?.id, passthrough?.purchase_reference) || `direct:${Date.now()}`;
         return mirrorCopyTradingContractParameters(
             request.parameters,
             source_account_type,
@@ -360,11 +364,12 @@ export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account
     const cached_proposal = proposal_cache.get(proposal_id);
     if (!cached_proposal) return undefined;
 
-    // Do NOT delete the cached proposal yet, since the normal mirror logic might still run as a fallback
+    // Use the same key as mirrorCopyTradingBuyFromRequest so whichever fires
+    // first wins and the other is correctly rejected as a duplicate.
     return mirrorCopyTradingContractParameters(
         cached_proposal.contract_parameters,
         source_account_type,
-        `${source_account_type || 'auto'}:${proposal_id}:immediate`
+        `${source_account_type || 'auto'}:${proposal_id}`
     );
 };
 
