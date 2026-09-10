@@ -29,44 +29,58 @@ const decryptCredential = secretRow => {
     ]).toString('utf8');
 };
 
-const DERIV_API_BASE = 'https://api.derivws.com';
 const DERIV_CLIENT_ID = process.env.DERIV_CLIENT_ID || '339iXSWkH7NEGne7sMdQT';
 
-// Fetch profit table (closed contracts) for an account using its API token.
-// Uses the Deriv REST profit_table endpoint.
+// Fetch profit table via WebSocket
 const fetchProfitTable = async (token, limit = 25) => {
-    const url = new URL(`${DERIV_API_BASE}/trading/v1/options/contracts`);
-    url.searchParams.set('limit', String(limit));
-    url.searchParams.set('sort', 'desc');
+    return new Promise((resolve, reject) => {
+        const ws = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${DERIV_CLIENT_ID === '339iXSWkH7NEGne7sMdQT' ? 1089 : 1089}`);
+        
+        const timeout = setTimeout(() => {
+            ws.close();
+            reject(new Error('Deriv profit table request timed out.'));
+        }, 15000);
 
-    const response = await fetch(url.toString(), {
-        headers: {
-            Accept: 'application/json',
-            Authorization: `Bearer ${token}`,
-            'Deriv-App-ID': DERIV_CLIENT_ID,
-        },
-        method: 'GET',
-        signal: AbortSignal.timeout(20000),
+        ws.onopen = () => {
+            ws.send(JSON.stringify({ authorize: token }));
+        };
+
+        ws.onmessage = (msg) => {
+            let data;
+            try {
+                data = JSON.parse(msg.data);
+            } catch {
+                return;
+            }
+
+            if (data.error) {
+                clearTimeout(timeout);
+                ws.close();
+                reject(new Error(data.error.message || 'Deriv API error.'));
+                return;
+            }
+
+            if (data.msg_type === 'authorize') {
+                ws.send(JSON.stringify({
+                    profit_table: 1,
+                    description: 1,
+                    limit: limit,
+                    sort: 'DESC'
+                }));
+            }
+
+            if (data.msg_type === 'profit_table') {
+                clearTimeout(timeout);
+                ws.close();
+                resolve(data.profit_table);
+            }
+        };
+
+        ws.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error('Deriv WebSocket connection failed.'));
+        };
     });
-
-    const text = await response.text();
-    let payload;
-    try {
-        payload = text ? JSON.parse(text) : null;
-    } catch {
-        throw new Error('Invalid response from Deriv profit table API.');
-    }
-
-    if (!response.ok) {
-        const msg =
-            payload?.errors?.[0]?.message ||
-            payload?.error?.message ||
-            payload?.message ||
-            'Deriv profit table request failed.';
-        throw new Error(msg);
-    }
-
-    return payload;
 };
 
 const normalizeTransaction = raw => {
