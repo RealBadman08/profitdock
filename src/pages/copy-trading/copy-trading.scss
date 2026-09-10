@@ -432,6 +432,193 @@
         &--info { color: #1d4ed8; }
         &--error { color: #be123c; }
     }
+
+    // ── Transaction History Modal ─────────────────────────────────────────────
+    &__history-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 200;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.2rem;
+        background: rgb(0 0 0 / 42%);
+        backdrop-filter: blur(4px);
+        animation: ct-fade-in 0.18s ease;
+    }
+
+    &__history-modal {
+        width: min(90vw, 72rem);
+        max-height: 88vh;
+        display: flex;
+        flex-direction: column;
+        border-radius: 1.2rem;
+        background: #fff;
+        box-shadow: 0 2rem 5rem rgb(0 0 0 / 22%);
+        overflow: hidden;
+        animation: ct-slide-up 0.2s ease;
+    }
+
+    &__history-header {
+        min-height: 5rem;
+        padding: 1.2rem 1.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid #e5e7eb;
+        flex-shrink: 0;
+
+        div {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        strong {
+            color: #0f172a;
+            font-size: 1.15rem;
+            font-weight: 900;
+        }
+
+        span {
+            color: #64748b;
+            font-size: 0.88rem;
+            font-weight: 500;
+        }
+    }
+
+    &__history-close {
+        width: 2.8rem;
+        height: 2.8rem;
+        display: inline-grid;
+        place-items: center;
+        border: 0;
+        border-radius: 0.8rem;
+        background: transparent;
+        color: #6b7280;
+        cursor: pointer;
+        transition: background 0.15s ease, color 0.15s ease;
+        flex-shrink: 0;
+
+        &:hover {
+            background: #f1f5f9;
+            color: #111827;
+        }
+    }
+
+    &__history-body {
+        overflow-y: auto;
+        flex: 1;
+        padding: 0.4rem 0;
+    }
+
+    &__history-empty {
+        padding: 2.4rem 1.4rem;
+        text-align: center;
+        color: #64748b;
+        font-size: 0.95rem;
+
+        &--error {
+            color: #be123c;
+        }
+    }
+
+    &__history-table-wrap {
+        overflow-x: auto;
+    }
+
+    &__history-table {
+        width: 100%;
+        min-width: 52rem;
+        border-collapse: collapse;
+        font-size: 0.88rem;
+
+        thead tr {
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        th {
+            padding: 0.55rem 0.9rem;
+            color: #64748b;
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-align: left;
+            white-space: nowrap;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        tbody tr {
+            border-bottom: 1px solid #f1f5f9;
+            transition: background 0.12s ease;
+
+            &:hover {
+                background: #f8fafc;
+            }
+
+            &:last-child {
+                border-bottom: 0;
+            }
+        }
+
+        td {
+            padding: 0.65rem 0.9rem;
+            color: #1e293b;
+            font-size: 0.88rem;
+            white-space: nowrap;
+        }
+    }
+
+    &__history-row {
+        &--won td { background: rgb(22 163 74 / 3%); }
+        &--lost td { background: rgb(239 68 68 / 3%); }
+    }
+
+    &__history-market {
+        padding: 0.18rem 0.5rem;
+        border-radius: 0.4rem;
+        background: #f0f4ff;
+        color: #3730a3;
+        font-size: 0.82rem;
+        font-weight: 750;
+        letter-spacing: 0.02em;
+    }
+
+    &__history-spot {
+        font-family: 'Roboto Mono', 'Courier New', monospace;
+        font-size: 0.86rem;
+        font-weight: 600;
+        color: #374151;
+    }
+
+    &__history-profit {
+        &--pos { color: #15803d; font-weight: 800; }
+        &--neg { color: #be123c; font-weight: 800; }
+    }
+
+    &__history-badge {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 0.5rem;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+
+        &--won { background: #dcfce7; color: #15803d; }
+        &--lost { background: #fee2e2; color: #be123c; }
+        &--open { background: #f0f9ff; color: #0369a1; }
+    }
+}
+
+@keyframes ct-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes ct-slide-up {
+    from { opacity: 0; transform: translateY(1.2rem) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 html.theme--dark,
@@ -485,6 +672,47 @@ body.theme--dark {
         &__replace-row button:first-of-type {
             background: #3fb7b8;
             color: #fff;
+        }
+
+        &__history-modal {
+            background: #1e293b;
+            box-shadow: 0 2rem 5rem rgb(0 0 0 / 50%);
+        }
+
+        &__history-header {
+            border-bottom-color: #334155;
+            
+            strong { color: #f8fafc; }
+            span { color: #94a3b8; }
+        }
+
+        &__history-close {
+            color: #94a3b8;
+            &:hover { background: #334155; color: #f8fafc; }
+        }
+
+        &__history-empty { color: #94a3b8; }
+
+        &__history-table {
+            thead tr { border-bottom-color: #334155; }
+            th { color: #94a3b8; }
+            tbody tr { 
+                border-bottom-color: #334155;
+                &:hover { background: #0f172a; }
+            }
+            td { color: #f1f5f9; }
+        }
+
+        &__history-market {
+            background: #312e81;
+            color: #c7d2fe;
+        }
+
+        &__history-spot { color: #cbd5e1; }
+
+        &__history-row {
+            &--won td { background: rgb(34 197 94 / 10%); }
+            &--lost td { background: rgb(239 68 68 / 10%); }
         }
     }
 }

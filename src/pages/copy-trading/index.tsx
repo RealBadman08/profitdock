@@ -36,6 +36,31 @@ type TCopyTradingResponse = {
     ok?: boolean;
 };
 
+type TTransaction = {
+    barrier: string | null;
+    buy_price: number | null;
+    contract_id: string;
+    contract_type: string;
+    currency: string;
+    duration: number | null;
+    duration_unit: string;
+    entry_spot: number | null;
+    entry_time: number | null;
+    exit_spot: number | null;
+    exit_time: number | null;
+    profit: number | null;
+    sell_price: number | null;
+    status: string;
+    underlying: string;
+};
+
+type THistoryState = {
+    account: TConnectedAccount;
+    error: string | null;
+    isLoading: boolean;
+    transactions: TTransaction[];
+} | null;
+
 const MAX_CONNECTED_ACCOUNTS = 20;
 
 const requestCopyTrading = async (path: string, init: RequestInit = {}) => {
@@ -115,6 +140,19 @@ const CopyTrading = observer(() => {
     const [pendingAction, setPendingAction] = useState<string | null>(null);
     const [replacementToken, setReplacementToken] = useState('');
     const [storedAuthToken, setStoredAuthToken] = useState('');
+    const [historyState, setHistoryState] = useState<THistoryState>(null);
+
+    const openAccountHistory = async (account: TConnectedAccount) => {
+        setMenuAccountId(null);
+        setHistoryState({ account, error: null, isLoading: true, transactions: [] });
+        try {
+            const res = await requestCopyTrading(`/api/copy-trading/account-history?account_id=${encodeURIComponent(account.id)}`);
+            const txns = (res as any).transactions as TTransaction[];
+            setHistoryState({ account, error: null, isLoading: false, transactions: Array.isArray(txns) ? txns : [] });
+        } catch (err) {
+            setHistoryState({ account, error: err instanceof Error ? err.message : 'Failed to load history.', isLoading: false, transactions: [] });
+        }
+    };
 
     const canManageAccounts = isAuthorized || connectionStatus === CONNECTION_STATUS.OPENED || !!storedAuthToken;
     const realAccounts = keepRealAccounts(accounts);
@@ -596,6 +634,12 @@ const CopyTrading = observer(() => {
                                             {menuAccountId === account.id ? (
                                                 <div className='copy-trading__menu' role='menu'>
                                                     <button
+                                                        onClick={() => void openAccountHistory(account)}
+                                                        type='button'
+                                                    >
+                                                        Transaction History
+                                                    </button>
+                                                    <button
                                                         onClick={() => handleStartEditAccount(account)}
                                                         type='button'
                                                     >
@@ -654,6 +698,90 @@ const CopyTrading = observer(() => {
                     <div className={`copy-trading__notice copy-trading__notice--${notice.tone}`}>{notice.message}</div>
                 ) : null}
             </ProfitDockSmoothSection>
+
+            {/* Transaction History Modal */}
+            {historyState ? (
+                <div className='copy-trading__history-overlay' role='dialog' aria-modal='true' aria-label='Transaction History'>
+                    <div className='copy-trading__history-modal'>
+                        <div className='copy-trading__history-header'>
+                            <div>
+                                <strong>{historyState.account.deriv_account_id}</strong>
+                                <span>Last 25 transactions</span>
+                            </div>
+                            <button
+                                aria-label='Close transaction history'
+                                className='copy-trading__history-close'
+                                onClick={() => setHistoryState(null)}
+                                type='button'
+                            >
+                                <svg aria-hidden='true' viewBox='0 0 24 24' width='20' height='20'>
+                                    <path d='M18 6 6 18M6 6l12 12' fill='none' stroke='currentColor' strokeWidth='2.2' strokeLinecap='round'/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className='copy-trading__history-body'>
+                            {historyState.isLoading ? (
+                                <div className='copy-trading__history-empty'>Loading transactions...</div>
+                            ) : historyState.error ? (
+                                <div className='copy-trading__history-empty copy-trading__history-empty--error'>{historyState.error}</div>
+                            ) : historyState.transactions.length === 0 ? (
+                                <div className='copy-trading__history-empty'>No closed transactions found.</div>
+                            ) : (
+                                <div className='copy-trading__history-table-wrap'>
+                                    <table className='copy-trading__history-table'>
+                                        <thead>
+                                            <tr>
+                                                <th>Market</th>
+                                                <th>Type</th>
+                                                <th>Duration</th>
+                                                <th>Entry Spot</th>
+                                                <th>Exit Spot</th>
+                                                <th>Buy</th>
+                                                <th>Sell</th>
+                                                <th>P&amp;L</th>
+                                                <th>Result</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {historyState.transactions.map(tx => {
+                                                const profit = tx.profit !== null ? Number(tx.profit) : null;
+                                                const isWon = tx.status === 'won' || (profit !== null && profit > 0);
+                                                const isLost = tx.status === 'lost' || (profit !== null && profit < 0);
+                                                const currency = tx.currency || historyState.account.currency;
+                                                const fmtNum = (v: number | null) =>
+                                                    v !== null && Number.isFinite(v) ? v.toFixed(5).replace(/\.?0+$/, '') : '—';
+                                                const dur = tx.duration
+                                                    ? `${tx.duration}${tx.duration_unit || ''}`
+                                                    : '—';
+                                                return (
+                                                    <tr key={tx.contract_id || Math.random()} className={isWon ? 'copy-trading__history-row--won' : isLost ? 'copy-trading__history-row--lost' : ''}>
+                                                        <td><span className='copy-trading__history-market'>{tx.underlying || '—'}</span></td>
+                                                        <td>{tx.contract_type || '—'}</td>
+                                                        <td>{dur}</td>
+                                                        <td className='copy-trading__history-spot'>{fmtNum(tx.entry_spot)}</td>
+                                                        <td className='copy-trading__history-spot'>{fmtNum(tx.exit_spot)}</td>
+                                                        <td>{tx.buy_price !== null ? `${Number(tx.buy_price).toFixed(2)} ${currency}` : '—'}</td>
+                                                        <td>{tx.sell_price !== null ? `${Number(tx.sell_price).toFixed(2)} ${currency}` : '—'}</td>
+                                                        <td className={isWon ? 'copy-trading__history-profit--pos' : isLost ? 'copy-trading__history-profit--neg' : ''}>
+                                                            {profit !== null ? `${profit >= 0 ? '+' : ''}${profit.toFixed(2)} ${currency}` : '—'}
+                                                        </td>
+                                                        <td>
+                                                            <span className={`copy-trading__history-badge copy-trading__history-badge--${isWon ? 'won' : isLost ? 'lost' : 'open'}`}>
+                                                                {isWon ? 'Won' : isLost ? 'Lost' : tx.status || '—'}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            ) : null}
         </ProfitDockSmoothPage>
     );
 });
