@@ -438,10 +438,7 @@ const CopyTrading = observer(() => {
                                 const isEnabled = acc.copy_trading_enabled;
                                 const avatarTone = index % 5;
                                 return (
-                                    <article className={`copy-trading__account-card${index === 0 ? ' copy-trading__account-card--top' : ''}`} key={acc.id} style={{ opacity: 1 }}>
-                                        {index === 0 && (
-                                            <div className='copy-trading__top-badge'>👑 Top Account</div>
-                                        )}
+                                    <article className='copy-trading__account-card' key={acc.id} style={{ opacity: 1 }}>
                                         <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
                                             <svg
                                                 xmlns='http://www.w3.org/2000/svg'
@@ -462,7 +459,7 @@ const CopyTrading = observer(() => {
                                             </svg>
                                         </div>
                                         <div className='copy-trading__account-text'>
-                                            <strong>{acc.deriv_account_id} <span className='copy-trading__account-type-badge copy-trading__account-type-badge--virtual'>Virtual</span></strong>
+                                            <strong>{acc.deriv_account_id}</strong>
                                             <span>
                                                 {acc.label !== acc.deriv_account_id ? `${acc.label} · ` : ''}
                                                 {acc.balance.toFixed(2)} {acc.currency}
@@ -537,10 +534,7 @@ const CopyTrading = observer(() => {
                                 const avatarTone = index % 5;
 
                                 return (
-                                    <article className={`copy-trading__account-card${index === 0 ? ' copy-trading__account-card--top' : ''}`} key={account.id}>
-                                        {index === 0 && (
-                                            <div className='copy-trading__top-badge'>👑 Top Account</div>
-                                        )}
+                                    <article className='copy-trading__account-card' key={account.id}>
                                         <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
                                             <svg
                                                 xmlns='http://www.w3.org/2000/svg'
@@ -561,7 +555,7 @@ const CopyTrading = observer(() => {
                                             </svg>
                                         </div>
                                         <div className='copy-trading__account-text'>
-                                            <strong>{account.deriv_account_id} <span className='copy-trading__account-type-badge copy-trading__account-type-badge--real'>Real</span></strong>
+                                            <strong>{account.deriv_account_id}</strong>
                                             <span>{getAccountBalance(account)}</span>
                                         </div>
                                         <label
