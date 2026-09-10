@@ -182,8 +182,14 @@ const normalizeTransaction = raw => {
 
     const status = data?.status ?? (profit !== null ? (Number(profit) >= 0 ? 'won' : 'lost') : 'unknown');
     const currency = String(data?.currency || '');
-    const duration = data?.duration ?? null;
-    const duration_unit = String(data?.duration_unit || '');
+    
+    let duration = data?.duration ?? null;
+    let duration_unit = String(data?.duration_unit || '');
+    if (duration === null && entry_time && exit_time) {
+        duration = Math.max(0, exit_time - entry_time);
+        duration_unit = 's';
+    }
+
     const barrier = data?.barrier ?? null;
 
     return {
