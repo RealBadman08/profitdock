@@ -61,6 +61,11 @@ const fetchProfitTable = async (token, loginid, limit = 25) => {
     return new Promise((resolve, reject) => {
         const ws = new WebSocket(wsUrl);
         
+        let expectedContracts = 0;
+        let receivedContracts = 0;
+        let profitTableData = null;
+        const augmentedContracts = {};
+
         const timeout = setTimeout(() => {
             ws.close();
             reject(new Error('Deriv profit table request timed out.'));
@@ -84,16 +89,56 @@ const fetchProfitTable = async (token, loginid, limit = 25) => {
             }
 
             if (data.error) {
-                clearTimeout(timeout);
-                ws.close();
-                reject(new Error(data.error.message || 'Deriv API error.'));
+                if (data.echo_req?.profit_table) {
+                    clearTimeout(timeout);
+                    ws.close();
+                    reject(new Error(data.error.message || 'Deriv API error.'));
+                } else if (data.echo_req?.proposal_open_contract) {
+                    receivedContracts++;
+                    if (profitTableData && receivedContracts >= expectedContracts) {
+                        clearTimeout(timeout);
+                        ws.close();
+                        const finalTransactions = Object.values(augmentedContracts).sort((a, b) => (b.sell_time || 0) - (a.sell_time || 0));
+                        resolve({ transactions: finalTransactions });
+                    }
+                }
                 return;
             }
 
             if (data.msg_type === 'profit_table') {
-                clearTimeout(timeout);
-                ws.close();
-                resolve(data.profit_table);
+                profitTableData = data.profit_table;
+                const transactions = profitTableData?.transactions || [];
+                expectedContracts = transactions.length;
+
+                if (expectedContracts === 0) {
+                    clearTimeout(timeout);
+                    ws.close();
+                    resolve(profitTableData);
+                    return;
+                }
+
+                transactions.forEach(t => {
+                    augmentedContracts[t.contract_id] = { ...t };
+                    ws.send(JSON.stringify({
+                        proposal_open_contract: 1,
+                        contract_id: t.contract_id
+                    }));
+                });
+            }
+
+            if (data.msg_type === 'proposal_open_contract') {
+                const poc = data.proposal_open_contract;
+                if (poc && poc.contract_id && augmentedContracts[poc.contract_id]) {
+                    Object.assign(augmentedContracts[poc.contract_id], poc);
+                }
+                receivedContracts++;
+
+                if (profitTableData && receivedContracts >= expectedContracts) {
+                    clearTimeout(timeout);
+                    ws.close();
+                    const finalTransactions = Object.values(augmentedContracts).sort((a, b) => (b.sell_time || 0) - (a.sell_time || 0));
+                    resolve({ transactions: finalTransactions });
+                }
             }
         };
 
@@ -118,8 +163,8 @@ const normalizeTransaction = raw => {
     }
 
     const contract_id = String(data?.contract_id || data?.id || '');
-    const entry_spot = data?.entry_spot ?? data?.entry_tick ?? null;
-    const exit_spot = data?.exit_spot ?? null;
+    const entry_spot = data?.entry_spot ?? data?.entry_tick ?? data?.entry_tick_display_value ?? null;
+    const exit_spot = data?.exit_spot ?? data?.exit_tick_display_value ?? data?.sell_spot ?? null;
     const entry_time = data?.entry_time ?? data?.purchase_time ?? data?.date_start ?? null;
     const exit_time = data?.exit_time ?? data?.sell_time ?? data?.date_expiry ?? null;
     const buy_price = data?.buy_price ?? data?.purchase_price ?? null;
