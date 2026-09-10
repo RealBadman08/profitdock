@@ -772,6 +772,8 @@ module.exports = {
     connectCredentialAccounts,
     disconnectAccount,
     executeBulkPurchase,
+    getOwnedAccount,
+    getSecretForAccount,
     handleApiError,
     listConnectedAccounts,
     normalizeBulkPurchaseContractParameters,
@@ -781,5 +783,3 @@ module.exports = {
     sendJson,
     updateAccount,
 };
-
-
