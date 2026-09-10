@@ -107,22 +107,34 @@ const fetchProfitTable = async (token, loginid, limit = 25) => {
 const normalizeTransaction = raw => {
     const data = raw?.data || raw;
 
-    const contract_id = String(
-        data?.contract_id || data?.id || ''
-    );
-    const contract_type = String(data?.contract_type || data?.type || '');
-    const underlying = String(
-        data?.underlying_symbol || data?.underlying || data?.symbol || ''
-    );
-    const entry_spot = data?.entry_spot ?? data?.entry_tick ?? data?.purchase_price ?? null;
-    const exit_spot = data?.exit_spot ?? data?.sell_price ?? null;
-    const entry_time =
-        data?.entry_time ?? data?.purchase_time ?? data?.date_start ?? null;
-    const exit_time =
-        data?.exit_time ?? data?.sell_time ?? data?.date_expiry ?? null;
+    let contract_type = String(data?.contract_type || data?.type || '');
+    let underlying = String(data?.underlying_symbol || data?.underlying || data?.symbol || '');
+    
+    // Parse shortcode if type/underlying are missing (e.g. from profit_table)
+    if (data?.shortcode && (!contract_type || !underlying)) {
+        const parts = data.shortcode.split('_');
+        if (!contract_type && parts.length > 0) contract_type = parts[0];
+        if (!underlying && parts.length > 2) underlying = `${parts[1]}_${parts[2]}`;
+    }
+
+    const contract_id = String(data?.contract_id || data?.id || '');
+    const entry_spot = data?.entry_spot ?? data?.entry_tick ?? null;
+    const exit_spot = data?.exit_spot ?? null;
+    const entry_time = data?.entry_time ?? data?.purchase_time ?? data?.date_start ?? null;
+    const exit_time = data?.exit_time ?? data?.sell_time ?? data?.date_expiry ?? null;
     const buy_price = data?.buy_price ?? data?.purchase_price ?? null;
     const sell_price = data?.sell_price ?? null;
-    const profit = data?.profit ?? null;
+    
+    // Calculate profit if missing
+    let profit = data?.profit;
+    if (profit === undefined || profit === null) {
+        if (buy_price !== null && sell_price !== null) {
+            profit = Number(sell_price) - Number(buy_price);
+        } else {
+            profit = null;
+        }
+    }
+
     const status = data?.status ?? (profit !== null ? (Number(profit) >= 0 ? 'won' : 'lost') : 'unknown');
     const currency = String(data?.currency || '');
     const duration = data?.duration ?? null;
@@ -185,6 +197,7 @@ module.exports = async (req, res) => {
         const payload = await fetchProfitTable(token, account.deriv_account_id, limit);
 
         const rawItems =
+            Array.isArray(payload?.transactions) ? payload.transactions :
             Array.isArray(payload?.data) ? payload.data :
             Array.isArray(payload?.data?.contracts) ? payload.data.contracts :
             Array.isArray(payload?.contracts) ? payload.contracts :
