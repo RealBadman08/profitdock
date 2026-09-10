@@ -312,14 +312,14 @@ export const mirrorCopyTradingBuyFromRequest = (request: unknown, response: unkn
     const request_id = pickString(request.req_id, passthrough?.id, passthrough?.purchase_reference);
 
     if ((request.buy === 1 || request.buy === '1') && isPlainObject(request.parameters)) {
-        // Use contract_id > request_id for the dedup key so that BuyImmediately
-        // (which runs before we have a contract_id) and BuyFromRequest (which runs
-        // after, with the real contract_id) share the same key when req_id matches.
+        // Use a source-type-agnostic key so this deduplicates against direct
+        // calls from pages (corsa, mesh, matchtool, accumulators) that also
+        // call mirrorCopyTradingContractParameters with auto:${contract_id}.
         const direct_key = contract_id || request_id || `direct:${Date.now()}`;
         return mirrorCopyTradingContractParameters(
             request.parameters,
             source_account_type,
-            `${source_account_type || 'auto'}:${direct_key}`
+            `auto:${direct_key}`
         );
     }
 
@@ -334,7 +334,7 @@ export const mirrorCopyTradingBuyFromRequest = (request: unknown, response: unkn
     return mirrorCopyTradingContractParameters(
         cached_proposal.contract_parameters,
         source_account_type,
-        `${source_account_type || 'auto'}:${contract_id || proposal_id}`
+        `auto:${contract_id || proposal_id}`
     );
 };
 
