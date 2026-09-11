@@ -110,7 +110,24 @@
             // Has a leading icon: icon is auto-sized, select fills the rest
         }
 
-        select,
+        select {
+            align-self: stretch;
+            background: transparent;
+            border: 0;
+            color: #102033;
+            font-size: 1.6rem;
+            font-weight: 700;
+            height: 100%;
+            min-width: 0;
+            outline: none;
+            text-align: center;
+            text-align-last: center;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
         input {
             align-self: stretch;
             background: transparent;
