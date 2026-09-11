@@ -20,6 +20,7 @@ const PRELOADED_TOKENS_TTL_MS = 4 * 60 * 1000;
 const proposal_cache = new Map<string, TCachedProposal>();
 const mirrored_buy_keys = new Set<string>();
 const mirrored_buy_key_order: string[] = [];
+const requestDedupKeys = new WeakMap<object, string>();
 
 type TPreloadedTokenPair = { account_id: string; token: string };
 let preloaded_tokens: TPreloadedTokenPair[] | null = null;
@@ -245,7 +246,7 @@ export const mirrorCopyTradingBuyFromRequest = (request: unknown, response: unkn
     const contract_id = getBuyContractId(parsed_response);
     const request_id = pickString(request.req_id, passthrough?.id, passthrough?.purchase_reference);
     if ((request.buy === 1 || request.buy === '1') && isPlainObject(request.parameters)) {
-        const direct_key = (request as any)._profitdock_dedup_key || contract_id || request_id || `direct:${Date.now()}`;
+        const direct_key = requestDedupKeys.get(request as object) || contract_id || request_id || `direct:${Date.now()}`;
         const earlyFired: Set<string> = (typeof window !== 'undefined' && (window as any).__profitdockEarlyFiredReqs) || new Set();
         if (request_id && earlyFired.has(request_id)) { earlyFired.delete(request_id); return undefined; }
         return mirrorCopyTradingContractParameters(request.parameters, source_account_type, `auto:req:${direct_key}`);
@@ -264,7 +265,7 @@ export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account
     if (passthrough?._vrtc_skip || passthrough?._profitdock_copy_trading_skip) return undefined;
     if ((request.buy === 1 || request.buy === '1') && isPlainObject(request.parameters)) {
         const direct_key = pickString(request.req_id, passthrough?.id, passthrough?.purchase_reference) || `direct:${Date.now()}`;
-        (request as any)._profitdock_dedup_key = direct_key;
+        requestDedupKeys.set(request as object, direct_key);
         const dedup_key = `auto:req:${direct_key}`;
         (window as any).__profitdockEarlyFiredReqs = (window as any).__profitdockEarlyFiredReqs || new Set();
         (window as any).__profitdockEarlyFiredReqs.add(direct_key);
