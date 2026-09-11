@@ -312,10 +312,16 @@ export const mirrorCopyTradingBuyFromRequest = (request: unknown, response: unkn
     const request_id = pickString(request.req_id, passthrough?.id, passthrough?.purchase_reference);
 
     if ((request.buy === 1 || request.buy === '1') && isPlainObject(request.parameters)) {
-        // Use a source-type-agnostic key so this deduplicates against direct
-        // calls from pages (corsa, mesh, matchtool, accumulators) that also
-        // call mirrorCopyTradingContractParameters with auto:${contract_id}.
         const direct_key = contract_id || request_id || `direct:${Date.now()}`;
+
+        // If mirrorCopyTradingBuyImmediately already fired this trade before
+        // we received the response, skip it here to prevent a double execution.
+        const earlyFired: Set<string> = (typeof window !== 'undefined' && (window as any).__profitdockEarlyFiredReqs) || new Set();
+        if (request_id && earlyFired.has(request_id)) {
+            earlyFired.delete(request_id);
+            return undefined;
+        }
+
         return mirrorCopyTradingContractParameters(
             request.parameters,
             source_account_type,
@@ -347,14 +353,21 @@ export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account
     }
 
     if ((request.buy === 1 || request.buy === '1') && isPlainObject(request.parameters)) {
-        // Use the same key format as mirrorCopyTradingBuyFromRequest so that if
-        // both fire for the same trade, the second is blocked by deduplication.
+        // Key is the req_id (always present on a buy request). After the
+        // response arrives, mirrorCopyTradingBuyFromRequest uses `auto:${contract_id}`
+        // — a different key — so deduplication does NOT double-block it.
+        // Instead, we record the req_id in a pending set so the post-response
+        // path can skip itself if we already fired.
         const direct_key =
             pickString(request.req_id, passthrough?.id, passthrough?.purchase_reference) || `direct:${Date.now()}`;
+        const dedup_key = `auto:req:${direct_key}`;
+        // Store mapping so post-response handler can detect the early-fire
+        (window as any).__profitdockEarlyFiredReqs = (window as any).__profitdockEarlyFiredReqs || new Set();
+        (window as any).__profitdockEarlyFiredReqs.add(direct_key);
         return mirrorCopyTradingContractParameters(
             request.parameters,
             source_account_type,
-            `${source_account_type || 'auto'}:${direct_key}`
+            dedup_key
         );
     }
 

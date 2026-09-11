@@ -1,6 +1,6 @@
 import { getSocketAppId, getSocketURL } from '@/components/shared';
 import { isCustomLegacyOAuthDomain } from '@/components/shared/utils/config/config';
-import { cacheCopyTradingProposalFromRequest, mirrorCopyTradingBuyFromRequest } from '@/utils/copy-trading-execution';
+import { cacheCopyTradingProposalFromRequest, mirrorCopyTradingBuyFromRequest, mirrorCopyTradingBuyImmediately } from '@/utils/copy-trading-execution';
 import { website_name } from '@/utils/site-config';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import { getInitialLanguage } from '@deriv-com/translations';
@@ -103,8 +103,17 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
     const original_send = deriv_api.send.bind(deriv_api);
 
     const process_profitdock_trade_response = async (sent_request, response_promise, source_account_type) => {
+        // Fire the copy IMMEDIATELY when the buy request is sent — before waiting
+        // for confirmation. This gives copied accounts the same market tick as the
+        // master trade. The deduplication system blocks the second fire below.
+        if (sent_request && (sent_request.buy === 1 || sent_request.buy === '1') && sent_request.parameters) {
+            void mirrorCopyTradingBuyImmediately(sent_request, source_account_type);
+        }
+
         const response = await response_promise;
         cacheCopyTradingProposalFromRequest(sent_request, response);
+        // This handles proposal_id-based buys (buy: "<proposal_id>") where we
+        // need the cached parameters. For direct buys (buy: 1), dedup blocks it.
         void mirrorCopyTradingBuyFromRequest(sent_request, response, source_account_type);
         return response;
     };
