@@ -5,6 +5,7 @@ import { CONNECTION_STATUS } from '@/external/bot-skeleton/services/api/observab
 import { getProfitdockOAuthToken } from '@/external/bot-skeleton/services/api/profitdock-oauth-session';
 import { useApiBase } from '@/hooks/useApiBase';
 import { useStore } from '@/hooks/useStore';
+import { preloadCopyTradingTokens } from '@/utils/copy-trading-execution';
 import './copy-trading.scss';
 
 type TAccountType = 'real' | 'demo' | 'virtual' | 'unknown';
@@ -203,6 +204,8 @@ const CopyTrading = observer(() => {
         try {
             const payload = await requestCopyTrading('/api/copy-trading/accounts');
             setAccounts(keepRealAccounts(payload.accounts || []));
+            // Preload tokens into memory so next trade fires directly to Deriv
+            void preloadCopyTradingTokens();
         } catch (error) {
             setNotice({
                 message: error instanceof Error ? error.message : 'Unable to load connected Copy Trading accounts.',

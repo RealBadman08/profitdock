@@ -13,13 +13,22 @@ type TCachedProposal = {
 };
 
 const COPY_TRADING_BULK_PURCHASE_URL = '/api/copy-trading/bulk-purchase';
+const COPY_TRADING_EXECUTION_TOKENS_URL = '/api/copy-trading/execution-tokens';
+const DERIV_BULK_PURCHASE_URL = 'https://api.derivws.com/trading/v1/options/contracts/bulk-purchase/real';
+const DERIV_CLIENT_ID = '339iXSWkH7NEGne7sMdQT';
 const MAX_PROPOSAL_CACHE_SIZE = 120;
 const MAX_MIRRORED_BUY_KEYS = 160;
 const PROPOSAL_CACHE_TTL_MS = 5 * 60 * 1000;
+const PRELOADED_TOKENS_TTL_MS = 4 * 60 * 1000; // refresh every 4 min
 
 const proposal_cache = new Map<string, TCachedProposal>();
 const mirrored_buy_keys = new Set<string>();
 const mirrored_buy_key_order: string[] = [];
+
+type TPreloadedTokenPair = { account_id: string; token: string };
+let preloaded_tokens: TPreloadedTokenPair[] | null = null;
+let preloaded_tokens_loaded_at = 0;
+let preloaded_tokens_fetch_promise: Promise<void> | null = null;
 
 const OMIT_CONTRACT_PARAMETER_KEYS = new Set([
     'proposal',
@@ -200,6 +209,58 @@ const dispatchCopyTradingResult = (detail: Record<string, unknown>) => {
     window.dispatchEvent(new CustomEvent('profitdock:copy-trading-result', { detail }));
 };
 
+const getPreloadedTokens = (): TPreloadedTokenPair[] | null => {
+    if (!preloaded_tokens) return null;
+    if (Date.now() - preloaded_tokens_loaded_at > PRELOADED_TOKENS_TTL_MS) {
+        preloaded_tokens = null;
+        return null;
+    }
+    return preloaded_tokens;
+};
+
+export const preloadCopyTradingTokens = (): Promise<void> => {
+    // Return existing promise if already in flight
+    if (preloaded_tokens_fetch_promise) return preloaded_tokens_fetch_promise;
+
+    // Return immediately if tokens are fresh
+    if (getPreloadedTokens()) return Promise.resolve();
+
+    const token = getProfitdockOAuthToken();
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    let ownerLoginid = '';
+    if (typeof window !== 'undefined') {
+        try {
+            const clientAccounts = JSON.parse(window.localStorage.getItem('clientAccounts') || '{}');
+            ownerLoginid = Object.keys(clientAccounts).find(k => k.startsWith('CR') || k.startsWith('ROT')) || '';
+        } catch { /* ignore */ }
+        if (!ownerLoginid) ownerLoginid = window.localStorage.getItem('active_loginid') || '';
+    }
+    if (ownerLoginid) headers['X-Deriv-Loginid'] = ownerLoginid;
+
+    preloaded_tokens_fetch_promise = fetch(COPY_TRADING_EXECUTION_TOKENS_URL, {
+        credentials: 'include',
+        headers,
+        method: 'GET',
+    })
+        .then(r => r.json())
+        .then((payload: any) => {
+            if (Array.isArray(payload?.accounts)) {
+                preloaded_tokens = payload.accounts;
+                preloaded_tokens_loaded_at = Date.now();
+            }
+        })
+        .catch(err => {
+            console.warn('[Copy Trading] Token preload failed, will use server path:', err);
+        })
+        .finally(() => {
+            preloaded_tokens_fetch_promise = null;
+        });
+
+    return preloaded_tokens_fetch_promise;
+};
+
 export const mirrorCopyTradingContractParameters = async (
     contract_parameters: unknown,
     source_account_type?: string,
@@ -217,21 +278,54 @@ export const mirrorCopyTradingContractParameters = async (
         return { skipped: true, reason: 'duplicate_buy' };
     }
 
+    // Fast path: use preloaded tokens to call Deriv directly, no Vercel hop
+    const cached = getPreloadedTokens();
+    if (cached && cached.length > 0 && source_type === 'real') {
+        try {
+            const symbolKey = String(
+                (normalized_parameters as any).underlying_symbol ||
+                (normalized_parameters as any).symbol || ''
+            );
+            const primary = { ...normalized_parameters, symbol: symbolKey || undefined };
+            delete (primary as any).underlying_symbol;
+
+            const result = await fetch(DERIV_BULK_PURCHASE_URL, {
+                body: JSON.stringify({ contract_parameters: primary, accounts: cached }),
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'Deriv-App-ID': DERIV_CLIENT_ID,
+                },
+                method: 'POST',
+            }).then(r => r.json()).catch(() => null);
+
+            dispatchCopyTradingResult({
+                contract_parameters: normalized_parameters,
+                ok: true,
+                payload: result,
+                source_account_type: source_type,
+                status: 200,
+                via: 'direct',
+            });
+
+            return result;
+        } catch (err) {
+            // Fall through to server path on error
+            console.warn('[Copy Trading] Direct Deriv call failed, falling back to server:', err);
+        }
+    }
+
+    // Slow path: go through Vercel server (used when tokens not preloaded yet)
     try {
         const headers: Record<string, string> = {
             Accept: 'application/json',
             'Content-Type': 'application/json',
         };
 
-        // Production OAuth sets an HttpOnly session cookie; localStorage is only
-        // a convenience fallback. Never skip mirroring just because authToken is
-        // not readable by JavaScript.
         if (token) {
             headers.Authorization = `Bearer ${token}`;
         }
 
-        // Send the real loginid so the server can resolve the owner account
-        // without calling the Deriv Options API (which rejects legacy Deriv tokens).
         let ownerLoginid = '';
         if (typeof window !== 'undefined') {
             try {
@@ -253,9 +347,6 @@ export const mirrorCopyTradingContractParameters = async (
             body: JSON.stringify({
                 contract_parameters: normalized_parameters,
                 source_account_type: source_type,
-                // Tell the server which Deriv account placed the original trade
-                // so it can exclude that account from the recipients list and
-                // avoid a double purchase ("nothing more, nothing less").
                 source_loginid: ownerLoginid || undefined,
             }),
             credentials: 'include',
@@ -271,6 +362,7 @@ export const mirrorCopyTradingContractParameters = async (
             payload,
             source_account_type: source_type,
             status: response.status,
+            via: 'server',
         };
 
         dispatchCopyTradingResult(result);
@@ -391,6 +483,8 @@ export const __copyTradingExecutionInternals = {
         proposal_cache.clear();
         mirrored_buy_keys.clear();
         mirrored_buy_key_order.splice(0, mirrored_buy_key_order.length);
+        preloaded_tokens = null;
+        preloaded_tokens_loaded_at = 0;
     },
     proposal_cache,
 };
