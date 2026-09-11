@@ -1,4 +1,4 @@
-﻿import {
+import {
     getActiveProfitdockLoginId,
     getProfitdockOAuthToken,
 } from '@/external/bot-skeleton/services/api/profitdock-oauth-session';
@@ -273,5 +273,5 @@ export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account
     if (!proposal_id) return undefined;
     const cached_proposal = proposal_cache.get(proposal_id);
     if (!cached_proposal) return undefined;
-    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, `${source_account_type || 'auto'}:${proposal_id}`);
+    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, `auto:${proposal_id}`);
 };
