@@ -1,6 +1,6 @@
 import { getSocketAppId, getSocketURL } from '@/components/shared';
 import { isCustomLegacyOAuthDomain } from '@/components/shared/utils/config/config';
-import { cacheCopyTradingProposalFromRequest, mirrorCopyTradingBuyFromRequest, mirrorCopyTradingBuyImmediately } from '@/utils/copy-trading-execution';
+import { cacheCopyTradingProposalFromRequest, mirrorCopyTradingBuyFromRequest, mirrorCopyTradingBuyImmediately, preloadCopyTradingTokens } from '@/utils/copy-trading-execution';
 import { website_name } from '@/utils/site-config';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import { getInitialLanguage } from '@deriv-com/translations';
@@ -99,6 +99,10 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
     });
     deriv_api.is_profitdock_authenticated_socket = /\/trading\/v1\/options\/ws\/(?:demo|real)\?/i.test(socket_url);
     deriv_api._profitdock_socket = deriv_socket;
+
+    if (deriv_api.is_profitdock_authenticated_socket) {
+        void preloadCopyTradingTokens();
+    }
 
     const original_send = deriv_api.send.bind(deriv_api);
 
