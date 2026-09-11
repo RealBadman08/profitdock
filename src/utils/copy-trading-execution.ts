@@ -255,7 +255,7 @@ export const mirrorCopyTradingBuyFromRequest = (request: unknown, response: unkn
     const cached_proposal = proposal_cache.get(proposal_id);
     if (!cached_proposal) return undefined;
     proposal_cache.delete(proposal_id);
-    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, `auto:${contract_id || proposal_id}`);
+    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, `auto:${proposal_id}`);
 };
 
 export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account_type?: string) => {
