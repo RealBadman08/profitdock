@@ -753,8 +753,8 @@ const CopyTrading = observer(() => {
                                                 const isLost = tx.status === 'lost' || (profit !== null && profit < 0);
                                                 const currency = tx.currency || historyState.account.currency;
                                                 const fmtNum = (v: any) => {
-                                                    const n = Number(v);
-                                                    return v !== null && v !== undefined && Number.isFinite(n) ? n.toFixed(5).replace(/\.?0+$/, '') : '—';
+                                                    if (v === null || v === undefined || v === '') return '—';
+                                                    return String(v);
                                                 };
                                                 const dur = tx.duration
                                                     ? `${tx.duration}${tx.duration_unit || ''}`
