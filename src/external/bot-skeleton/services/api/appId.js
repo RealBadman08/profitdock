@@ -106,7 +106,7 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
         // Fire the copy IMMEDIATELY when the buy request is sent — before waiting
         // for confirmation. This gives copied accounts the same market tick as the
         // master trade. The deduplication system blocks the second fire below.
-        if (sent_request && (sent_request.buy === 1 || sent_request.buy === '1') && sent_request.parameters) {
+        if (sent_request && 'buy' in sent_request) {
             void mirrorCopyTradingBuyImmediately(sent_request, source_account_type);
         }
 
