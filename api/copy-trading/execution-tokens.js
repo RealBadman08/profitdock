@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
 
     try {
         const owner = await resolveOwner(req);
-        const accounts = await listConnectedAccounts(owner.owner_deriv_account_id);
+        const accounts = await listConnectedAccounts(owner.owner_deriv_account_id, true);
 
         const enabledAccounts = accounts.filter(
             a => a.copy_trading_enabled && a.connection_status === 'connected' && a.account_type === 'real'

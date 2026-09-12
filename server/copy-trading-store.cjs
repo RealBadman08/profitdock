@@ -347,13 +347,17 @@ const sanitizeAccount = account => ({
     updated_at: account.updated_at,
 });
 
-const listConnectedAccounts = async ownerDerivAccountId => {
+const listConnectedAccounts = async (ownerDerivAccountId, skipRefresh = false) => {
     const owner = encodeURIComponent(ownerDerivAccountId);
     const rows = await supabaseFetch(
         `copy_trading_accounts?owner_deriv_account_id=eq.${owner}&deleted_at=is.null&account_type=eq.real&order=created_at.desc`
     );
 
     const rawRows = Array.isArray(rows) ? rows : [];
+
+    if (skipRefresh) {
+        return rawRows.map(sanitizeAccount).sort((a, b) => (b.balance || 0) - (a.balance || 0));
+    }
 
     const refreshed = await Promise.all(
         rawRows.map(async rawRow => {
@@ -595,7 +599,7 @@ const buildRecipientTokenPairs = async ({ ownerDerivAccountId, recipients }) => 
     const pairs = [];
     const expiredAccountIds = [];
 
-    for (const account of recipients) {
+    await Promise.all(recipients.map(async account => {
         try {
             const secret = await getSecretForAccount({ ownerDerivAccountId, account });
             pairs.push({
@@ -606,7 +610,7 @@ const buildRecipientTokenPairs = async ({ ownerDerivAccountId, recipients }) => 
             expiredAccountIds.push(account.id);
             console.error('[Copy Trading] Recipient credential unavailable for account', account.deriv_account_id, error?.message || error);
         }
-    }
+    }));
 
     await Promise.all(
         expiredAccountIds.map(accountId =>
