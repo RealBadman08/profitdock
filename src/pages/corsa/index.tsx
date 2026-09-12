@@ -196,7 +196,7 @@ const buyDirectContract = async ({
         );
     }
 
-    void mirrorCopyTradingContractParameters(parameters, undefined, `auto:${response.buy.contract_id}`);
+    // void mirrorCopyTradingContractParameters(parameters, undefined, `auto:${response.buy.contract_id}`);
 
     return response.buy;
 };

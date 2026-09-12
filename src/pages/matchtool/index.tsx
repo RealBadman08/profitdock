@@ -319,11 +319,11 @@ const requestProposalThenBuy = async ({
         );
     }
 
-    void mirrorCopyTradingContractParameters(
-        proposalPayload,
-        undefined,
-        `auto:${buyResponse.buy.contract_id}`
-    );
+    // void mirrorCopyTradingContractParameters(
+    //     proposalPayload,
+    //     undefined,
+    //     `auto:${buyResponse.buy.contract_id}`
+    // );
 
     return buyResponse.buy;
 };

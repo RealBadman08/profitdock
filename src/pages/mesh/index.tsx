@@ -310,11 +310,11 @@ const requestDirectBuy = async ({
         );
     }
 
-    void mirrorCopyTradingContractParameters(
-        buyPayload.parameters,
-        undefined,
-        `auto:${buyResponse.buy.contract_id}`
-    );
+    // void mirrorCopyTradingContractParameters(
+    //     buyPayload.parameters,
+    //     undefined,
+    //     `auto:${buyResponse.buy.contract_id}`
+    // );
 
     return buyResponse.buy;
 };

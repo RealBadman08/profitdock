@@ -708,13 +708,13 @@ const buyAccumulatorQuote = async (
         throw error;
     }
 
-    if (response?.buy?.contract_id && quote.contractParameters) {
-        void mirrorCopyTradingContractParameters(
-            quote.contractParameters,
-            undefined,
-            `auto:${response.buy.contract_id}`
-        );
-    }
+    // if (response?.buy?.contract_id && quote.contractParameters) {
+    //     void mirrorCopyTradingContractParameters(
+    //         quote.contractParameters,
+    //         undefined,
+    //         `auto:${response.buy.contract_id}`
+    //     );
+    // }
 
     return response;
 };
