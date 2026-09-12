@@ -1,6 +1,6 @@
 import { getSocketAppId, getSocketURL } from '@/components/shared';
 import { isCustomLegacyOAuthDomain } from '@/components/shared/utils/config/config';
-import { broadcastCopyTradingProposal, cacheCopyTradingProposalFromRequest, mirrorCopyTradingBuyFromRequest, preloadCopyTradingTokens } from '@/utils/copy-trading-execution';
+import { broadcastCopyTradingProposal, cacheCopyTradingProposalFromRequest, mirrorCopyTradingBuyFromRequest, mirrorCopyTradingBuyImmediately, preloadCopyTradingTokens } from '@/utils/copy-trading-execution';
 import { website_name } from '@/utils/site-config';
 import DerivAPIBasic from '@deriv/deriv-api/dist/DerivAPIBasic';
 import { getInitialLanguage } from '@deriv-com/translations';
