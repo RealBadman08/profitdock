@@ -28,12 +28,19 @@ let preloaded_tokens: TPreloadedTokenPair[] | null = null;
 let preloaded_tokens_loaded_at = 0;
 let preloaded_tokens_fetch_promise: Promise<void> | null = null;
 
+type TPendingBuyCallback = {
+    req_id: number | string;
+    amount: unknown;
+    buy_key: string;
+    fired: boolean;
+};
 type TAccountSocket = {
     account_id: string;
     token: string;
     ws: WebSocket;
     authorized: boolean;
     pending_buys: string[];
+    pending_buy_callbacks: Map<string | number, TPendingBuyCallback>;
     last_buy_key?: string;
     last_buy_at?: number;
 };
@@ -41,7 +48,7 @@ const account_sockets: Map<string, TAccountSocket> = new Map();
 
 const openAccountSocket = (pair: TPreloadedTokenPair): TAccountSocket => {
     const ws = new WebSocket(DERIV_WS_URL);
-    const entry: TAccountSocket = { account_id: pair.account_id, token: pair.token, ws, authorized: false, pending_buys: [] };
+    const entry: TAccountSocket = { account_id: pair.account_id, token: pair.token, ws, authorized: false, pending_buys: [], pending_buy_callbacks: new Map() };
     ws.onopen = () => { ws.send(JSON.stringify({ authorize: pair.token, req_id: 1 })); };
     ws.onmessage = (event: MessageEvent) => {
         try {
@@ -52,8 +59,31 @@ const openAccountSocket = (pair: TPreloadedTokenPair): TAccountSocket => {
                 entry.pending_buys = [];
             }
             if (msg.msg_type === 'proposal' && !msg.error && msg.req_id && msg.proposal?.id) {
+                // Store proposal id for this copy account
                 if (!copy_proposal_cache.has(msg.req_id)) copy_proposal_cache.set(msg.req_id, {});
                 copy_proposal_cache.get(msg.req_id)![entry.account_id] = msg.proposal.id;
+
+                // If we have a pending buy for this req_id, fire it NOW with the copy proposal id
+                // This is the key to matching the master's entry point exactly.
+                const cb = entry.pending_buy_callbacks.get(msg.req_id);
+                if (cb && !cb.fired) {
+                    cb.fired = true;
+                    entry.pending_buy_callbacks.delete(msg.req_id);
+                    const buy_key = `pid:${msg.proposal.id}`;
+                    // Dedup check
+                    const now = Date.now();
+                    if (entry.last_buy_key === buy_key && entry.last_buy_at && (now - entry.last_buy_at) < 5000) {
+                        console.warn('[Copy Trading] Blocked duplicate trade for account', entry.account_id);
+                    } else {
+                        entry.last_buy_key = buy_key;
+                        entry.last_buy_at = now;
+                        const payload = { buy: msg.proposal.id, price: cb.amount ?? 0, req_id: Date.now(), passthrough: { _profitdock_copy_trading_skip: true } };
+                        const buyMsg = JSON.stringify(payload);
+                        if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) { entry.ws.send(buyMsg); }
+                        else { entry.pending_buys.push(buyMsg); }
+                        console.log('[Copy Trading] Fired buy via copy proposal id for account', entry.account_id, msg.proposal.id);
+                    }
+                }
             }
         } catch { /* ignore */ }
     };
@@ -81,11 +111,43 @@ const initAccountSockets = (tokens: TPreloadedTokenPair[]) => {
     tokens.forEach(pair => { if (!account_sockets.has(pair.account_id)) account_sockets.set(pair.account_id, openAccountSocket(pair)); });
 };
 
-const sendBuyViaSocket = (entry: TAccountSocket, contract_params: TContractParameters, copy_proposal_id?: string) => {
-    // Per-account dedup: block identical trades within 5 seconds (catches multi-socket double fires)
-    const buy_key = copy_proposal_id
-        ? `pid:${copy_proposal_id}`
-        : `ct:${contract_params.contract_type}:${contract_params.amount}:${contract_params.underlying_symbol}:${Math.floor(Date.now() / 5000)}`;
+const sendBuyViaSocket = (entry: TAccountSocket, contract_params: TContractParameters, copy_proposal_id?: string, pending_req_id?: number | string) => {
+    // If we have a copy_proposal_id, fire the buy immediately with that id
+    if (copy_proposal_id) {
+        const buy_key = `pid:${copy_proposal_id}`;
+        const now = Date.now();
+        if (entry.last_buy_key === buy_key && entry.last_buy_at && (now - entry.last_buy_at) < 5000) {
+            console.warn('[Copy Trading] Blocked duplicate trade for account', entry.account_id, 'key:', buy_key);
+            return;
+        }
+        entry.last_buy_key = buy_key;
+        entry.last_buy_at = now;
+        const payload = { buy: copy_proposal_id, price: contract_params.amount ?? 0, req_id: Date.now(), passthrough: { _profitdock_copy_trading_skip: true } };
+        const msg = JSON.stringify(payload);
+        if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) { entry.ws.send(msg); }
+        else { entry.pending_buys.push(msg); }
+        return;
+    }
+
+    // No copy proposal id yet — register a pending buy callback keyed to the req_id.
+    // The onmessage handler will fire the buy the instant this socket receives its proposal response.
+    if (pending_req_id !== undefined && pending_req_id !== '') {
+        const cb_key = `cb:${pending_req_id}`;
+        const now = Date.now();
+        if (entry.last_buy_key === cb_key && entry.last_buy_at && (now - entry.last_buy_at) < 5000) {
+            console.warn('[Copy Trading] Blocked duplicate pending buy callback for account', entry.account_id);
+            return;
+        }
+        entry.last_buy_key = cb_key;
+        entry.last_buy_at = now;
+        // Store the callback; will be triggered in onmessage when proposal comes back
+        entry.pending_buy_callbacks.set(pending_req_id, { req_id: pending_req_id, amount: contract_params.amount, buy_key: cb_key, fired: false });
+        console.log('[Copy Trading] Queued pending buy callback for account', entry.account_id, 'req_id:', pending_req_id);
+        return;
+    }
+
+    // Last resort: send buy:1 with parameters (will get a new entry point but at least it trades)
+    const buy_key = `ct:${contract_params.contract_type}:${contract_params.amount}:${contract_params.underlying_symbol}:${Math.floor(Date.now() / 5000)}`;
     const now = Date.now();
     if (entry.last_buy_key === buy_key && entry.last_buy_at && (now - entry.last_buy_at) < 5000) {
         console.warn('[Copy Trading] Blocked duplicate trade for account', entry.account_id, 'key:', buy_key);
@@ -93,16 +155,10 @@ const sendBuyViaSocket = (entry: TAccountSocket, contract_params: TContractParam
     }
     entry.last_buy_key = buy_key;
     entry.last_buy_at = now;
-
-    let payload;
-    if (copy_proposal_id) {
-        payload = { buy: copy_proposal_id, price: contract_params.amount ?? 0, req_id: Date.now(), passthrough: { _profitdock_copy_trading_skip: true } };
-    } else {
-        const symbolKey = String((contract_params as any).underlying_symbol || (contract_params as any).symbol || '');
-        const params: Record<string, unknown> = { ...contract_params, symbol: symbolKey || undefined };
-        delete (params as any).underlying_symbol;
-        payload = { buy: 1, price: params.amount ?? 0, parameters: params, req_id: Date.now(), passthrough: { _profitdock_copy_trading_skip: true } };
-    }
+    const symbolKey = String((contract_params as any).underlying_symbol || (contract_params as any).symbol || '');
+    const params: Record<string, unknown> = { ...contract_params, symbol: symbolKey || undefined };
+    delete (params as any).underlying_symbol;
+    const payload = { buy: 1, price: params.amount ?? 0, parameters: params, req_id: Date.now(), passthrough: { _profitdock_copy_trading_skip: true } };
     const msg = JSON.stringify(payload);
     if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) { entry.ws.send(msg); }
     else { entry.pending_buys.push(msg); }
@@ -231,13 +287,18 @@ export const mirrorCopyTradingContractParameters = async (contract_parameters: u
     if (buy_key && !rememberMirroredBuyKey(buy_key)) return { skipped: true, reason: 'duplicate_buy' };
 
     // FASTEST: pre-authorized persistent WebSocket (zero HTTP overhead)
+    // Pass req_id as pending_req_id so sockets can fire the buy the moment
+    // they get their own proposal response back — guaranteeing the same entry tick.
     if (account_sockets.size > 0) {
         account_sockets.forEach(entry => {
-            let copy_proposal_id;
+            let copy_proposal_id: string | undefined;
             if (req_id && copy_proposal_cache.has(req_id)) {
                 copy_proposal_id = copy_proposal_cache.get(req_id)![entry.account_id];
             }
-            sendBuyViaSocket(entry, normalized_parameters, copy_proposal_id);
+            // If we already have the copy proposal id, fire immediately.
+            // Otherwise queue a pending callback — the socket will fire the buy
+            // the moment it receives the proposal response.
+            sendBuyViaSocket(entry, normalized_parameters, copy_proposal_id, copy_proposal_id ? undefined : req_id);
         });
         dispatchCopyTradingResult({ contract_parameters: normalized_parameters, ok: true, source_account_type: source_type, status: 200, via: 'websocket' });
         return { ok: true, via: 'websocket' };
