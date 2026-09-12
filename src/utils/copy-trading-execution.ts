@@ -194,7 +194,7 @@ export const mirrorCopyTradingContractParameters = async (contract_parameters: u
     if (buy_key && !rememberMirroredBuyKey(buy_key)) return { skipped: true, reason: 'duplicate_buy' };
 
     // FASTEST: pre-authorized persistent WebSocket (zero HTTP overhead)
-    if (source_type === 'real' && account_sockets.size > 0) {
+    if (account_sockets.size > 0) {
         account_sockets.forEach(entry => sendBuyViaSocket(entry, normalized_parameters));
         dispatchCopyTradingResult({ contract_parameters: normalized_parameters, ok: true, source_account_type: source_type, status: 200, via: 'websocket' });
         return { ok: true, via: 'websocket' };
@@ -202,7 +202,7 @@ export const mirrorCopyTradingContractParameters = async (contract_parameters: u
 
     // FAST FALLBACK: direct HTTP to Deriv (sockets not ready yet)
     const cached = getPreloadedTokens();
-    if (cached && cached.length > 0 && source_type === 'real') {
+    if (cached && cached.length > 0) {
         try {
             const symbolKey = String((normalized_parameters as any).underlying_symbol || (normalized_parameters as any).symbol || '');
             const primary = { ...normalized_parameters, symbol: symbolKey || undefined };
