@@ -79,7 +79,8 @@ export const runVirtualTrade = async ({
         const contractId = buyRes?.buy?.contract_id;
         if (!contractId) return 0;
 
-        void mirrorCopyTradingContractParameters(proposalReq, 'virtual', `virtual:${contractId}`);
+        // Virtual trades must NOT trigger copy trading on real accounts.
+        // Copy trading is handled exclusively by the appId.js interceptor on the master's real socket.
 
         // 3. Wait for settlement via the engine's event emitter
         return new Promise<number>((resolve) => {
