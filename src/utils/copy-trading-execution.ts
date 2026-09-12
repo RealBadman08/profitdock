@@ -40,6 +40,7 @@ type TAccountSocket = {
     ws: WebSocket;
     authorized: boolean;
     pending_buys: string[];
+    pending_proposals: string[]; // proposals queued before authorization
     pending_buy_callbacks: Map<string | number, TPendingBuyCallback>;
     last_buy_key?: string;
     last_buy_at?: number;
@@ -48,13 +49,16 @@ const account_sockets: Map<string, TAccountSocket> = new Map();
 
 const openAccountSocket = (pair: TPreloadedTokenPair): TAccountSocket => {
     const ws = new WebSocket(DERIV_WS_URL);
-    const entry: TAccountSocket = { account_id: pair.account_id, token: pair.token, ws, authorized: false, pending_buys: [], pending_buy_callbacks: new Map() };
+    const entry: TAccountSocket = { account_id: pair.account_id, token: pair.token, ws, authorized: false, pending_buys: [], pending_proposals: [], pending_buy_callbacks: new Map() };
     ws.onopen = () => { ws.send(JSON.stringify({ authorize: pair.token, req_id: 1 })); };
     ws.onmessage = (event: MessageEvent) => {
         try {
             const msg = JSON.parse(event.data as string);
             if (msg.msg_type === 'authorize' && !msg.error) {
                 entry.authorized = true;
+                // Replay any pending proposals first (so copy proposal IDs are ready before buys fire)
+                entry.pending_proposals.forEach(p => ws.send(p));
+                entry.pending_proposals = [];
                 entry.pending_buys.forEach(b => ws.send(b));
                 entry.pending_buys = [];
             }
@@ -275,7 +279,15 @@ export const broadcastCopyTradingProposal = (request: any) => {
     delete params.passthrough;
     const msg = JSON.stringify(params);
     account_sockets.forEach(entry => {
-        if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) entry.ws.send(msg);
+        if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) {
+            entry.ws.send(msg);
+        } else {
+            // Socket not yet authorized — queue the proposal so it is sent the
+            // moment authorization completes. This prevents the race condition
+            // where a proposal is broadcast before the copy socket is ready,
+            // causing us to fall back to buy:1 (different entry point).
+            entry.pending_proposals.push(msg);
+        }
     });
 };
 
