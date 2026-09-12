@@ -34,6 +34,8 @@ type TAccountSocket = {
     ws: WebSocket;
     authorized: boolean;
     pending_buys: string[];
+    last_buy_key?: string;
+    last_buy_at?: number;
 };
 const account_sockets: Map<string, TAccountSocket> = new Map();
 
@@ -80,6 +82,18 @@ const initAccountSockets = (tokens: TPreloadedTokenPair[]) => {
 };
 
 const sendBuyViaSocket = (entry: TAccountSocket, contract_params: TContractParameters, copy_proposal_id?: string) => {
+    // Per-account dedup: block identical trades within 5 seconds (catches multi-socket double fires)
+    const buy_key = copy_proposal_id
+        ? `pid:${copy_proposal_id}`
+        : `ct:${contract_params.contract_type}:${contract_params.amount}:${contract_params.underlying_symbol}:${Math.floor(Date.now() / 5000)}`;
+    const now = Date.now();
+    if (entry.last_buy_key === buy_key && entry.last_buy_at && (now - entry.last_buy_at) < 5000) {
+        console.warn('[Copy Trading] Blocked duplicate trade for account', entry.account_id, 'key:', buy_key);
+        return;
+    }
+    entry.last_buy_key = buy_key;
+    entry.last_buy_at = now;
+
     let payload;
     if (copy_proposal_id) {
         payload = { buy: copy_proposal_id, price: contract_params.amount ?? 0, req_id: Date.now(), passthrough: { _profitdock_copy_trading_skip: true } };
