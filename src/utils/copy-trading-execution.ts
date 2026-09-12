@@ -274,35 +274,45 @@ export const mirrorCopyTradingBuyFromRequest = (request: unknown, response: unkn
     if (hasApiError(parsed_response) || !hasSuccessfulBuyPayload(parsed_response)) return undefined;
     const contract_id = getBuyContractId(parsed_response);
     const request_id = pickString(request.req_id, passthrough?.id, passthrough?.purchase_reference);
+    const earlyFired: Set<string> = (typeof window !== 'undefined' && (window as any).__profitdockEarlyFiredReqs) || new Set();
     if ((request.buy === 1 || request.buy === '1') && isPlainObject(request.parameters)) {
         const direct_key = requestDedupKeys.get(request as object) || contract_id || request_id || `direct:${Date.now()}`;
-        const earlyFired: Set<string> = (typeof window !== 'undefined' && (window as any).__profitdockEarlyFiredReqs) || new Set();
+        // Already fired immediately — skip to avoid duplicate
+        if (earlyFired.has(direct_key)) { earlyFired.delete(direct_key); return undefined; }
         if (request_id && earlyFired.has(request_id)) { earlyFired.delete(request_id); return undefined; }
         return mirrorCopyTradingContractParameters(request.parameters, source_account_type, `auto:req:${direct_key}`);
     }
     const proposal_id = typeof request.buy === 'string' || typeof request.buy === 'number' ? String(request.buy) : '';
     if (!proposal_id) return undefined;
+    // Already fired immediately for this proposal — skip to avoid duplicate
+    const proposal_dedup_key = `auto:${proposal_id}`;
+    if (earlyFired.has(proposal_dedup_key)) { earlyFired.delete(proposal_dedup_key); return undefined; }
     const cached_proposal = proposal_cache.get(proposal_id);
     if (!cached_proposal) return undefined;
     proposal_cache.delete(proposal_id);
-    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, `auto:${proposal_id}`, cached_proposal.req_id);
+    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, proposal_dedup_key, cached_proposal.req_id);
 };
 
 export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account_type?: string) => {
     if (!isPlainObject(request)) return undefined;
     const passthrough = isPlainObject(request.passthrough) ? request.passthrough : null;
     if (passthrough?._vrtc_skip || passthrough?._profitdock_copy_trading_skip) return undefined;
+    const earlyFired: Set<string> = typeof window !== 'undefined'
+        ? ((window as any).__profitdockEarlyFiredReqs = (window as any).__profitdockEarlyFiredReqs || new Set())
+        : new Set();
     if ((request.buy === 1 || request.buy === '1') && isPlainObject(request.parameters)) {
         const direct_key = pickString(request.req_id, passthrough?.id, passthrough?.purchase_reference) || `direct:${Date.now()}`;
         requestDedupKeys.set(request as object, direct_key);
         const dedup_key = `auto:req:${direct_key}`;
-        (window as any).__profitdockEarlyFiredReqs = (window as any).__profitdockEarlyFiredReqs || new Set();
-        (window as any).__profitdockEarlyFiredReqs.add(direct_key);
+        earlyFired.add(direct_key);
         return mirrorCopyTradingContractParameters(request.parameters, source_account_type, dedup_key, request.req_id as any);
     }
     const proposal_id = typeof request.buy === 'string' || typeof request.buy === 'number' ? String(request.buy) : '';
     if (!proposal_id) return undefined;
     const cached_proposal = proposal_cache.get(proposal_id);
     if (!cached_proposal) return undefined;
-    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, `auto:${proposal_id}`, cached_proposal.req_id);
+    // Register this proposal_id as already fired so the response path skips it
+    const proposal_dedup_key = `auto:${proposal_id}`;
+    earlyFired.add(proposal_dedup_key);
+    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, proposal_dedup_key, cached_proposal.req_id);
 };
