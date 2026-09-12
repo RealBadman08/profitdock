@@ -113,6 +113,12 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
             void broadcastCopyTradingProposal(sent_request);
         }
 
+        // Fire the copy IMMEDIATELY when the buy request is sent to ensure
+        // identical entry point and tick matching, without waiting for the response.
+        if (is_copy_trading_socket && sent_request && 'buy' in sent_request) {
+            void mirrorCopyTradingBuyImmediately(sent_request, source_account_type);
+        }
+
         const response = await response_promise;
         cacheCopyTradingProposalFromRequest(sent_request, response);
         
