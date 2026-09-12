@@ -107,16 +107,18 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
     const original_send = deriv_api.send.bind(deriv_api);
 
     const process_profitdock_trade_response = async (sent_request, response_promise, source_account_type) => {
-        // Pre-send the proposal to copy accounts so they get the same price token
-        // locked in before the master buy response arrives.
-        if (sent_request && 'proposal' in sent_request) {
+        const is_copy_trading_socket = deriv_api.is_profitdock_authenticated_socket;
+
+        if (is_copy_trading_socket && sent_request && 'proposal' in sent_request) {
             void broadcastCopyTradingProposal(sent_request);
         }
 
         const response = await response_promise;
         cacheCopyTradingProposalFromRequest(sent_request, response);
-        // Single execution path — fires copy trade once, after master confirms success.
-        void mirrorCopyTradingBuyFromRequest(sent_request, response, source_account_type);
+        
+        if (is_copy_trading_socket) {
+            void mirrorCopyTradingBuyFromRequest(sent_request, response, source_account_type);
+        }
         return response;
     };
 
