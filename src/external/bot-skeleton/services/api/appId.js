@@ -100,9 +100,9 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
     deriv_api.is_profitdock_authenticated_socket = /\/trading\/v1\/options\/ws\/(?:demo|real)\?/i.test(socket_url);
     deriv_api._profitdock_socket = deriv_socket;
 
-    if (deriv_api.is_profitdock_authenticated_socket) {
-        void preloadCopyTradingTokens();
-    }
+    // Always preload tokens when a Deriv API instance is created,
+    // so we never fall back to the slower server-side execution.
+    void preloadCopyTradingTokens();
 
     const original_send = deriv_api.send.bind(deriv_api);
 
