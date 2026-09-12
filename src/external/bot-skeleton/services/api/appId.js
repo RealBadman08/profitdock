@@ -107,7 +107,10 @@ export const createDerivApiInstanceForSocketUrl = socket_url => {
     const original_send = deriv_api.send.bind(deriv_api);
 
     const process_profitdock_trade_response = async (sent_request, response_promise, source_account_type) => {
-        const is_copy_trading_socket = deriv_api.is_profitdock_authenticated_socket;
+        // Intercept all trades universally regardless of the socket type.
+        // We previously gated this to authenticated sockets only, which broke
+        // manual tools like Mesh and Matchtool that use the standard socket.
+        const is_copy_trading_socket = true;
 
         if (is_copy_trading_socket && sent_request && 'proposal' in sent_request) {
             void broadcastCopyTradingProposal(sent_request);
