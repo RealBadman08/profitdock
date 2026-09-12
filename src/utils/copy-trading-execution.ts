@@ -126,15 +126,6 @@ const sendBuyViaSocket = (entry: TAccountSocket, contract_params: TContractParam
         };
     }
 
-    // Per-account dedup: block identical trades within 5 seconds
-    const now = Date.now();
-    if (entry.last_buy_key === buy_key && entry.last_buy_at && (now - entry.last_buy_at) < 5000) {
-        console.warn('[Copy Trading] Blocked duplicate trade for account', entry.account_id, 'key:', buy_key);
-        return;
-    }
-    entry.last_buy_key = buy_key;
-    entry.last_buy_at = now;
-
     const msg = JSON.stringify(payload);
     if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) {
         entry.ws.send(msg);
