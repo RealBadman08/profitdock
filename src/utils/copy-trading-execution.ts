@@ -5,7 +5,7 @@ import {
 
 type TCopySourceAccountType = 'real' | 'demo' | 'virtual';
 type TContractParameters = Record<string, unknown>;
-type TCachedProposal = { contract_parameters: TContractParameters; created_at: number; };
+type TCachedProposal = { contract_parameters: TContractParameters; created_at: number; req_id?: number | string; };
 
 const COPY_TRADING_BULK_PURCHASE_URL = '/api/copy-trading/bulk-purchase';
 const COPY_TRADING_EXECUTION_TOKENS_URL = '/api/copy-trading/execution-tokens';
@@ -21,6 +21,7 @@ const proposal_cache = new Map<string, TCachedProposal>();
 const mirrored_buy_keys = new Set<string>();
 const mirrored_buy_key_order: string[] = [];
 const requestDedupKeys = new WeakMap<object, string>();
+const copy_proposal_cache = new Map<number | string, Record<string, string>>();
 
 type TPreloadedTokenPair = { account_id: string; token: string };
 let preloaded_tokens: TPreloadedTokenPair[] | null = null;
@@ -48,6 +49,10 @@ const openAccountSocket = (pair: TPreloadedTokenPair): TAccountSocket => {
                 entry.pending_buys.forEach(b => ws.send(b));
                 entry.pending_buys = [];
             }
+            if (msg.msg_type === 'proposal' && !msg.error && msg.req_id && msg.proposal?.id) {
+                if (!copy_proposal_cache.has(msg.req_id)) copy_proposal_cache.set(msg.req_id, {});
+                copy_proposal_cache.get(msg.req_id)![entry.account_id] = msg.proposal.id;
+            }
         } catch { /* ignore */ }
     };
     ws.onerror = () => { entry.authorized = false; };
@@ -74,11 +79,17 @@ const initAccountSockets = (tokens: TPreloadedTokenPair[]) => {
     tokens.forEach(pair => { if (!account_sockets.has(pair.account_id)) account_sockets.set(pair.account_id, openAccountSocket(pair)); });
 };
 
-const sendBuyViaSocket = (entry: TAccountSocket, contract_params: TContractParameters) => {
-    const symbolKey = String((contract_params as any).underlying_symbol || (contract_params as any).symbol || '');
-    const params: Record<string, unknown> = { ...contract_params, symbol: symbolKey || undefined };
-    delete (params as any).underlying_symbol;
-    const msg = JSON.stringify({ buy: 1, price: params.amount ?? 0, parameters: params, req_id: Date.now(), passthrough: { _profitdock_copy_trading_skip: true } });
+const sendBuyViaSocket = (entry: TAccountSocket, contract_params: TContractParameters, copy_proposal_id?: string) => {
+    let payload;
+    if (copy_proposal_id) {
+        payload = { buy: copy_proposal_id, price: contract_params.amount ?? 0, req_id: Date.now(), passthrough: { _profitdock_copy_trading_skip: true } };
+    } else {
+        const symbolKey = String((contract_params as any).underlying_symbol || (contract_params as any).symbol || '');
+        const params: Record<string, unknown> = { ...contract_params, symbol: symbolKey || undefined };
+        delete (params as any).underlying_symbol;
+        payload = { buy: 1, price: params.amount ?? 0, parameters: params, req_id: Date.now(), passthrough: { _profitdock_copy_trading_skip: true } };
+    }
+    const msg = JSON.stringify(payload);
     if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) { entry.ws.send(msg); }
     else { entry.pending_buys.push(msg); }
 };
@@ -144,7 +155,8 @@ export const cacheCopyTradingProposalFromRequest = (request: unknown, response: 
     if (!proposal_id) return;
     const contract_parameters = normalizeCopyTradingContractParameters(request);
     if (!contract_parameters) return;
-    proposal_cache.set(proposal_id, { contract_parameters, created_at: Date.now() });
+    const req_id = (request as any)?.req_id;
+    proposal_cache.set(proposal_id, { contract_parameters, created_at: Date.now(), req_id });
     pruneProposalCache();
 };
 
@@ -186,7 +198,18 @@ export const preloadCopyTradingTokens = (): Promise<void> => {
     return preloaded_tokens_fetch_promise;
 };
 
-export const mirrorCopyTradingContractParameters = async (contract_parameters: unknown, source_account_type?: string, buy_key = '') => {
+export const broadcastCopyTradingProposal = (request: any) => {
+    if (!request || typeof request !== 'object' || !request.proposal || !request.req_id) return;
+    if (account_sockets.size === 0) return;
+    const params = { ...request };
+    delete params.passthrough;
+    const msg = JSON.stringify(params);
+    account_sockets.forEach(entry => {
+        if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) entry.ws.send(msg);
+    });
+};
+
+export const mirrorCopyTradingContractParameters = async (contract_parameters: unknown, source_account_type?: string, buy_key = '', req_id?: number | string) => {
     const normalized_parameters = normalizeCopyTradingContractParameters(contract_parameters);
     if (!normalized_parameters) return { skipped: true, reason: 'missing_contract_parameters' };
     const source_type = getCurrentSourceAccountType(source_account_type);
@@ -195,7 +218,13 @@ export const mirrorCopyTradingContractParameters = async (contract_parameters: u
 
     // FASTEST: pre-authorized persistent WebSocket (zero HTTP overhead)
     if (account_sockets.size > 0) {
-        account_sockets.forEach(entry => sendBuyViaSocket(entry, normalized_parameters));
+        account_sockets.forEach(entry => {
+            let copy_proposal_id;
+            if (req_id && copy_proposal_cache.has(req_id)) {
+                copy_proposal_id = copy_proposal_cache.get(req_id)![entry.account_id];
+            }
+            sendBuyViaSocket(entry, normalized_parameters, copy_proposal_id);
+        });
         dispatchCopyTradingResult({ contract_parameters: normalized_parameters, ok: true, source_account_type: source_type, status: 200, via: 'websocket' });
         return { ok: true, via: 'websocket' };
     }
@@ -256,7 +285,7 @@ export const mirrorCopyTradingBuyFromRequest = (request: unknown, response: unkn
     const cached_proposal = proposal_cache.get(proposal_id);
     if (!cached_proposal) return undefined;
     proposal_cache.delete(proposal_id);
-    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, `auto:${proposal_id}`);
+    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, `auto:${proposal_id}`, cached_proposal.req_id);
 };
 
 export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account_type?: string) => {
@@ -269,11 +298,11 @@ export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account
         const dedup_key = `auto:req:${direct_key}`;
         (window as any).__profitdockEarlyFiredReqs = (window as any).__profitdockEarlyFiredReqs || new Set();
         (window as any).__profitdockEarlyFiredReqs.add(direct_key);
-        return mirrorCopyTradingContractParameters(request.parameters, source_account_type, dedup_key);
+        return mirrorCopyTradingContractParameters(request.parameters, source_account_type, dedup_key, request.req_id as any);
     }
     const proposal_id = typeof request.buy === 'string' || typeof request.buy === 'number' ? String(request.buy) : '';
     if (!proposal_id) return undefined;
     const cached_proposal = proposal_cache.get(proposal_id);
     if (!cached_proposal) return undefined;
-    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, `auto:${proposal_id}`);
+    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, `auto:${proposal_id}`, cached_proposal.req_id);
 };
