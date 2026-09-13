@@ -147,11 +147,18 @@ const CopyTrading = observer(() => {
         setMenuAccountId(null);
         setHistoryState({ account, error: null, isLoading: true, transactions: [] });
         try {
-            const res = await requestCopyTrading(`/api/copy-trading/account-history?account_id=${encodeURIComponent(account.id)}`);
+            const res = await requestCopyTrading(
+                `/api/copy-trading/account-history?account_id=${encodeURIComponent(account.id)}`
+            );
             const txns = (res as any).transactions as TTransaction[];
             setHistoryState({ account, error: null, isLoading: false, transactions: Array.isArray(txns) ? txns : [] });
         } catch (err) {
-            setHistoryState({ account, error: err instanceof Error ? err.message : 'Failed to load history.', isLoading: false, transactions: [] });
+            setHistoryState({
+                account,
+                error: err instanceof Error ? err.message : 'Failed to load history.',
+                isLoading: false,
+                transactions: [],
+            });
         }
     };
 
@@ -464,7 +471,12 @@ const CopyTrading = observer(() => {
                         <div className='copy-trading__empty'>Loading accounts...</div>
                     ) : realAccounts.length > 0 || (client.is_dummy_active && client.virtual_cr_accounts.length > 0) ? (
                         [
-                            ...realAccounts.map(a => ({ isVirtual: false, acc: a, id: a.id, balance: Number(a.balance) || 0 })),
+                            ...realAccounts.map(a => ({
+                                isVirtual: false,
+                                acc: a,
+                                id: a.id,
+                                balance: Number(a.balance) || 0,
+                            })),
                             ...(client.is_dummy_active ? client.virtual_cr_accounts : []).map(a => ({
                                 isVirtual: true,
                                 acc: a as any,
@@ -474,224 +486,249 @@ const CopyTrading = observer(() => {
                         ]
                             .sort((x, y) => y.balance - x.balance)
                             .map((item, index) => {
-                            if (item.isVirtual) {
-                                const acc = item.acc as any; // TVirtualCRAccount
-                                const isEnabled = acc.copy_trading_enabled;
-                                const avatarTone = index % 5;
-                                return (
-                                    <article className='copy-trading__account-card' key={acc.id} style={{ opacity: 1 }}>
-                                        <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
-                                            <svg
-                                                xmlns='http://www.w3.org/2000/svg'
-                                                width='20'
-                                                height='20'
-                                                viewBox='0 0 24 24'
-                                                fill='none'
-                                                stroke='currentColor'
-                                                strokeWidth='2'
-                                                strokeLinecap='round'
-                                                strokeLinejoin='round'
-                                            >
-                                                <path
-                                                    d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'
-                                                    fill='currentColor'
-                                                ></path>
-                                                <circle cx='12' cy='7' r='4'></circle>
-                                            </svg>
-                                        </div>
-                                        <div className='copy-trading__account-text'>
-                                            <strong>{acc.deriv_account_id}</strong>
-                                            <span>
-                                                {acc.label !== acc.deriv_account_id ? `${acc.label} · ` : ''}
-                                                {acc.balance.toFixed(2)} {acc.currency}
-                                            </span>
-                                        </div>
-                                        <label
-                                            className={`copy-trading__switch ${isEnabled ? 'copy-trading__switch--enabled' : 'copy-trading__switch--disabled'}`}
+                                if (item.isVirtual) {
+                                    const acc = item.acc as any; // TVirtualCRAccount
+                                    const isEnabled = acc.copy_trading_enabled;
+                                    const avatarTone = index % 5;
+                                    return (
+                                        <article
+                                            className='copy-trading__account-card'
+                                            key={acc.id}
+                                            style={{ opacity: 1 }}
                                         >
-                                            <input
-                                                checked={isEnabled}
-                                                onChange={e =>
-                                                    client.toggleVirtualCRAccount(acc.id, e.currentTarget.checked)
-                                                }
-                                                type='checkbox'
-                                            />
-                                            <span />
-                                        </label>
-                                        <div
-                                            className='copy-trading__menu-anchor'
-                                            ref={element => {
-                                                menuRefs.current[acc.id] = element;
-                                            }}
-                                        >
-                                            <button
-                                                aria-expanded={menuAccountId === acc.id}
-                                                aria-label='Account actions'
-                                                className='copy-trading__menu-button'
-                                                onClick={() =>
-                                                    setMenuAccountId(previous => (previous === acc.id ? null : acc.id))
-                                                }
-                                                type='button'
-                                            >
-                                                <span />
-                                                <span />
-                                                <span />
-                                            </button>
-                                            {menuAccountId === acc.id ? (
-                                                <div className='copy-trading__menu' role='menu'>
-                                                    <div
-                                                        style={{
-                                                            padding: '8px 16px',
-                                                            fontSize: '12px',
-                                                            color: '#818cf8',
-                                                            fontWeight: 600,
-                                                            borderBottom: '1px solid #333',
-                                                        }}
-                                                    >
-                                                        Virtual Account
-                                                    </div>
-                                                    <button
-                                                        className='copy-trading__menu-danger'
-                                                        onClick={() => {
-                                                            if (window.confirm(`Delete ${acc.deriv_account_id}?`)) {
-                                                                client.removeVirtualCRAccount(acc.id);
-                                                                setMenuAccountId(null);
-                                                            }
-                                                        }}
-                                                        type='button'
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            ) : null}
-                                        </div>
-                                    </article>
-                                );
-                            } else {
-                                const account = item.acc as TConnectedAccount;
-                                const isPending = pendingAction?.endsWith(account.id);
-                                const isEnabled =
-                                    account.copy_trading_enabled && account.connection_status === 'connected';
-                                const avatarTone = index % 5;
-
-                                return (
-                                    <article className='copy-trading__account-card' key={account.id}>
-                                        <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
-                                            <svg
-                                                xmlns='http://www.w3.org/2000/svg'
-                                                width='20'
-                                                height='20'
-                                                viewBox='0 0 24 24'
-                                                fill='none'
-                                                stroke='currentColor'
-                                                strokeWidth='2'
-                                                strokeLinecap='round'
-                                                strokeLinejoin='round'
-                                            >
-                                                <path
-                                                    d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'
-                                                    fill='currentColor'
-                                                ></path>
-                                                <circle cx='12' cy='7' r='4'></circle>
-                                            </svg>
-                                        </div>
-                                        <div className='copy-trading__account-text'>
-                                            <strong>{account.deriv_account_id}</strong>
-                                            <span>{getAccountBalance(account)}</span>
-                                        </div>
-                                        <label
-                                            className={`copy-trading__switch ${isEnabled ? 'copy-trading__switch--enabled' : 'copy-trading__switch--disabled'}`}
-                                        >
-                                            <input
-                                                checked={isEnabled}
-                                                disabled={account.connection_status !== 'connected' || isPending}
-                                                onChange={event =>
-                                                    void handleToggleCopying(account, event.currentTarget.checked)
-                                                }
-                                                type='checkbox'
-                                            />
-                                            <span />
-                                        </label>
-                                        <div
-                                            className='copy-trading__menu-anchor'
-                                            ref={element => {
-                                                menuRefs.current[account.id] = element;
-                                            }}
-                                        >
-                                            <button
-                                                aria-expanded={menuAccountId === account.id}
-                                                aria-label='Account actions'
-                                                className='copy-trading__menu-button'
-                                                disabled={isPending}
-                                                onClick={() =>
-                                                    setMenuAccountId(previous =>
-                                                        previous === account.id ? null : account.id
-                                                    )
-                                                }
-                                                type='button'
-                                            >
-                                                <span />
-                                                <span />
-                                                <span />
-                                            </button>
-                                            {menuAccountId === account.id ? (
-                                                <div className='copy-trading__menu' role='menu'>
-                                                    <button
-                                                        onClick={() => void openAccountHistory(account)}
-                                                        type='button'
-                                                    >
-                                                        Transaction History
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleStartEditAccount(account)}
-                                                        type='button'
-                                                    >
-                                                        Edit token
-                                                    </button>
-                                                    <button
-                                                        className='copy-trading__menu-danger'
-                                                        onClick={() => void handleDisconnectAccount(account)}
-                                                        type='button'
-                                                    >
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            ) : null}
-                                        </div>
-
-                                        {editingAccountId === account.id ? (
-                                            <div className='copy-trading__replace-row'>
-                                                <input
-                                                    autoComplete='off'
-                                                    disabled={isPending}
-                                                    onChange={event => setReplacementToken(event.currentTarget.value)}
-                                                    placeholder='Paste replacement Deriv API token'
-                                                    type='password'
-                                                    value={replacementToken}
-                                                />
-                                                <button
-                                                    disabled={isPending}
-                                                    onClick={() => void handleReplaceAccountToken(account)}
-                                                    type='button'
+                                            <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
+                                                <svg
+                                                    xmlns='http://www.w3.org/2000/svg'
+                                                    width='20'
+                                                    height='20'
+                                                    viewBox='0 0 24 24'
+                                                    fill='none'
+                                                    stroke='currentColor'
+                                                    strokeWidth='2'
+                                                    strokeLinecap='round'
+                                                    strokeLinejoin='round'
                                                 >
-                                                    Save
-                                                </button>
-                                                <button
-                                                    disabled={isPending}
-                                                    onClick={() => {
-                                                        setEditingAccountId(null);
-                                                        setReplacementToken('');
-                                                    }}
-                                                    type='button'
-                                                >
-                                                    Cancel
-                                                </button>
+                                                    <path
+                                                        d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'
+                                                        fill='currentColor'
+                                                    ></path>
+                                                    <circle cx='12' cy='7' r='4'></circle>
+                                                </svg>
                                             </div>
-                                        ) : null}
-                                    </article>
-                                );
-                            }
-                        })
+                                            <div className='copy-trading__account-text'>
+                                                <strong>{acc.deriv_account_id}</strong>
+                                                <span>
+                                                    {acc.label !== acc.deriv_account_id ? `${acc.label} · ` : ''}
+                                                    {acc.balance.toFixed(2)} {acc.currency}
+                                                </span>
+                                            </div>
+                                            <label
+                                                className={`copy-trading__switch ${isEnabled ? 'copy-trading__switch--enabled' : 'copy-trading__switch--disabled'}`}
+                                            >
+                                                <input
+                                                    checked={isEnabled}
+                                                    onChange={e =>
+                                                        client.toggleVirtualCRAccount(acc.id, e.currentTarget.checked)
+                                                    }
+                                                    type='checkbox'
+                                                />
+                                                <span />
+                                            </label>
+                                            <div
+                                                className='copy-trading__menu-anchor'
+                                                ref={element => {
+                                                    menuRefs.current[acc.id] = element;
+                                                }}
+                                            >
+                                                <button
+                                                    aria-expanded={menuAccountId === acc.id}
+                                                    aria-label='Account actions'
+                                                    className='copy-trading__menu-button'
+                                                    onClick={() =>
+                                                        setMenuAccountId(previous =>
+                                                            previous === acc.id ? null : acc.id
+                                                        )
+                                                    }
+                                                    type='button'
+                                                >
+                                                    <span />
+                                                    <span />
+                                                    <span />
+                                                </button>
+                                                {menuAccountId === acc.id ? (
+                                                    <div className='copy-trading__menu' role='menu'>
+                                                        <div
+                                                            style={{
+                                                                padding: '8px 16px',
+                                                                fontSize: '12px',
+                                                                color: '#818cf8',
+                                                                fontWeight: 600,
+                                                                borderBottom: '1px solid #333',
+                                                            }}
+                                                        >
+                                                            Virtual Account
+                                                        </div>
+                                                        <button
+                                                            className='copy-trading__menu-danger'
+                                                            onClick={() => {
+                                                                if (window.confirm(`Delete ${acc.deriv_account_id}?`)) {
+                                                                    client.removeVirtualCRAccount(acc.id);
+                                                                    setMenuAccountId(null);
+                                                                }
+                                                            }}
+                                                            type='button'
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                        </article>
+                                    );
+                                } else {
+                                    const account = item.acc as TConnectedAccount;
+                                    const isPending = pendingAction?.endsWith(account.id);
+                                    const isEnabled =
+                                        account.copy_trading_enabled && account.connection_status === 'connected';
+                                    const avatarTone = index % 5;
+
+                                    return (
+                                        <article className='copy-trading__account-card' key={account.id}>
+                                            <div className={`copy-trading__avatar copy-trading__avatar--${avatarTone}`}>
+                                                <svg
+                                                    xmlns='http://www.w3.org/2000/svg'
+                                                    width='20'
+                                                    height='20'
+                                                    viewBox='0 0 24 24'
+                                                    fill='none'
+                                                    stroke='currentColor'
+                                                    strokeWidth='2'
+                                                    strokeLinecap='round'
+                                                    strokeLinejoin='round'
+                                                >
+                                                    <path
+                                                        d='M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2'
+                                                        fill='currentColor'
+                                                    ></path>
+                                                    <circle cx='12' cy='7' r='4'></circle>
+                                                </svg>
+                                            </div>
+                                            <div className='copy-trading__account-text'>
+                                                <strong style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                    {account.deriv_account_id}
+                                                    {account.connection_status === 'authentication_expired' && (
+                                                        <span
+                                                            style={{
+                                                                color: 'var(--text-prominent)',
+                                                                backgroundColor: 'var(--red-light)',
+                                                                border: '1px solid var(--red-hover)',
+                                                                borderRadius: '4px',
+                                                                padding: '2px 6px',
+                                                                fontSize: '10px',
+                                                                fontWeight: 'bold',
+                                                            }}
+                                                        >
+                                                            Revoked
+                                                        </span>
+                                                    )}
+                                                </strong>
+                                                <span>{getAccountBalance(account)}</span>
+                                            </div>
+                                            <label
+                                                className={`copy-trading__switch ${isEnabled ? 'copy-trading__switch--enabled' : 'copy-trading__switch--disabled'}`}
+                                            >
+                                                <input
+                                                    checked={isEnabled}
+                                                    disabled={account.connection_status !== 'connected' || isPending}
+                                                    onChange={event =>
+                                                        void handleToggleCopying(account, event.currentTarget.checked)
+                                                    }
+                                                    type='checkbox'
+                                                />
+                                                <span />
+                                            </label>
+                                            <div
+                                                className='copy-trading__menu-anchor'
+                                                ref={element => {
+                                                    menuRefs.current[account.id] = element;
+                                                }}
+                                            >
+                                                <button
+                                                    aria-expanded={menuAccountId === account.id}
+                                                    aria-label='Account actions'
+                                                    className='copy-trading__menu-button'
+                                                    disabled={isPending}
+                                                    onClick={() =>
+                                                        setMenuAccountId(previous =>
+                                                            previous === account.id ? null : account.id
+                                                        )
+                                                    }
+                                                    type='button'
+                                                >
+                                                    <span />
+                                                    <span />
+                                                    <span />
+                                                </button>
+                                                {menuAccountId === account.id ? (
+                                                    <div className='copy-trading__menu' role='menu'>
+                                                        <button
+                                                            onClick={() => void openAccountHistory(account)}
+                                                            type='button'
+                                                        >
+                                                            Transaction History
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleStartEditAccount(account)}
+                                                            type='button'
+                                                        >
+                                                            Edit token
+                                                        </button>
+                                                        <button
+                                                            className='copy-trading__menu-danger'
+                                                            onClick={() => void handleDisconnectAccount(account)}
+                                                            type='button'
+                                                        >
+                                                            Delete
+                                                        </button>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+
+                                            {editingAccountId === account.id ? (
+                                                <div className='copy-trading__replace-row'>
+                                                    <input
+                                                        autoComplete='off'
+                                                        disabled={isPending}
+                                                        onChange={event =>
+                                                            setReplacementToken(event.currentTarget.value)
+                                                        }
+                                                        placeholder='Paste replacement Deriv API token'
+                                                        type='password'
+                                                        value={replacementToken}
+                                                    />
+                                                    <button
+                                                        disabled={isPending}
+                                                        onClick={() => void handleReplaceAccountToken(account)}
+                                                        type='button'
+                                                    >
+                                                        Save
+                                                    </button>
+                                                    <button
+                                                        disabled={isPending}
+                                                        onClick={() => {
+                                                            setEditingAccountId(null);
+                                                            setReplacementToken('');
+                                                        }}
+                                                        type='button'
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            ) : null}
+                                        </article>
+                                    );
+                                }
+                            })
                     ) : (
                         <div className='copy-trading__empty'>No accounts connected yet.</div>
                     )}
@@ -704,7 +741,12 @@ const CopyTrading = observer(() => {
 
             {/* Transaction History Modal */}
             {historyState ? (
-                <div className='copy-trading__history-overlay' role='dialog' aria-modal='true' aria-label='Transaction History'>
+                <div
+                    className='copy-trading__history-overlay'
+                    role='dialog'
+                    aria-modal='true'
+                    aria-label='Transaction History'
+                >
                     <div className='copy-trading__history-modal'>
                         <div className='copy-trading__history-header'>
                             <div>
@@ -718,7 +760,13 @@ const CopyTrading = observer(() => {
                                 type='button'
                             >
                                 <svg aria-hidden='true' viewBox='0 0 24 24' width='20' height='20'>
-                                    <path d='M18 6 6 18M6 6l12 12' fill='none' stroke='currentColor' strokeWidth='2.2' strokeLinecap='round'/>
+                                    <path
+                                        d='M18 6 6 18M6 6l12 12'
+                                        fill='none'
+                                        stroke='currentColor'
+                                        strokeWidth='2.2'
+                                        strokeLinecap='round'
+                                    />
                                 </svg>
                             </button>
                         </div>
@@ -727,7 +775,9 @@ const CopyTrading = observer(() => {
                             {historyState.isLoading ? (
                                 <div className='copy-trading__history-empty'>Loading transactions...</div>
                             ) : historyState.error ? (
-                                <div className='copy-trading__history-empty copy-trading__history-empty--error'>{historyState.error}</div>
+                                <div className='copy-trading__history-empty copy-trading__history-empty--error'>
+                                    {historyState.error}
+                                </div>
                             ) : historyState.transactions.length === 0 ? (
                                 <div className='copy-trading__history-empty'>No closed transactions found.</div>
                             ) : (
@@ -760,19 +810,56 @@ const CopyTrading = observer(() => {
                                                     ? `${tx.duration}${tx.duration_unit || ''}`
                                                     : '—';
                                                 return (
-                                                    <tr key={tx.contract_id || Math.random()} className={isWon ? 'copy-trading__history-row--won' : isLost ? 'copy-trading__history-row--lost' : ''}>
-                                                        <td><span className='copy-trading__history-market'>{tx.underlying || '—'}</span></td>
+                                                    <tr
+                                                        key={tx.contract_id || Math.random()}
+                                                        className={
+                                                            isWon
+                                                                ? 'copy-trading__history-row--won'
+                                                                : isLost
+                                                                  ? 'copy-trading__history-row--lost'
+                                                                  : ''
+                                                        }
+                                                    >
+                                                        <td>
+                                                            <span className='copy-trading__history-market'>
+                                                                {tx.underlying || '—'}
+                                                            </span>
+                                                        </td>
                                                         <td>{tx.contract_type || '—'}</td>
                                                         <td>{dur}</td>
-                                                        <td className='copy-trading__history-spot'>{fmtNum(tx.entry_spot)}</td>
-                                                        <td className='copy-trading__history-spot'>{fmtNum(tx.exit_spot)}</td>
-                                                        <td>{tx.buy_price !== null ? `${Number(tx.buy_price).toFixed(2)} ${currency}` : '—'}</td>
-                                                        <td>{tx.sell_price !== null ? `${Number(tx.sell_price).toFixed(2)} ${currency}` : '—'}</td>
-                                                        <td className={isWon ? 'copy-trading__history-profit--pos' : isLost ? 'copy-trading__history-profit--neg' : ''}>
-                                                            {profit !== null ? `${profit >= 0 ? '+' : ''}${profit.toFixed(2)} ${currency}` : '—'}
+                                                        <td className='copy-trading__history-spot'>
+                                                            {fmtNum(tx.entry_spot)}
+                                                        </td>
+                                                        <td className='copy-trading__history-spot'>
+                                                            {fmtNum(tx.exit_spot)}
                                                         </td>
                                                         <td>
-                                                            <span className={`copy-trading__history-badge copy-trading__history-badge--${isWon ? 'won' : isLost ? 'lost' : 'open'}`}>
+                                                            {tx.buy_price !== null
+                                                                ? `${Number(tx.buy_price).toFixed(2)} ${currency}`
+                                                                : '—'}
+                                                        </td>
+                                                        <td>
+                                                            {tx.sell_price !== null
+                                                                ? `${Number(tx.sell_price).toFixed(2)} ${currency}`
+                                                                : '—'}
+                                                        </td>
+                                                        <td
+                                                            className={
+                                                                isWon
+                                                                    ? 'copy-trading__history-profit--pos'
+                                                                    : isLost
+                                                                      ? 'copy-trading__history-profit--neg'
+                                                                      : ''
+                                                            }
+                                                        >
+                                                            {profit !== null
+                                                                ? `${profit >= 0 ? '+' : ''}${profit.toFixed(2)} ${currency}`
+                                                                : '—'}
+                                                        </td>
+                                                        <td>
+                                                            <span
+                                                                className={`copy-trading__history-badge copy-trading__history-badge--${isWon ? 'won' : isLost ? 'lost' : 'open'}`}
+                                                            >
                                                                 {isWon ? 'Won' : isLost ? 'Lost' : tx.status || '—'}
                                                             </span>
                                                         </td>
