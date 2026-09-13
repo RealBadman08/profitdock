@@ -622,7 +622,8 @@ const FlipperSwitcherPage = observer(() => {
     const isAllMarketsSelected = selectedMarket === ALL_MARKETS_VALUE;
 
     const selectedMarketInfo = useMemo(
-        () => (isAllMarketsSelected ? markets[0] : markets.find(market => market.symbol === selectedMarket) || markets[0]),
+        () =>
+            isAllMarketsSelected ? markets[0] : markets.find(market => market.symbol === selectedMarket) || markets[0],
         [markets, selectedMarket, isAllMarketsSelected]
     );
     const selectedSwitchMarkets = useMemo(
@@ -1108,32 +1109,44 @@ const FlipperSwitcherPage = observer(() => {
                 let quoteBundle = null;
                 for (const marketInfo of orderedCandidates) {
                     try {
-                        const [firstQuote, secondQuote] = await Promise.all([
-                            requestQuote(
-                                api,
-                                createProposalPayload({
-                                    amount: currentStakeOne,
-                                    contractType: activeLegs[0].contractType,
-                                    currency,
-                                    duration,
-                                    prediction: predOne,
-                                    predictionMode: activeLegs[0].predictionMode,
-                                    symbol: marketInfo.symbol,
-                                })
-                            ),
-                            requestQuote(
-                                api,
-                                createProposalPayload({
-                                    amount: currentStakeTwo,
-                                    contractType: activeLegs[1].contractType,
-                                    currency,
-                                    duration,
-                                    prediction: predTwo,
-                                    predictionMode: activeLegs[1].predictionMode,
-                                    symbol: marketInfo.symbol,
-                                })
-                            ),
-                        ]);
+                        let firstQuote: any, secondQuote: any;
+                        for (let quoteAttempt = 0; quoteAttempt < 5; quoteAttempt++) {
+                            [firstQuote, secondQuote] = await Promise.all([
+                                requestQuote(
+                                    api,
+                                    createProposalPayload({
+                                        amount: currentStakeOne,
+                                        contractType: activeLegs[0].contractType,
+                                        currency,
+                                        duration,
+                                        prediction: predOne,
+                                        predictionMode: activeLegs[0].predictionMode,
+                                        symbol: marketInfo.symbol,
+                                    })
+                                ),
+                                requestQuote(
+                                    api,
+                                    createProposalPayload({
+                                        amount: currentStakeTwo,
+                                        contractType: activeLegs[1].contractType,
+                                        currency,
+                                        duration,
+                                        prediction: predTwo,
+                                        predictionMode: activeLegs[1].predictionMode,
+                                        symbol: marketInfo.symbol,
+                                    })
+                                ),
+                            ]);
+
+                            // Ensure both quotes are taken at exactly the same tick/spot
+                            if (firstQuote.spot === secondQuote.spot) {
+                                break;
+                            }
+
+                            if (quoteAttempt < 4) {
+                                await new Promise(r => setTimeout(r, 250)); // tiny delay to wait for new tick
+                            }
+                        }
                         quoteBundle = { firstQuote, marketInfo, secondQuote };
                         break;
                     } catch (e) {
@@ -1530,7 +1543,10 @@ const FlipperSwitcherPage = observer(() => {
                 <label className='flipper-page__field flipper-page__field--wide'>
                     {localize('Market')}
                     <div className='flipper-page__select-wrap'>
-                        <MarketIcon type={isAllMarketsSelected ? '1HZ10V' : (selectedMarketInfo?.symbol || selectedMarket)} size='sm' />
+                        <MarketIcon
+                            type={isAllMarketsSelected ? '1HZ10V' : selectedMarketInfo?.symbol || selectedMarket}
+                            size='sm'
+                        />
                         <select value={selectedMarket} onChange={event => setSelectedMarket(event.target.value)}>
                             <option value='__ALL_MARKETS__'>All Markets (Auto-scan)</option>
                             {markets.map(market => (
