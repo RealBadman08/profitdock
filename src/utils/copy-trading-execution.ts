@@ -17,16 +17,19 @@ const MAX_MIRRORED_BUY_KEYS = 160;
 const PROPOSAL_CACHE_TTL_MS = 5 * 60 * 1000;
 const PRELOADED_TOKENS_TTL_MS = 4 * 60 * 1000;
 
-// master proposal_id → { contract_parameters, req_id }
+// master proposal_id → { contract_parameters, req_id (our correlation id) }
 const proposal_cache = new Map<string, TCachedProposal>();
 const mirrored_buy_keys = new Set<string>();
 const mirrored_buy_key_order: string[] = [];
 const requestDedupKeys = new WeakMap<object, string>();
 
-// req_id (from master proposal broadcast) → { account_id → copy_proposal_id }
-// Updated every time a copy socket receives a proposal response for that req_id.
-// Subscribe proposals update this map on every tick, so it's always fresh.
+// correlation_req_id → { account_id → copy_proposal_id }
+// Populated whenever a copy socket receives a proposal response.
+// The correlation_req_id is what WE sent to copy sockets (same as or derived from master req_id).
 const copy_proposal_ids = new Map<number | string, Record<string, string>>();
+
+let _next_req_id = Date.now();
+const genReqId = () => ++_next_req_id;
 
 type TPreloadedTokenPair = { account_id: string; token: string };
 let preloaded_tokens: TPreloadedTokenPair[] | null = null;
@@ -64,8 +67,8 @@ const openAccountSocket = (pair: TPreloadedTokenPair): TAccountSocket => {
                 entry.pending_buys.forEach(b => ws.send(b));
                 entry.pending_buys = [];
             }
-            // Cache the latest proposal ID for each req_id.
-            // This works for both one-shot and subscribe proposals — subscribe keeps it fresh every tick.
+            // Cache copy proposal IDs keyed by req_id (the one WE sent).
+            // Works for both subscribe (updates every tick) and one-shot proposals.
             if (msg.msg_type === 'proposal' && !msg.error && msg.req_id && msg.proposal?.id) {
                 const req_id = msg.req_id;
                 if (!copy_proposal_ids.has(req_id)) copy_proposal_ids.set(req_id, {});
@@ -98,14 +101,13 @@ const initAccountSockets = (tokens: TPreloadedTokenPair[]) => {
 };
 
 /**
- * Fire buy:<copy_proposal_id> on a copy socket.
- * Uses the copy's own proposal ID (same tick as master proposal) — tick-perfect.
+ * Fire buy:<copy_proposal_id> — tick-perfect when a cached copy proposal is available.
  */
 const sendBuyWithProposalId = (entry: TAccountSocket, copy_proposal_id: string, amount: unknown) => {
     const payload = JSON.stringify({
         buy: copy_proposal_id,
         price: amount ?? 0,
-        req_id: Date.now(),
+        req_id: genReqId(),
         passthrough: { _profitdock_copy_trading_skip: true },
     });
     if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) {
@@ -116,8 +118,7 @@ const sendBuyWithProposalId = (entry: TAccountSocket, copy_proposal_id: string, 
 };
 
 /**
- * Fire buy:1 with inline params on a copy socket.
- * Last resort only — no proposal so entry tick is not guaranteed to match.
+ * Fire buy:1 with inline params — used as a fallback when no copy proposal is cached.
  */
 const sendDirectBuy = (entry: TAccountSocket, contract_params: TContractParameters) => {
     const symbolKey = String((contract_params as any).underlying_symbol || (contract_params as any).symbol || '');
@@ -127,7 +128,7 @@ const sendDirectBuy = (entry: TAccountSocket, contract_params: TContractParamete
         buy: 1,
         price: params.amount ?? 0,
         parameters: params,
-        req_id: Date.now(),
+        req_id: genReqId(),
         passthrough: { _profitdock_copy_trading_skip: true },
     });
     if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) {
@@ -198,7 +199,8 @@ export const cacheCopyTradingProposalFromRequest = (request: unknown, response: 
     if (!proposal_id) return;
     const contract_parameters = normalizeCopyTradingContractParameters(request);
     if (!contract_parameters) return;
-    const req_id = (request as any)?.req_id;
+    // req_id here is OUR correlation id (assigned in broadcastCopyTradingProposal if missing originally)
+    const req_id = (request as any)?._pd_req_id ?? (request as any)?.req_id;
     proposal_cache.set(proposal_id, { contract_parameters, created_at: Date.now(), req_id });
     pruneProposalCache();
 };
@@ -242,16 +244,32 @@ export const preloadCopyTradingTokens = (): Promise<void> => {
 };
 
 /**
- * Broadcast the master's proposal request to all copy sockets.
- * Copy sockets will receive their own proposal IDs and cache them in copy_proposal_ids[req_id].
- * When the master fires a buy, we use those cached IDs immediately — no extra roundtrip.
+ * Broadcast the master's proposal to all copy sockets.
+ *
+ * CRITICAL: We always assign a stable correlation req_id (ours or the existing one)
+ * and write it back to `request._pd_req_id` so `cacheCopyTradingProposalFromRequest`
+ * can pick up the SAME correlation id when the master's proposal response arrives.
+ *
+ * This means copy sockets receive proposals keyed by OUR req_id, which matches
+ * what we store in `proposal_cache` → so at buy time we can look up copy proposal IDs instantly.
  */
 export const broadcastCopyTradingProposal = (request: any) => {
-    if (!request || typeof request !== 'object' || !request.proposal || !request.req_id) return;
+    if (!request || typeof request !== 'object' || !request.proposal) return;
     if (account_sockets.size === 0) return;
-    const params = { ...request };
+
+    // Assign a correlation id if the request doesn't have one yet.
+    // We write it to _pd_req_id (a private field) so we don't conflict with DerivAPIBasic's own req_id.
+    if (!request._pd_req_id) {
+        request._pd_req_id = request.req_id || genReqId();
+    }
+    const correlation_id = request._pd_req_id;
+
+    // Build the message to send to copy sockets, using OUR correlation_id as req_id
+    const params: Record<string, any> = { ...request, req_id: correlation_id };
     delete params.passthrough;
+    delete params._pd_req_id;
     const msg = JSON.stringify(params);
+
     account_sockets.forEach(entry => {
         if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) {
             entry.ws.send(msg);
@@ -262,11 +280,12 @@ export const broadcastCopyTradingProposal = (request: any) => {
 };
 
 /**
- * Fire copy trades for a given set of contract parameters.
- * 
- * If req_id is provided: look for pre-fetched copy proposal IDs (from broadcastCopyTradingProposal).
- * If found: fire buy:<copy_proposal_id> immediately — tick-perfect.
- * If not found: fire buy:1 with params — best effort, same tick not guaranteed.
+ * Execute copy trades for the given contract parameters.
+ *
+ * If req_id is provided and copy sockets have returned proposals for it,
+ * fires buy:<copy_proposal_id> immediately — TICK-PERFECT.
+ *
+ * Otherwise falls back to buy:1 with inline params (best effort).
  */
 export const mirrorCopyTradingContractParameters = async (
     contract_parameters: unknown,
@@ -280,21 +299,20 @@ export const mirrorCopyTradingContractParameters = async (
     const token = getProfitdockOAuthToken();
     if (buy_key && !rememberMirroredBuyKey(buy_key)) return { skipped: true, reason: 'duplicate_buy' };
 
-    // FASTEST PATH: WebSocket connections are ready
+    // FASTEST PATH: WebSocket connections ready
     if (account_sockets.size > 0) {
         const cached_copy_proposals = req_id ? copy_proposal_ids.get(req_id) : undefined;
         account_sockets.forEach(entry => {
             const copy_proposal_id = cached_copy_proposals?.[entry.account_id];
             if (copy_proposal_id) {
-                // Best path: copy already has a proposal ID from broadcastCopyTradingProposal.
-                // Fire buy:<proposal_id> immediately — same tick as master.
+                // TICK-PERFECT: copy socket already received its proposal for this req_id.
                 sendBuyWithProposalId(entry, copy_proposal_id, normalized_parameters.amount);
             } else {
-                // No pre-fetched proposal — fire buy:1 directly (best effort).
+                // Fallback: copy socket didn't receive its proposal in time (or no proposal step).
+                // Fire buy:1 immediately — same latency as before, best effort.
                 sendDirectBuy(entry, normalized_parameters);
             }
         });
-        // Clean up used proposal IDs so they don't get reused on the next trade
         if (req_id) copy_proposal_ids.delete(req_id);
         dispatchCopyTradingResult({ contract_parameters: normalized_parameters, ok: true, source_account_type: source_type, status: 200, via: 'websocket' });
         return { ok: true, via: 'websocket' };
@@ -374,7 +392,6 @@ export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account
         requestDedupKeys.set(request as object, direct_key);
         const dedup_key = `auto:req:${direct_key}`;
         earlyFired.add(direct_key);
-        // buy:1 direct — no pre-fetched proposal, fire directly
         return mirrorCopyTradingContractParameters(request.parameters, source_account_type, dedup_key);
     }
     const proposal_id = typeof request.buy === 'string' || typeof request.buy === 'number' ? String(request.buy) : '';
@@ -383,6 +400,6 @@ export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account
     if (!cached_proposal) return undefined;
     const proposal_dedup_key = `auto:${proposal_id}`;
     earlyFired.add(proposal_dedup_key);
-    // buy:<proposal_id> — use pre-fetched copy proposal IDs from broadcastCopyTradingProposal
+    // Pass our correlation req_id so we can look up cached copy proposal IDs
     return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, proposal_dedup_key, cached_proposal.req_id);
 };
