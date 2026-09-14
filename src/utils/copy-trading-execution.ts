@@ -17,17 +17,22 @@ const MAX_MIRRORED_BUY_KEYS = 160;
 const PROPOSAL_CACHE_TTL_MS = 5 * 60 * 1000;
 const PRELOADED_TOKENS_TTL_MS = 4 * 60 * 1000;
 
+// How long to wait for a copy-account proposal to arrive before giving up (ms).
+// Keep this short — a proposal round-trip is typically < 200ms on a good connection.
+const PROPOSAL_WAIT_TIMEOUT_MS = 700;
+
 const proposal_cache = new Map<string, TCachedProposal>();
 const mirrored_buy_keys = new Set<string>();
 const mirrored_buy_key_order: string[] = [];
 const requestDedupKeys = new WeakMap<object, string>();
-const copy_proposal_cache = new Map<number | string, Map<number, Record<string, string>>>();
 
 type TPreloadedTokenPair = { account_id: string; token: string };
 let preloaded_tokens: TPreloadedTokenPair[] | null = null;
 let preloaded_tokens_loaded_at = 0;
 let preloaded_tokens_fetch_promise: Promise<void> | null = null;
 
+// Per-account pending proposal resolvers: req_id -> resolver
+type TProposalResolver = (proposal_id: string) => void;
 type TAccountSocket = {
     account_id: string;
     token: string;
@@ -35,7 +40,7 @@ type TAccountSocket = {
     authorized: boolean;
     pending_buys: string[];
     pending_proposals: string[]; // proposals queued before authorization
-    pending_exact_tick_buys: Map<string, { req_id: number | string; spot_time: number; contract_params: TContractParameters }>;
+    pending_proposal_resolvers: Map<number | string, TProposalResolver>; // req_id -> resolve
     last_buy_key?: string;
     last_buy_at?: number;
 };
@@ -50,7 +55,7 @@ const openAccountSocket = (pair: TPreloadedTokenPair): TAccountSocket => {
         authorized: false,
         pending_buys: [],
         pending_proposals: [],
-        pending_exact_tick_buys: new Map(),
+        pending_proposal_resolvers: new Map(),
     };
     ws.onopen = () => { ws.send(JSON.stringify({ authorize: pair.token, req_id: 1 })); };
     ws.onmessage = (event: MessageEvent) => {
@@ -66,23 +71,11 @@ const openAccountSocket = (pair: TPreloadedTokenPair): TAccountSocket => {
                 entry.pending_buys = [];
             }
             if (msg.msg_type === 'proposal' && !msg.error && msg.req_id && msg.proposal?.id) {
-                const req_id = msg.req_id;
-                const spot_time = msg.proposal.spot_time;
-                if (!copy_proposal_cache.has(req_id)) copy_proposal_cache.set(req_id, new Map());
-                
-                if (spot_time) {
-                    const timeMap = copy_proposal_cache.get(req_id)!;
-                    if (!timeMap.has(spot_time)) timeMap.set(spot_time, {});
-                    timeMap.get(spot_time)![entry.account_id] = msg.proposal.id;
-
-                    // Check if we were waiting for this exact tick to fire a copy trade
-                    const pendingBuysArr = Array.from(entry.pending_exact_tick_buys.entries());
-                    for (const [buy_key, pending] of pendingBuysArr) {
-                        if (pending.req_id === req_id && pending.spot_time === spot_time) {
-                            entry.pending_exact_tick_buys.delete(buy_key);
-                            sendBuyViaSocket(entry, pending.contract_params, msg.proposal.id);
-                        }
-                    }
+                // Resolve any pending proposal request waiting for this req_id
+                const resolver = entry.pending_proposal_resolvers.get(msg.req_id);
+                if (resolver) {
+                    entry.pending_proposal_resolvers.delete(msg.req_id);
+                    resolver(msg.proposal.id);
                 }
             }
         } catch { /* ignore */ }
@@ -112,44 +105,90 @@ const initAccountSockets = (tokens: TPreloadedTokenPair[]) => {
 };
 
 /**
- * Send a buy via a copy account's WebSocket.
- * - If copy_proposal_id is provided: fire buy:<copy_proposal_id> immediately.
- * - Otherwise: fire buy:1 with parameters immediately (no waiting).
- * Both paths send at the current moment to minimize entry point divergence from master.
+ * Send a one-shot proposal to a copy account socket and return the proposal ID.
+ * Returns null if the socket isn't ready or if the proposal times out.
  */
-const sendBuyViaSocket = (entry: TAccountSocket, contract_params: TContractParameters, copy_proposal_id?: string) => {
-    let payload: object;
-    let buy_key: string;
-
-    if (copy_proposal_id) {
-        buy_key = `pid:${copy_proposal_id}`;
-        payload = {
-            buy: copy_proposal_id,
-            price: contract_params.amount ?? 0,
-            req_id: Date.now(),
-            passthrough: { _profitdock_copy_trading_skip: true },
-        };
-    } else {
-        buy_key = `ct:${contract_params.contract_type}:${contract_params.amount}:${contract_params.underlying_symbol}:${Math.floor(Date.now() / 5000)}`;
+const sendProposalAndWait = (entry: TAccountSocket, contract_params: TContractParameters): Promise<string | null> => {
+    return new Promise(resolve => {
+        const req_id = Date.now() + Math.floor(Math.random() * 1000);
         const symbolKey = String((contract_params as any).underlying_symbol || (contract_params as any).symbol || '');
-        const params: Record<string, unknown> = { ...contract_params, symbol: symbolKey || undefined };
+        const params: Record<string, unknown> = { ...contract_params };
+        // Deriv standard WS uses 'symbol' not 'underlying_symbol'
+        params.symbol = symbolKey || undefined;
         delete (params as any).underlying_symbol;
-        payload = {
-            buy: 1,
-            price: params.amount ?? 0,
-            parameters: params,
-            req_id: Date.now(),
-            passthrough: { _profitdock_copy_trading_skip: true },
-        };
-    }
 
+        const proposalPayload = JSON.stringify({
+            proposal: 1,
+            subscribe: 0,
+            req_id,
+            ...params,
+        });
+
+        let timer: ReturnType<typeof setTimeout>;
+
+        const cleanup = () => {
+            clearTimeout(timer);
+            entry.pending_proposal_resolvers.delete(req_id);
+        };
+
+        entry.pending_proposal_resolvers.set(req_id, (proposal_id: string) => {
+            cleanup();
+            resolve(proposal_id);
+        });
+
+        timer = setTimeout(() => {
+            cleanup();
+            resolve(null);
+        }, PROPOSAL_WAIT_TIMEOUT_MS);
+
+        if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) {
+            entry.ws.send(proposalPayload);
+        } else {
+            // Socket not ready — can't wait, resolve immediately with null so caller falls back
+            cleanup();
+            resolve(null);
+        }
+    });
+};
+
+/**
+ * Send a buy via a copy account's WebSocket using a known proposal ID.
+ * This is the tick-perfect path — always use a proposal ID.
+ */
+const sendBuyViaSocket = (entry: TAccountSocket, contract_params: TContractParameters, copy_proposal_id: string) => {
+    const payload = {
+        buy: copy_proposal_id,
+        price: contract_params.amount ?? 0,
+        req_id: Date.now(),
+        passthrough: { _profitdock_copy_trading_skip: true },
+    };
     const msg = JSON.stringify(payload);
     if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) {
         entry.ws.send(msg);
     } else {
-        // Socket not yet authorized — queue the buy. It will fire the moment
-        // the socket authorizes. This is better than the HTTP fallback if
-        // authorization is only a few hundred ms away.
+        entry.pending_buys.push(msg);
+    }
+};
+
+/**
+ * Send a buy via a copy account's WebSocket with inline parameters as fallback.
+ * Only used when we cannot get a proposal ID in time.
+ */
+const sendDirectBuyViaSocket = (entry: TAccountSocket, contract_params: TContractParameters) => {
+    const symbolKey = String((contract_params as any).underlying_symbol || (contract_params as any).symbol || '');
+    const params: Record<string, unknown> = { ...contract_params, symbol: symbolKey || undefined };
+    delete (params as any).underlying_symbol;
+    const payload = {
+        buy: 1,
+        price: params.amount ?? 0,
+        parameters: params,
+        req_id: Date.now(),
+        passthrough: { _profitdock_copy_trading_skip: true },
+    };
+    const msg = JSON.stringify(payload);
+    if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) {
+        entry.ws.send(msg);
+    } else {
         entry.pending_buys.push(msg);
     }
 };
@@ -269,59 +308,45 @@ export const broadcastCopyTradingProposal = (request: any) => {
         if (entry.authorized && entry.ws.readyState === WebSocket.OPEN) {
             entry.ws.send(msg);
         } else {
-            // Queue so it's replayed the moment the socket authorizes
             entry.pending_proposals.push(msg);
         }
     });
 };
 
-export const mirrorCopyTradingContractParameters = async (contract_parameters: unknown, source_account_type?: string, buy_key = '', req_id?: number | string, spot_time?: number) => {
+/**
+ * TICK-PERFECT COPY TRADE via WebSocket.
+ *
+ * For each copy account:
+ *   1. Send a one-shot proposal request (no subscribe) with the EXACT same params.
+ *   2. Wait up to PROPOSAL_WAIT_TIMEOUT_MS for the proposal ID to arrive.
+ *   3. Fire buy:<proposal_id> immediately — same tick as master.
+ *   4. If we timeout, fall back to buy:1 with params (different tick, last resort).
+ */
+const mirrorViaWebSocket = async (normalized_parameters: TContractParameters, source_type: TCopySourceAccountType): Promise<void> => {
+    const entries = Array.from(account_sockets.values());
+    await Promise.all(entries.map(async entry => {
+        const proposal_id = await sendProposalAndWait(entry, normalized_parameters);
+        if (proposal_id) {
+            sendBuyViaSocket(entry, normalized_parameters, proposal_id);
+        } else {
+            // Proposal timed out or socket not ready — best effort direct buy
+            console.warn(`[Copy Trading] Proposal timed out for ${entry.account_id}, falling back to direct buy.`);
+            sendDirectBuyViaSocket(entry, normalized_parameters);
+        }
+    }));
+    dispatchCopyTradingResult({ contract_parameters: normalized_parameters, ok: true, source_account_type: source_type, status: 200, via: 'websocket' });
+};
+
+export const mirrorCopyTradingContractParameters = async (contract_parameters: unknown, source_account_type?: string, buy_key = '') => {
     const normalized_parameters = normalizeCopyTradingContractParameters(contract_parameters);
     if (!normalized_parameters) return { skipped: true, reason: 'missing_contract_parameters' };
     const source_type = getCurrentSourceAccountType(source_account_type);
     const token = getProfitdockOAuthToken();
     if (buy_key && !rememberMirroredBuyKey(buy_key)) return { skipped: true, reason: 'duplicate_buy' };
 
-    // FASTEST PATH: fire via pre-authorized WebSocket connections.
+    // FASTEST PATH: fire via pre-authorized WebSocket connections with proposal-first approach.
     if (account_sockets.size > 0) {
-        account_sockets.forEach(entry => {
-            let copy_proposal_id: string | undefined;
-            if (req_id && copy_proposal_cache.has(req_id)) {
-                if (spot_time) {
-                    const timeMap = copy_proposal_cache.get(req_id)!;
-                    if (timeMap.has(spot_time)) {
-                        copy_proposal_id = timeMap.get(spot_time)![entry.account_id];
-                    }
-                } else {
-                    // Fallback to whatever is latest if spot_time is somehow missing
-                    const timeMap = copy_proposal_cache.get(req_id)!;
-                    const latestSpotTime = Math.max(...Array.from(timeMap.keys()));
-                    if (latestSpotTime >= 0 && timeMap.has(latestSpotTime)) {
-                        copy_proposal_id = timeMap.get(latestSpotTime)![entry.account_id];
-                    }
-                }
-            }
-
-            if (copy_proposal_id || !spot_time || !req_id) {
-                // If we found the exact proposal, or we don't have the data to wait for one, fire instantly.
-                sendBuyViaSocket(entry, normalized_parameters, copy_proposal_id);
-            } else {
-                // TICK-PERFECT SYNC: We know the spot_time, but the copy socket hasn't received it yet.
-                // Queue it and wait up to 1000ms for it to arrive so we can guarantee the EXACT same entry point.
-                const pending_key = `wait:${buy_key}`;
-                entry.pending_exact_tick_buys.set(pending_key, { req_id, spot_time, contract_params: normalized_parameters });
-
-                setTimeout(() => {
-                    if (entry.pending_exact_tick_buys.has(pending_key)) {
-                        entry.pending_exact_tick_buys.delete(pending_key);
-                        // Timeout reached, fallback to immediate buy:1
-                        console.warn(`[Copy Trading] Timed out waiting for tick ${spot_time} on ${entry.account_id}, falling back to instant buy.`);
-                        sendBuyViaSocket(entry, normalized_parameters);
-                    }
-                }, 1000);
-            }
-        });
-        dispatchCopyTradingResult({ contract_parameters: normalized_parameters, ok: true, source_account_type: source_type, status: 200, via: 'websocket' });
+        void mirrorViaWebSocket(normalized_parameters, source_type);
         return { ok: true, via: 'websocket' };
     }
 
@@ -384,7 +409,7 @@ export const mirrorCopyTradingBuyFromRequest = (request: unknown, response: unkn
     const cached_proposal = proposal_cache.get(proposal_id);
     if (!cached_proposal) return undefined;
     proposal_cache.delete(proposal_id);
-    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, proposal_dedup_key, cached_proposal.req_id, cached_proposal.spot_time);
+    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, proposal_dedup_key);
 };
 
 export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account_type?: string) => {
@@ -399,7 +424,7 @@ export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account
         requestDedupKeys.set(request as object, direct_key);
         const dedup_key = `auto:req:${direct_key}`;
         earlyFired.add(direct_key);
-        return mirrorCopyTradingContractParameters(request.parameters, source_account_type, dedup_key, request.req_id as any);
+        return mirrorCopyTradingContractParameters(request.parameters, source_account_type, dedup_key);
     }
     const proposal_id = typeof request.buy === 'string' || typeof request.buy === 'number' ? String(request.buy) : '';
     if (!proposal_id) return undefined;
@@ -407,5 +432,5 @@ export const mirrorCopyTradingBuyImmediately = (request: unknown, source_account
     if (!cached_proposal) return undefined;
     const proposal_dedup_key = `auto:${proposal_id}`;
     earlyFired.add(proposal_dedup_key);
-    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, proposal_dedup_key, cached_proposal.req_id, cached_proposal.spot_time);
+    return mirrorCopyTradingContractParameters(cached_proposal.contract_parameters, source_account_type, proposal_dedup_key);
 };
