@@ -28,6 +28,14 @@ const requestDedupKeys = new WeakMap<object, string>();
 // The correlation_req_id is what WE sent to copy sockets (same as or derived from master req_id).
 const copy_proposal_ids = new Map<number | string, Record<string, string>>();
 
+type TPendingBuy = {
+    account_id: string;
+    amount: unknown;
+    fallback_params: TContractParameters;
+    timeout: ReturnType<typeof setTimeout>;
+};
+const pending_buys_by_req_id = new Map<number | string, TPendingBuy[]>();
+
 let _next_req_id = Date.now();
 const genReqId = () => ++_next_req_id;
 
@@ -67,12 +75,39 @@ const openAccountSocket = (pair: TPreloadedTokenPair): TAccountSocket => {
                 entry.pending_buys.forEach(b => ws.send(b));
                 entry.pending_buys = [];
             }
-            // Cache copy proposal IDs keyed by req_id (the one WE sent).
-            // Works for both subscribe (updates every tick) and one-shot proposals.
-            if (msg.msg_type === 'proposal' && !msg.error && msg.req_id && msg.proposal?.id) {
+            if (msg.msg_type === 'proposal' && msg.req_id) {
                 const req_id = msg.req_id;
                 if (!copy_proposal_ids.has(req_id)) copy_proposal_ids.set(req_id, {});
-                copy_proposal_ids.get(req_id)![entry.account_id] = msg.proposal.id;
+                
+                if (!msg.error && msg.proposal?.id) {
+                    copy_proposal_ids.get(req_id)![entry.account_id] = msg.proposal.id;
+                    
+                    const pending = pending_buys_by_req_id.get(req_id);
+                    if (pending) {
+                        const index = pending.findIndex(p => p.account_id === entry.account_id);
+                        if (index !== -1) {
+                            const item = pending[index];
+                            clearTimeout(item.timeout);
+                            sendBuyWithProposalId(entry, msg.proposal.id, item.amount);
+                            pending.splice(index, 1);
+                            if (pending.length === 0) pending_buys_by_req_id.delete(req_id);
+                        }
+                    }
+                } else if (msg.error) {
+                    copy_proposal_ids.get(req_id)![entry.account_id] = 'ERROR';
+                    
+                    const pending = pending_buys_by_req_id.get(req_id);
+                    if (pending) {
+                        const index = pending.findIndex(p => p.account_id === entry.account_id);
+                        if (index !== -1) {
+                            const item = pending[index];
+                            clearTimeout(item.timeout);
+                            sendDirectBuy(entry, item.fallback_params);
+                            pending.splice(index, 1);
+                            if (pending.length === 0) pending_buys_by_req_id.delete(req_id);
+                        }
+                    }
+                }
             }
         } catch { /* ignore */ }
     };
@@ -304,16 +339,49 @@ export const mirrorCopyTradingContractParameters = async (
         const cached_copy_proposals = req_id ? copy_proposal_ids.get(req_id) : undefined;
         account_sockets.forEach(entry => {
             const copy_proposal_id = cached_copy_proposals?.[entry.account_id];
-            if (copy_proposal_id) {
+            if (copy_proposal_id && copy_proposal_id !== 'ERROR') {
                 // TICK-PERFECT: copy socket already received its proposal for this req_id.
                 sendBuyWithProposalId(entry, copy_proposal_id, normalized_parameters.amount);
-            } else {
-                // Fallback: copy socket didn't receive its proposal in time (or no proposal step).
-                // Fire buy:1 immediately — same latency as before, best effort.
+            } else if (copy_proposal_id === 'ERROR' || !req_id) {
+                // Fallback: copy socket proposal failed, or no proposal step (like Mesh).
                 sendDirectBuy(entry, normalized_parameters);
+            } else {
+                // In flight! The master got the proposal, but copy socket hasn't received it yet.
+                // Queue the buy to execute immediately when the proposal response arrives.
+                const timeout = setTimeout(() => {
+                    const pending = pending_buys_by_req_id.get(req_id);
+                    if (pending) {
+                        const index = pending.findIndex(p => p.account_id === entry.account_id);
+                        if (index !== -1) {
+                            pending.splice(index, 1);
+                            if (pending.length === 0) pending_buys_by_req_id.delete(req_id);
+                            if (account_sockets.has(entry.account_id)) {
+                                sendDirectBuy(entry, normalized_parameters);
+                            }
+                        }
+                    }
+                }, 1500);
+
+                const item: TPendingBuy = {
+                    account_id: entry.account_id,
+                    amount: normalized_parameters.amount,
+                    fallback_params: normalized_parameters,
+                    timeout
+                };
+                if (!pending_buys_by_req_id.has(req_id)) pending_buys_by_req_id.set(req_id, []);
+                pending_buys_by_req_id.get(req_id)!.push(item);
             }
         });
-        if (req_id) copy_proposal_ids.delete(req_id);
+        
+        // We cannot delete copy_proposal_ids(req_id) immediately if some sockets are still waiting!
+        // It will be cleaned up eventually by other mechanisms or memory isn't huge.
+        // Actually, we can schedule a cleanup.
+        if (req_id) {
+            setTimeout(() => {
+                copy_proposal_ids.delete(req_id);
+            }, 5000);
+        }
+
         dispatchCopyTradingResult({ contract_parameters: normalized_parameters, ok: true, source_account_type: source_type, status: 200, via: 'websocket' });
         return { ok: true, via: 'websocket' };
     }
