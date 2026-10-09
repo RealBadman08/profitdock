@@ -51,6 +51,7 @@ interface FakeContract {
     underlying: string;
     display_name: string;
     pip_size?: number;
+    all_ticks?: Array<{ epoch: number; tick: number; tick_display_value: string }>;
     [key: string]: any;
 }
 
@@ -196,7 +197,8 @@ class VirtualTradingEngine {
                 contract.entry_spot = spot;
                 contract.entry_tick_display_value = fmt;
                 contract.entry_tick_time = epoch;
-                contract.ticks_seen = 1;
+                contract.ticks_seen = 0;
+                contract.all_ticks = [{ epoch, tick: spot, tick_display_value: fmt }];
 
                 const resolveBarrier = (b?: string) => {
                     if (!b) return b;
@@ -208,6 +210,9 @@ class VirtualTradingEngine {
                 contract.low_barrier = resolveBarrier(contract.low_barrier);
             } else {
                 contract.ticks_seen++;
+                if (contract.all_ticks) {
+                    contract.all_ticks.push({ epoch, tick: spot, tick_display_value: fmt });
+                }
             }
 
             contract.current_spot = spot;
@@ -321,7 +326,7 @@ class VirtualTradingEngine {
                 buy: contract.contract_id,
                 sell: contract.is_sold ? contract.contract_id + 1 : undefined,
             },
-            audit_details: { all_ticks: [] },
+            audit_details: { all_ticks: contract.all_ticks || [] },
         };
     }
 
