@@ -168,7 +168,72 @@
     }
 }
 
+.trade-type-indicator-control-masks {
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+    z-index: 40;
+
+    &__item {
+        background: #181c25;
+        border-radius: 2px;
+        bottom: 4.2rem;
+        height: 3.4rem;
+        left: clamp(7.8rem, 8.2%, 9.4rem);
+        position: absolute;
+        width: 16rem;
+    }
+
+    &--2 {
+        .trade-type-indicator-control-masks__item:nth-child(2) {
+            bottom: 15.2rem;
+        }
+    }
+
+    &--3 {
+        .trade-type-indicator-control-masks__item:nth-child(2) {
+            bottom: 10.2rem;
+        }
+
+        .trade-type-indicator-control-masks__item:nth-child(3) {
+            bottom: 16.2rem;
+        }
+    }
+
+    &--1 {
+        .trade-type-indicator-control-masks__item {
+            bottom: 4.2rem;
+        }
+    }
+}
+
+body.theme--light {
+    .trade-type-indicator-control-masks__item {
+        background: #fff;
+    }
+}
+
 .cq-modal-dropdown.stxMenuActive {
     left: 0;
     top: 0;
+}
+
+body.profitdock-trade-type-indicators-active {
+    .indicator-tooltip,
+    .mSticky.indicator-tooltip {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    .cq-modal--settings:has(.form--indicator-setting),
+    .cq-chart-settings:has(.form--indicator-setting) {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+    }
+
+    .sc-studies__panel__content--active .detail {
+        display: none !important;
+    }
 }

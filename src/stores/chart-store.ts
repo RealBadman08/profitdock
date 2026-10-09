@@ -8,6 +8,8 @@ type TSubscription = {
     subscriber: null | { unsubscribe: () => void };
 };
 
+const normalizeChartType = (chart_type?: string) => (chart_type === 'candle' ? 'candles' : chart_type);
+
 export default class ChartStore {
     root_store: RootStore;
     constructor(root_store: RootStore) {
@@ -66,12 +68,29 @@ export default class ChartStore {
     };
 
     updateSymbol = () => {
-        const workspace = window.Blockly.derivWorkspace;
-        const market_block = workspace?.getAllBlocks().find((block: window.Blockly.Block) => {
-            return block.type === 'trade_definition_market';
-        });
+        // Safely try to read the symbol from the Blockly workspace.
+        // Blockly may not be loaded yet when the chart mounts, so wrap in try/catch.
+        let symbol: string | undefined;
+        try {
+            const workspace = (window as any).Blockly?.derivWorkspace;
+            const market_block = workspace?.getAllBlocks?.()?.find?.((block: any) => {
+                return block.type === 'trade_definition_market';
+            });
+            symbol = market_block?.getFieldValue?.('SYMBOL_LIST');
+        } catch {
+            // Blockly not ready yet
+        }
 
-        const symbol = market_block?.getFieldValue('SYMBOL_LIST') ?? api_base?.active_symbols[0]?.symbol;
+        // Fall back to the first active symbol from the API
+        if (!symbol) {
+            symbol = api_base?.active_symbols?.[0]?.symbol;
+        }
+
+        // Last resort: use a known-safe default so the chart doesn't get stuck
+        if (!symbol) {
+            symbol = 'R_100';
+        }
+
         this.symbol = symbol;
     };
 
@@ -86,7 +105,7 @@ export default class ChartStore {
     };
 
     updateChartType = (chart_type: string) => {
-        this.chart_type = chart_type;
+        this.chart_type = normalizeChartType(chart_type);
         this.saveToLocalStorage();
     };
 
@@ -113,7 +132,7 @@ export default class ChartStore {
                 const { symbol, granularity, chart_type } = JSON.parse(props);
                 this.symbol = symbol;
                 this.granularity = granularity;
-                this.chart_type = chart_type;
+                this.chart_type = normalizeChartType(chart_type);
             } else {
                 this.granularity = 0;
                 this.chart_type = 'line';

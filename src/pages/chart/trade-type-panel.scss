@@ -1,0 +1,98 @@
+.trade-type-panel {
+    position: absolute;
+    top: 50px;
+    left: 8px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: rgba(16, 19, 28, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 12px 10px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    min-width: 150px;
+
+    &__header {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 8px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    &__title {
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    &__subtitle {
+        font-size: 9px;
+        color: rgba(255, 255, 255, 0.3);
+        margin-top: 2px;
+    }
+
+    &__buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    &__btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 12px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.04);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: left;
+        width: 100%;
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 107, 53, 0.4);
+            transform: translateX(2px);
+        }
+
+        &--active {
+            background: linear-gradient(135deg, rgba(255, 107, 53, 0.25), rgba(255, 60, 120, 0.15));
+            border-color: rgba(255, 107, 53, 0.6);
+            box-shadow: 0 0 12px rgba(255, 107, 53, 0.2);
+
+            .trade-type-panel__btn-label {
+                color: #ff6b35;
+                font-weight: 600;
+            }
+        }
+
+        &-icon {
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        &-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.85);
+            flex: 1;
+            line-height: 1.2;
+        }
+
+        &-badge {
+            font-size: 9px;
+            color: #ff6b35;
+            background: rgba(255, 107, 53, 0.12);
+            padding: 2px 5px;
+            border-radius: 4px;
+            white-space: nowrap;
+            font-weight: 600;
+        }
+    }
+}

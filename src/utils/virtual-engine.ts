@@ -309,6 +309,7 @@ class VirtualTradingEngine {
                     : undefined,
             status: contract.status,
             profit: contract.profit,
+            payout: contract.payout,
             is_valid_to_sell: contract.is_sold ? 0 : 1,
             is_sold: contract.is_sold,
             is_expired: contract.is_expired,
@@ -376,6 +377,35 @@ class VirtualTradingEngine {
 
             // If propId wasn't found (e.g. buy: 1 with parameters), use parameters
             if (!prop && req.parameters) {
+                let realPayout = price * 1.95;
+                let realLongcode = 'Virtual Contract';
+                let realDisplayName = 'Virtual';
+                try {
+                    const apiBase = getApiBase();
+                    if (apiBase?.api) {
+                        const rawRes = await apiBase.api.send({
+                            proposal: 1,
+                            amount: price,
+                            basis: 'stake',
+                            contract_type: req.parameters.contract_type || 'CALL',
+                            currency: (window as any)._clientStore?.currency || 'USD',
+                            duration: req.parameters.duration || 5,
+                            duration_unit: req.parameters.duration_unit || 't',
+                            symbol: req.parameters.symbol || req.parameters.underlying_symbol || 'R_100',
+                            barrier: req.parameters.barrier,
+                            barrier2: req.parameters.barrier2,
+                            passthrough: { _vrtc_skip: true }
+                        });
+                        if (rawRes?.proposal) {
+                            realPayout = rawRes.proposal.payout;
+                            realLongcode = rawRes.proposal.longcode;
+                            realDisplayName = rawRes.proposal.display_name;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[VirtualEngine] Failed to fetch real payout for direct buy, using fallback', e);
+                }
+
                 prop = {
                     contract_type: req.parameters.contract_type || 'CALL',
                     symbol: req.parameters.symbol || req.parameters.underlying_symbol || 'R_100',
@@ -383,10 +413,10 @@ class VirtualTradingEngine {
                     duration_unit: req.parameters.duration_unit || 't',
                     growth_rate: req.parameters.growth_rate,
                     barrier: req.parameters.barrier,
-                    payout: price * 1.95, // mock payout for direct buy
-                    longcode: 'Virtual Contract',
+                    payout: realPayout,
+                    longcode: realLongcode,
                     ask_price: price,
-                    display_name: 'Virtual',
+                    display_name: realDisplayName,
                 };
             }
 

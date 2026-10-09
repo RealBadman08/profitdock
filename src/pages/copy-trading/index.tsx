@@ -616,7 +616,7 @@ const CopyTrading = observer(() => {
                                             <div className='copy-trading__account-text'>
                                                 <strong style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                     {account.deriv_account_id}
-                                                    {account.connection_status === 'authentication_expired' && (
+                                                    {account.connection_status === 'authentication_expired' && !account.deleted_at && (
                                                         <span
                                                             style={{
                                                                 color: 'var(--text-prominent)',
@@ -629,6 +629,21 @@ const CopyTrading = observer(() => {
                                                             }}
                                                         >
                                                             Revoked
+                                                        </span>
+                                                    )}
+                                                    {account.deleted_at && (
+                                                        <span
+                                                            style={{
+                                                                color: 'var(--text-prominent)',
+                                                                backgroundColor: 'var(--red-light)',
+                                                                border: '1px solid var(--red-hover)',
+                                                                borderRadius: '4px',
+                                                                padding: '2px 6px',
+                                                                fontSize: '10px',
+                                                                fontWeight: 'bold',
+                                                            }}
+                                                        >
+                                                            Deleted
                                                         </span>
                                                     )}
                                                 </strong>

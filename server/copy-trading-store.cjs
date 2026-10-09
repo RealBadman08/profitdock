@@ -345,12 +345,13 @@ const sanitizeAccount = account => ({
     connection_status: account.connection_status,
     created_at: account.created_at,
     updated_at: account.updated_at,
+    deleted_at: account.deleted_at,
 });
 
 const listConnectedAccounts = async (ownerDerivAccountId, skipRefresh = false) => {
     const owner = encodeURIComponent(ownerDerivAccountId);
     const rows = await supabaseFetch(
-        `copy_trading_accounts?owner_deriv_account_id=eq.${owner}&deleted_at=is.null&account_type=eq.real&order=created_at.desc`
+        `copy_trading_accounts?owner_deriv_account_id=eq.${owner}&account_type=eq.real&order=created_at.desc`
     );
 
     const rawRows = Array.isArray(rows) ? rows : [];

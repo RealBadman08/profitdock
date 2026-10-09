@@ -391,11 +391,70 @@ const requestQuote = async (api: ApiLike, payload: Record<string, unknown>) => {
     } as FlipperQuote;
 };
 
-const buyQuote = async (api: ApiLike, quote: FlipperQuote) => {
+const requestDirectBuy = async (
+    api: ApiLike,
+    contractType: string,
+    currency: string,
+    duration: number,
+    prediction: string | number,
+    predictionMode: 'barrier' | 'selected_tick' | 'none',
+    stake: number,
+    symbol: string
+) => {
+    const { finalDuration, finalDurationUnit } = validateDuration(contractType, duration);
+
+    const parameters: Record<string, unknown> = {
+        amount: stake,
+        basis: 'stake',
+        contract_type: contractType,
+        currency,
+        duration: finalDuration,
+        duration_unit: finalDurationUnit,
+    };
+
+    parameters[isCustomLegacyOAuthDomain() ? 'underlying_symbol' : 'symbol'] = symbol;
+
+    if (predictionMode === 'barrier') {
+        const isDigitContract = ['DIGITOVER', 'DIGITUNDER', 'DIGITMATCH', 'DIGITDIFF'].includes(contractType);
+        const isTwoBarrierContract = ['EXPIRYMISS', 'EXPIRYRANGE', 'RANGE', 'UPORDOWN'].includes(contractType);
+
+        if (isDigitContract) {
+            parameters.barrier = Math.max(0, Math.min(9, Math.trunc(Number(prediction))));
+        } else if (isTwoBarrierContract) {
+            const val = String(prediction).trim();
+            const num = Number(val);
+            if (!isNaN(num) && num > 0) {
+                parameters.barrier = `+${num}`;
+                parameters.barrier2 = `-${num}`;
+            } else {
+                parameters.barrier = val;
+                parameters.barrier2 = `-${val.replace(/[+-]/g, '')}`;
+            }
+        } else {
+            let barrierValue = String(prediction).trim();
+            if (barrierValue && !barrierValue.startsWith('+') && !barrierValue.startsWith('-')) {
+                const num = Number(barrierValue);
+                if (!isNaN(num) && num > 0) {
+                    if (contractType === 'LOWER') {
+                        barrierValue = '-' + barrierValue;
+                    } else {
+                        barrierValue = '+' + barrierValue;
+                    }
+                }
+            }
+            parameters.barrier = barrierValue;
+        }
+    }
+
+    if (predictionMode === 'selected_tick') {
+        parameters.selected_tick = prediction;
+    }
+
     const response = normalizeApiMessage<BuyResponse>(
         await api.send({
-            buy: quote.proposalId,
-            price: String(quote.askPrice),
+            buy: 1,
+            price: String(stake),
+            parameters,
         })
     );
 
@@ -1106,78 +1165,53 @@ const FlipperSwitcherPage = observer(() => {
                 const predOne = getPredictionValue(predictionOneRef.current, activeLegs[0]);
                 const predTwo = getPredictionValue(predictionTwoRef.current, activeLegs[1]);
 
-                let quoteBundle = null;
+                let activeMarketInfo = null;
+                let firstId: any, secondId: any;
+
                 for (const marketInfo of orderedCandidates) {
                     try {
-                        let firstQuote: any, secondQuote: any;
-                        for (let quoteAttempt = 0; quoteAttempt < 5; quoteAttempt++) {
-                            [firstQuote, secondQuote] = await Promise.all([
-                                requestQuote(
-                                    api,
-                                    createProposalPayload({
-                                        amount: currentStakeOne,
-                                        contractType: activeLegs[0].contractType,
-                                        currency,
-                                        duration,
-                                        prediction: predOne,
-                                        predictionMode: activeLegs[0].predictionMode,
-                                        symbol: marketInfo.symbol,
-                                    })
-                                ),
-                                requestQuote(
-                                    api,
-                                    createProposalPayload({
-                                        amount: currentStakeTwo,
-                                        contractType: activeLegs[1].contractType,
-                                        currency,
-                                        duration,
-                                        prediction: predTwo,
-                                        predictionMode: activeLegs[1].predictionMode,
-                                        symbol: marketInfo.symbol,
-                                    })
-                                ),
-                            ]);
-
-                            // Ensure both quotes are taken at exactly the same tick/spot
-                            if (firstQuote.spot === secondQuote.spot) {
-                                break;
-                            }
-
-                            if (quoteAttempt < 4) {
-                                await new Promise(r => setTimeout(r, 250)); // tiny delay to wait for new tick
-                            }
-                        }
-                        quoteBundle = { firstQuote, marketInfo, secondQuote };
+                        const [b1, b2] = await Promise.all([
+                            requestDirectBuy(
+                                api,
+                                activeLegs[0].contractType,
+                                currency,
+                                duration,
+                                predOne,
+                                activeLegs[0].predictionMode || 'none',
+                                currentStakeOne,
+                                marketInfo.symbol
+                            ),
+                            requestDirectBuy(
+                                api,
+                                activeLegs[1].contractType,
+                                currency,
+                                duration,
+                                predTwo,
+                                activeLegs[1].predictionMode || 'none',
+                                currentStakeTwo,
+                                marketInfo.symbol
+                            )
+                        ]);
+                        firstId = b1.contract_id;
+                        secondId = b2.contract_id;
+                        activeMarketInfo = marketInfo;
                         break;
                     } catch (e) {
                         if (!switchMarketRef.current || orderedCandidates.length <= 1) throw e;
                     }
                 }
 
-                if (!quoteBundle) {
-                    setFeedback('No supported market available.');
+                if (!activeMarketInfo || !firstId || !secondId) {
+                    setFeedback('No supported market available, or buy failed.');
                     break;
                 }
 
-                if (quoteBundle.marketInfo.symbol !== selectedMarketInfoRef.current.symbol) {
-                    selectedMarketInfoRef.current = quoteBundle.marketInfo;
-                    setSelectedMarket(quoteBundle.marketInfo.symbol);
+                if (activeMarketInfo.symbol !== selectedMarketInfoRef.current.symbol) {
+                    selectedMarketInfoRef.current = activeMarketInfo;
+                    setSelectedMarket(activeMarketInfo.symbol);
                 }
 
                 currentRunIdRef.current = Date.now();
-                let firstId: any, secondId: any;
-
-                try {
-                    const [b1, b2] = await Promise.all([
-                        buyQuote(api, quoteBundle.firstQuote),
-                        buyQuote(api, quoteBundle.secondQuote),
-                    ]);
-                    firstId = b1.contract_id;
-                    secondId = b2.contract_id;
-                } catch (err: any) {
-                    setFeedback('Buy failed: ' + (err?.message || String(err)));
-                    break;
-                }
 
                 const [r1, r2] = await Promise.all([
                     waitForSettlement(api, firstId, c => updatePositionsUi(c, 0, activeLegs)),
