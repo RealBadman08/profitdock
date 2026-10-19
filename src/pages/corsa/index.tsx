@@ -11,17 +11,15 @@ import {
 import { getMarketsWithoutStepBoomCrashRange, normalizeApiMessage } from '@/features/deriv-live/api';
 import { MarketSymbol } from '@/features/deriv-live/types';
 import { useApiBase } from '@/hooks/useApiBase';
+import { normalizeMartingaleMultiplier, roundMartingaleStake } from '@/hooks/useMartingale';
 import { useProfitdockPersistentState } from '@/hooks/useProfitdockPersistentState';
 import { useStore } from '@/hooks/useStore';
-import { normalizeMartingaleMultiplier, roundMartingaleStake } from '@/hooks/useMartingale';
-import { runVirtualTrade } from '@/utils/virtual-trade';
-import { mirrorCopyTradingContractParameters } from '@/utils/copy-trading-execution';
-
 import {
     emitProfitdockTradeStatus,
     subscribeProfitdockTradeStart,
     subscribeProfitdockTradeStop,
 } from '@/utils/profitdock-trade-controller';
+import { runVirtualTrade } from '@/utils/virtual-trade';
 import { ProposalOpenContract } from '@deriv/api-types';
 import { localize } from '@deriv-com/translations';
 import './corsa.scss';
@@ -40,9 +38,17 @@ type CorsaDirection =
     | 'DIGITMATCH'
     | 'DIGITDIFF'
     | 'CALL'
-    | 'PUT';
+    | 'PUT'
+    | 'RUNHIGH'
+    | 'RUNLOW';
 type MarketMode = 'single' | 'all';
-type DetectorState = { history: number[]; lastEpoch?: number | null; lastQuote: number | null; priceHistory: number[]; streak: number };
+type DetectorState = {
+    history: number[];
+    lastEpoch?: number | null;
+    lastQuote: number | null;
+    priceHistory: number[];
+    streak: number;
+};
 type CorsaDisplayItem = { label: string; tone: 'empty' | 'negative' | 'positive' };
 type TicksHistoryResponse = {
     error?: { message?: string };
@@ -87,13 +93,16 @@ const DIRECTIONS: Array<{ contractType: CorsaDirection; label: string; needsDigi
     { contractType: 'DIGITDIFF', label: 'Differs', needsDigit: true },
     { contractType: 'CALL', label: 'Rise' },
     { contractType: 'PUT', label: 'Fall' },
+    { contractType: 'RUNHIGH', label: 'Only Ups' },
+    { contractType: 'RUNLOW', label: 'Only Downs' },
 ];
 
 const CORSA_EXCLUDED_MARKET_SYMBOLS = new Set(['1HZ15V', '1HZ30V', '1HZ90V']);
 
-
 const getCorsaMarkets = (activeSymbols: MarketSymbol[]) =>
-    getMarketsWithoutStepBoomCrashRange(activeSymbols).filter(market => !CORSA_EXCLUDED_MARKET_SYMBOLS.has(market.symbol));
+    getMarketsWithoutStepBoomCrashRange(activeSymbols).filter(
+        market => !CORSA_EXCLUDED_MARKET_SYMBOLS.has(market.symbol)
+    );
 
 const getDerivApi = () => api_base.api as ApiLike | undefined;
 const getActiveTransactionAccountId = () => api_base.account_id || localStorage.getItem('active_loginid') || undefined;
@@ -104,8 +113,8 @@ const hasTradingSession = () => {
         !isCustomLegacyOAuthDomain() || !activeLoginId || !api_base.account_id || api_base.account_id === activeLoginId;
     return Boolean(
         isDerivSocketOpen() &&
-            selectedAccountOk &&
-            (isCustomLegacyOAuthDomain() ? api_base.has_authenticated_profitdock_socket : api_base.is_authorized)
+        selectedAccountOk &&
+        (isCustomLegacyOAuthDomain() ? api_base.has_authenticated_profitdock_socket : api_base.is_authorized)
     );
 };
 const toPositiveNumber = (value: string | number, fallback = 0) => {
@@ -116,7 +125,8 @@ const toPositiveInteger = (value: string | number, fallback = 1) => {
     const parsed = Math.trunc(Number(value));
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
-const clampDigit = (value: string | number, fallback = 0) => Math.max(0, Math.min(9, Math.trunc(Number(value) || fallback)));
+const clampDigit = (value: string | number, fallback = 0) =>
+    Math.max(0, Math.min(9, Math.trunc(Number(value) || fallback)));
 const getLastDigit = (quote: number, pipSize = 2) => {
     const formattedQuote = Number(quote).toFixed(Math.max(0, Math.trunc(pipSize)));
     const digits = formattedQuote.replace(/\D/g, '');
@@ -143,8 +153,12 @@ const isOppositeDigitSignal = (contractType: CorsaDirection, digit: number, pred
 };
 
 const isOppositePriceSignal = (contractType: CorsaDirection, current: number, previous: number) => {
-    if (contractType === 'CALL') return current < previous;
-    if (contractType === 'PUT') return current > previous;
+    // CALL/PUT: fade the streak — wait for opposite moves then bet on reversion
+    if (contractType === 'CALL') return current < previous; // N downs before betting Rise
+    if (contractType === 'PUT') return current > previous; // N ups before betting Fall
+    // RUNHIGH/RUNLOW: follow the trend — wait for N successive moves in the contract direction
+    if (contractType === 'RUNHIGH') return current > previous; // N consecutive ups → Only Ups
+    if (contractType === 'RUNLOW') return current < previous; // N consecutive downs → Only Downs
     return false;
 };
 
@@ -249,7 +263,7 @@ const getCorsaSignalStreak = ({
     prediction: number;
     priceHistory: number[];
 }) => {
-    if (contractType === 'CALL' || contractType === 'PUT') {
+    if (['CALL', 'PUT', 'RUNHIGH', 'RUNLOW'].includes(contractType)) {
         let streak = 0;
 
         for (let index = 0; index < priceHistory.length - 1; index++) {
@@ -306,6 +320,20 @@ const getCorsaDisplayItem = ({
     previousQuote: number | null;
     quote: number;
 }): CorsaDisplayItem => {
+    if (contractType === 'RUNHIGH') {
+        // Only Ups: every tick must be higher than previous
+        if (previousQuote === null) return { label: '--', tone: 'empty' };
+        if (quote > previousQuote) return { label: '↑', tone: 'positive' };
+        return { label: 'X', tone: 'negative' }; // condition broken
+    }
+
+    if (contractType === 'RUNLOW') {
+        // Only Downs: every tick must be lower than previous
+        if (previousQuote === null) return { label: '--', tone: 'empty' };
+        if (quote < previousQuote) return { label: '↓', tone: 'positive' };
+        return { label: 'X', tone: 'negative' }; // condition broken
+    }
+
     if (contractType === 'CALL' || contractType === 'PUT') {
         if (previousQuote === null || quote === previousQuote) {
             return { label: '--', tone: 'empty' };
@@ -357,13 +385,19 @@ const CorsaPage = observer(() => {
     const modeIndicatorRef = useRef<HTMLDivElement>(null);
     const modeSingleBtnRef = useRef<HTMLButtonElement>(null);
     const modeAllBtnRef = useRef<HTMLButtonElement>(null);
-    const { transactions, client } = useStore();
+    const { transactions, client, summary_card } = useStore();
     const { authData, connectionStatus } = useApiBase();
     const currency = authData?.currency || getStoredProfitdockActiveCurrency() || 'USD';
     const [markets, setMarkets] = useState<MarketSymbol[]>(() => getCorsaMarkets([]));
-    const [marketMode, setMarketMode] = useProfitdockPersistentState<MarketMode>('profitdock.corsa.marketMode', 'single');
+    const [marketMode, setMarketMode] = useProfitdockPersistentState<MarketMode>(
+        'profitdock.corsa.marketMode',
+        'single'
+    );
     const [selectedMarket, setSelectedMarket] = useProfitdockPersistentState('profitdock.corsa.market', '1HZ10V');
-    const [contractType, setContractType] = useProfitdockPersistentState<CorsaDirection>('profitdock.corsa.contract', 'DIGITOVER');
+    const [contractType, setContractType] = useProfitdockPersistentState<CorsaDirection>(
+        'profitdock.corsa.contract',
+        'DIGITOVER'
+    );
     const [stake, setStake] = useProfitdockPersistentState('profitdock.corsa.stake', '0.35');
     const [martingale, setMartingale] = useProfitdockPersistentState('profitdock.corsa.martingale', '2');
     const [signalStreak, setSignalStreak] = useProfitdockPersistentState('profitdock.corsa.streak', '3');
@@ -415,13 +449,24 @@ const CorsaPage = observer(() => {
 
     const durationTicksRef = useRef(durationTicks);
 
-
-    useEffect(() => { contractTypeRef.current = contractType; }, [contractType]);
-    useEffect(() => { signalStreakRef.current = signalStreak; }, [signalStreak]);
-    useEffect(() => { predictionRef.current = prediction; }, [prediction]);
-    useEffect(() => { durationTicksRef.current = durationTicks; }, [durationTicks]);
-    useEffect(() => { martingaleRef.current = martingale; }, [martingale]);
-    useEffect(() => { marketsRef.current = markets; }, [markets]);
+    useEffect(() => {
+        contractTypeRef.current = contractType;
+    }, [contractType]);
+    useEffect(() => {
+        signalStreakRef.current = signalStreak;
+    }, [signalStreak]);
+    useEffect(() => {
+        predictionRef.current = prediction;
+    }, [prediction]);
+    useEffect(() => {
+        durationTicksRef.current = durationTicks;
+    }, [durationTicks]);
+    useEffect(() => {
+        martingaleRef.current = martingale;
+    }, [martingale]);
+    useEffect(() => {
+        marketsRef.current = markets;
+    }, [markets]);
 
     useEffect(() => {
         let isActive = true;
@@ -448,9 +493,7 @@ const CorsaPage = observer(() => {
 
                         setDetectors(prev => {
                             const current = prev[symbol];
-                            return current?.history?.length >= 9
-                                ? prev
-                                : { ...prev, [symbol]: seeded };
+                            return current?.history?.length >= 9 ? prev : { ...prev, [symbol]: seeded };
                         });
                     } catch (error) {
                         console.warn('[Corsa] Historical ticks unavailable for', symbol, error);
@@ -468,10 +511,17 @@ const CorsaPage = observer(() => {
                     const symbol = data.tick.symbol;
                     if (watchedMarketSymbols.includes(symbol)) {
                         setDetectors(prev => {
-                            const current = prev[symbol] || { history: [], priceHistory: [], streak: 0, lastEpoch: null, lastQuote: null };
+                            const current = prev[symbol] || {
+                                history: [],
+                                priceHistory: [],
+                                streak: 0,
+                                lastEpoch: null,
+                                lastQuote: null,
+                            };
                             const tick = data.tick;
 
-                            if (!tick || current.lastQuote === tick.quote || current.lastEpoch === tick.epoch) return prev;
+                            if (!tick || current.lastQuote === tick.quote || current.lastEpoch === tick.epoch)
+                                return prev;
 
                             const digit = getLastDigit(tick.quote, tick.pip_size || 2);
                             const history = [digit, ...current.history].slice(0, 50);
@@ -479,7 +529,13 @@ const CorsaPage = observer(() => {
 
                             return {
                                 ...prev,
-                                [symbol]: { ...current, history, priceHistory, lastEpoch: tick.epoch, lastQuote: tick.quote }
+                                [symbol]: {
+                                    ...current,
+                                    history,
+                                    priceHistory,
+                                    lastEpoch: tick.epoch,
+                                    lastQuote: tick.quote,
+                                },
                             };
                         });
                     }
@@ -523,14 +579,18 @@ const CorsaPage = observer(() => {
         };
     }, [connectionStatus]);
 
-    const waitForSettlement = (api: ApiLike, contractId: number, onUpdate: (contract: any) => void): Promise<number> => {
+    const waitForSettlement = (
+        api: ApiLike,
+        contractId: number,
+        onUpdate: (contract: any) => void
+    ): Promise<number> => {
         return new Promise((resolve, reject) => {
             let cleanup = null;
             let resolved = false;
             subscribeToContract(
                 api,
                 contractId,
-                (contract) => {
+                contract => {
                     onUpdate(contract);
                     const status = contract.status;
                     if (!resolved && (status === 'won' || status === 'lost')) {
@@ -539,17 +599,19 @@ const CorsaPage = observer(() => {
                         resolve(Number(contract.profit || 0));
                     }
                 },
-                (errorMsg) => {
+                errorMsg => {
                     if (!resolved) {
                         resolved = true;
                         if (cleanup) cleanup();
                         reject(new Error(errorMsg));
                     }
                 }
-            ).then(fn => {
-                cleanup = fn;
-                if (resolved) cleanup();
-            }).catch(reject);
+            )
+                .then(fn => {
+                    cleanup = fn;
+                    if (resolved) cleanup();
+                })
+                .catch(reject);
         });
     };
 
@@ -558,7 +620,13 @@ const CorsaPage = observer(() => {
         baseStakeRef.current = currentStake;
         const existingDetector = detectors[symbol];
         const detector = existingDetector
-            ? { history: [...existingDetector.history], priceHistory: [...existingDetector.priceHistory], streak: existingDetector.streak, lastEpoch: existingDetector.lastEpoch, lastQuote: existingDetector.lastQuote }
+            ? {
+                  history: [...existingDetector.history],
+                  priceHistory: [...existingDetector.priceHistory],
+                  streak: existingDetector.streak,
+                  lastEpoch: existingDetector.lastEpoch,
+                  lastQuote: existingDetector.lastQuote,
+              }
             : { history: [], priceHistory: [], streak: 0, lastEpoch: null, lastQuote: null };
         const registerListener = async () => {
             const api = await ensureTradingApi();
@@ -572,7 +640,7 @@ const CorsaPage = observer(() => {
             tickCleanupRef.current.get(symbol)?.();
             tickCleanupRef.current.delete(symbol);
 
-            const messageSub = api.onMessage().subscribe(async (message) => {
+            const messageSub = api.onMessage().subscribe(async message => {
                 const data = normalizeApiMessage(message);
                 if (data.msg_type !== 'tick' || data.tick?.symbol !== symbol) return;
 
@@ -607,7 +675,13 @@ const CorsaPage = observer(() => {
 
                 setDetectors(prev => ({
                     ...prev,
-                    [symbol]: { history: [...detector.history], priceHistory: [...detector.priceHistory], streak: detector.streak, lastEpoch: detector.lastEpoch, lastQuote: detector.lastQuote }
+                    [symbol]: {
+                        history: [...detector.history],
+                        priceHistory: [...detector.priceHistory],
+                        streak: detector.streak,
+                        lastEpoch: detector.lastEpoch,
+                        lastQuote: detector.lastQuote,
+                    },
                 }));
 
                 if (nextStreak >= targetStreak && !activeByMarketRef.current[symbol]) {
@@ -645,7 +719,10 @@ const CorsaPage = observer(() => {
                                     symbol: market.symbol,
                                     displayName: market.display_name || market.symbol,
                                     duration: toPositiveInteger(durationTicksRef.current, 1),
-                                    onUpdate: contract => transactions.pushTransaction(contract as any),
+                                    onUpdate: contract => {
+                                        transactions.pushTransaction(contract as any);
+                                        summary_card.onBotContractEvent(contract as any);
+                                    },
                                     getDummyBalance: () => client.dummy_balance,
                                     setDummyBalance: val => client.setDummyBalance(val),
                                 });
@@ -674,38 +751,61 @@ const CorsaPage = observer(() => {
 
                             const contractId = Number(buyRes.contract_id);
 
-                            const updateUi = (contract) => {
+                            const updateUi = contract => {
                                 const liveContract = contract;
-                                transactions.pushTransaction({
+                                const enriched = {
                                     ...contract,
                                     accountID: getActiveTransactionAccountId(),
-                                });
+                                };
+                                transactions.pushTransaction(enriched);
+                                summary_card.onBotContractEvent(enriched as any);
                                 const status = contract.status;
                                 const isSettled = status === 'won' || status === 'lost';
                                 setPositions(prev => {
                                     const existing = prev.find(p => p.contractId === contract.contract_id);
                                     if (existing) {
-                                        return prev.map(p => p.contractId === contract.contract_id ? {
-                                            ...p,
-                                            entrySpot: contract.entry_tick_display_value || contract.entry_tick || p.entrySpot,
-                                            exitSpot: contract.exit_tick_display_value || contract.exit_tick || (isSettled ? liveContract.current_spot_display_value || liveContract.current_spot : p.exitSpot),
-                                            profit: contract.profit != null ? Number(contract.profit) : p.profit,
-                                            status: isSettled ? 'closed' : 'live'
-                                        } : p);
+                                        return prev.map(p =>
+                                            p.contractId === contract.contract_id
+                                                ? {
+                                                      ...p,
+                                                      entrySpot:
+                                                          contract.entry_tick_display_value ||
+                                                          contract.entry_tick ||
+                                                          p.entrySpot,
+                                                      exitSpot:
+                                                          contract.exit_tick_display_value ||
+                                                          contract.exit_tick ||
+                                                          (isSettled
+                                                              ? liveContract.current_spot_display_value ||
+                                                                liveContract.current_spot
+                                                              : p.exitSpot),
+                                                      profit:
+                                                          contract.profit != null ? Number(contract.profit) : p.profit,
+                                                      status: isSettled ? 'closed' : 'live',
+                                                  }
+                                                : p
+                                        );
                                     } else {
-                                        return [...prev, {
-                                            buyPrice: contract.buy_price,
-                                            contractId: contract.contract_id,
-                                            contractType: contract.contract_type,
-                                            entrySpot: contract.entry_tick_display_value || contract.entry_tick,
-                                            exitSpot: contract.exit_tick_display_value || contract.exit_tick || liveContract.current_spot_display_value || liveContract.current_spot,
-                                            label: market.display_name || market.symbol,
-                                            market: contract.underlying,
-                                            profit: Number(contract.profit || 0),
-                                            stake: contract.buy_price,
-                                            status: isSettled ? 'closed' : 'live',
-                                            symbol
-                                        }];
+                                        return [
+                                            ...prev,
+                                            {
+                                                buyPrice: contract.buy_price,
+                                                contractId: contract.contract_id,
+                                                contractType: contract.contract_type,
+                                                entrySpot: contract.entry_tick_display_value || contract.entry_tick,
+                                                exitSpot:
+                                                    contract.exit_tick_display_value ||
+                                                    contract.exit_tick ||
+                                                    liveContract.current_spot_display_value ||
+                                                    liveContract.current_spot,
+                                                label: market.display_name || market.symbol,
+                                                market: contract.underlying,
+                                                profit: Number(contract.profit || 0),
+                                                stake: contract.buy_price,
+                                                status: isSettled ? 'closed' : 'live',
+                                                symbol,
+                                            },
+                                        ];
                                     }
                                 });
                             };
@@ -736,7 +836,6 @@ const CorsaPage = observer(() => {
         registerListener();
     };
 
-
     const handleRun = () => {
         if (isRunningRef.current) {
             isRunningRef.current = false;
@@ -765,7 +864,7 @@ const CorsaPage = observer(() => {
         emitProfitdockTradeStatus({
             canStop: isRunning,
             feature: 'corsa',
-            label: isRunning ? localize('Corsa running') : localize('Corsa ready'),
+            label: isRunning ? localize('Corsa is running') : localize('Corsa is not running'),
             running: isRunning,
         });
     }, [isRunning]);
@@ -811,11 +910,25 @@ const CorsaPage = observer(() => {
         <div className='corsa-page'>
             <section className='corsa-page__controls'>
                 <div className='corsa-page__mode' role='group'>
-                    <div className='corsa-page__mode-indicator' ref={modeIndicatorRef} style={{ transform: marketMode === 'all' ? 'translateX(100%)' : 'translateX(0)' }} />
-                    <button type='button' ref={modeSingleBtnRef} className={`corsa-page__mode-btn ${marketMode === 'single' ? 'corsa-page__mode-btn--active' : ''}`} onClick={() => setMarketMode('single')}>
+                    <div
+                        className='corsa-page__mode-indicator'
+                        ref={modeIndicatorRef}
+                        style={{ transform: marketMode === 'all' ? 'translateX(100%)' : 'translateX(0)' }}
+                    />
+                    <button
+                        type='button'
+                        ref={modeSingleBtnRef}
+                        className={`corsa-page__mode-btn ${marketMode === 'single' ? 'corsa-page__mode-btn--active' : ''}`}
+                        onClick={() => setMarketMode('single')}
+                    >
                         {localize('Single Market')}
                     </button>
-                    <button type='button' ref={modeAllBtnRef} className={`corsa-page__mode-btn ${marketMode === 'all' ? 'corsa-page__mode-btn--active' : ''}`} onClick={() => setMarketMode('all')}>
+                    <button
+                        type='button'
+                        ref={modeAllBtnRef}
+                        className={`corsa-page__mode-btn ${marketMode === 'all' ? 'corsa-page__mode-btn--active' : ''}`}
+                        onClick={() => setMarketMode('all')}
+                    >
                         {localize('Multiple Markets')}
                     </button>
                 </div>
@@ -826,7 +939,11 @@ const CorsaPage = observer(() => {
                         <span className='corsa-page__select-value'>
                             {selectedMarketInfo?.display_name || selectedMarket}
                         </span>
-                        <select value={selectedMarket} onChange={event => setSelectedMarket(event.target.value)} disabled={marketMode === 'all'}>
+                        <select
+                            value={selectedMarket}
+                            onChange={event => setSelectedMarket(event.target.value)}
+                            disabled={marketMode === 'all'}
+                        >
                             {markets.map(market => (
                                 <option key={market.symbol} value={market.symbol}>
                                     {market.display_name}
@@ -839,7 +956,10 @@ const CorsaPage = observer(() => {
                     <span>{localize('Contract')}</span>
                     <div className='corsa-page__select-wrap corsa-page__select-wrap--plain'>
                         <span className='corsa-page__select-value'>{selectedDirection.label}</span>
-                        <select value={contractType} onChange={event => setContractType(event.target.value as CorsaDirection)}>
+                        <select
+                            value={contractType}
+                            onChange={event => setContractType(event.target.value as CorsaDirection)}
+                        >
                             {DIRECTIONS.map(direction => (
                                 <option key={direction.contractType} value={direction.contractType}>
                                     {direction.label}
@@ -850,27 +970,53 @@ const CorsaPage = observer(() => {
                 </label>
                 <label className='corsa-page__field'>
                     <span>{localize('Stake')}</span>
-                    <input value={stake} onChange={event => setStake(event.target.value)} inputMode='decimal' placeholder='0.35' />
+                    <input
+                        value={stake}
+                        onChange={event => setStake(event.target.value)}
+                        inputMode='decimal'
+                        placeholder='0.35'
+                    />
                 </label>
                 <label className='corsa-page__field'>
                     <span>{localize('Martingale')}</span>
-                    <input value={martingale} onChange={event => setMartingale(event.target.value)} inputMode='decimal' />
+                    <input
+                        value={martingale}
+                        onChange={event => setMartingale(event.target.value)}
+                        inputMode='decimal'
+                    />
                 </label>
                 <label className='corsa-page__field'>
                     <span>{localize('Streak')}</span>
-                    <input value={signalStreak} onChange={event => setSignalStreak(event.target.value)} inputMode='numeric' />
+                    <input
+                        value={signalStreak}
+                        onChange={event => setSignalStreak(event.target.value)}
+                        inputMode='numeric'
+                    />
                 </label>
                 <label className='corsa-page__field'>
                     <span>{selectedDirection.needsDigit ? localize('Digit') : localize('Digit reference')}</span>
-                    <input value={prediction} onChange={event => setPrediction(event.target.value)} inputMode='numeric' disabled={!selectedDirection.needsDigit} />
+                    <input
+                        value={prediction}
+                        onChange={event => setPrediction(event.target.value)}
+                        inputMode='numeric'
+                        disabled={!selectedDirection.needsDigit}
+                    />
                 </label>
                 <label className='corsa-page__field'>
                     <span>{localize('Ticks')}</span>
-                    <input value={durationTicks} onChange={event => setDurationTicks(event.target.value)} inputMode='numeric' />
+                    <input
+                        value={durationTicks}
+                        onChange={event => setDurationTicks(event.target.value)}
+                        inputMode='numeric'
+                    />
                 </label>
                 <label className='corsa-page__field'>
                     <span>{localize('Take profit')}</span>
-                    <input value={takeProfit} onChange={event => setTakeProfit(event.target.value)} inputMode='decimal' />
+                    <input
+                        value={takeProfit}
+                        onChange={event => setTakeProfit(event.target.value)}
+                        inputMode='decimal'
+                    />
                 </label>
                 <label className='corsa-page__field'>
                     <span>{localize('Stop loss')}</span>
@@ -897,11 +1043,12 @@ const CorsaPage = observer(() => {
                                     detector,
                                     prediction: clampDigit(prediction, 0),
                                 }).map((item, index) => {
+                                    const isXMark = item.label === 'X';
                                     return (
                                         <b
                                             className={`corsa-page__digit corsa-page__digit--${item.tone} ${
                                                 index === 0 ? 'corsa-page__digit--current' : ''
-                                            }`}
+                                            }${isXMark ? ' corsa-page__digit--xmark' : ''}`}
                                             key={`${symbol}-${index}`}
                                         >
                                             {item.label}
@@ -918,4 +1065,3 @@ const CorsaPage = observer(() => {
 });
 
 export default CorsaPage;
-

@@ -41,8 +41,10 @@ type ApiLike = {
 type StrategyLeg = {
     contractType: string;
     label: string;
-    predictionMode?: 'barrier' | 'selected_tick' | 'none';
+    predictionMode?: 'barrier' | 'selected_tick' | 'none' | 'multiplier';
 };
+
+const FLIPPER_MULTIPLIER_OPTIONS = [80, 200, 400, 600, 800];
 
 type StrategyPair = {
     key: string;
@@ -148,14 +150,6 @@ const STRATEGY_PAIRS: StrategyPair[] = [
         ],
     },
     {
-        key: 'rise_fall_equals',
-        label: 'Rise = / Fall =',
-        legs: [
-            { contractType: 'CALLE', label: 'Rise =' },
-            { contractType: 'PUTE', label: 'Fall =' },
-        ],
-    },
-    {
         key: 'higher_lower',
         label: 'Higher / Lower',
         legs: [
@@ -185,6 +179,14 @@ const STRATEGY_PAIRS: StrategyPair[] = [
         legs: [
             { contractType: 'EXPIRYMISS', label: 'Ends Outside', predictionMode: 'barrier' },
             { contractType: 'RANGE', label: 'Stays Between', predictionMode: 'barrier' },
+        ],
+    },
+    {
+        key: 'up_down_multipliers',
+        label: 'Up / Down (Multipliers)',
+        legs: [
+            { contractType: 'MULTUP', label: 'Up', predictionMode: 'multiplier' },
+            { contractType: 'MULTDOWN', label: 'Down', predictionMode: 'multiplier' },
         ],
     },
 ];
@@ -273,6 +275,9 @@ const CONTRACT_TICK_LIMITS: Record<string, { min: number; max?: number }> = {
     UPORDOWN: { min: 2 },
 };
 
+const isMinutesDurationContract = (contractType: string) =>
+    ['EXPIRYMISS', 'EXPIRYRANGE', 'RANGE', 'UPORDOWN', 'MULTUP', 'MULTDOWN'].includes(contractType);
+
 const validateDuration = (contractType: string, duration: number) => {
     const finalDuration = Number.isFinite(duration) && duration > 0 ? Math.trunc(duration) : 1;
     const limits = CONTRACT_TICK_LIMITS[contractType] ?? { min: 1 };
@@ -305,9 +310,24 @@ const createProposalPayload = ({
     currency: string;
     duration: number;
     prediction: number | string;
-    predictionMode?: 'barrier' | 'selected_tick' | 'none';
+    predictionMode?: 'barrier' | 'selected_tick' | 'none' | 'multiplier';
     symbol: string;
 }) => {
+    const isMultiplierContract = contractType === 'MULTUP' || contractType === 'MULTDOWN';
+
+    if (isMultiplierContract) {
+        const payload: Record<string, unknown> = {
+            amount,
+            basis: 'stake',
+            contract_type: contractType,
+            currency,
+            multiplier: FLIPPER_MULTIPLIER_OPTIONS.includes(Number(prediction)) ? Number(prediction) : 80,
+            proposal: 1,
+        };
+        payload[isCustomLegacyOAuthDomain() ? 'underlying_symbol' : 'symbol'] = symbol;
+        return payload;
+    }
+
     const { finalDuration, finalDurationUnit } = validateDuration(contractType, duration);
 
     const payload: Record<string, unknown> = {
@@ -397,20 +417,26 @@ const requestDirectBuy = async (
     currency: string,
     duration: number,
     prediction: string | number,
-    predictionMode: 'barrier' | 'selected_tick' | 'none',
+    predictionMode: 'barrier' | 'selected_tick' | 'none' | 'multiplier',
     stake: number,
     symbol: string
 ) => {
-    const { finalDuration, finalDurationUnit } = validateDuration(contractType, duration);
+    const isMultiplierContract = contractType === 'MULTUP' || contractType === 'MULTDOWN';
 
     const parameters: Record<string, unknown> = {
         amount: stake,
         basis: 'stake',
         contract_type: contractType,
         currency,
-        duration: finalDuration,
-        duration_unit: finalDurationUnit,
     };
+
+    if (isMultiplierContract) {
+        parameters.multiplier = FLIPPER_MULTIPLIER_OPTIONS.includes(Number(prediction)) ? Number(prediction) : 80;
+    } else {
+        const { finalDuration, finalDurationUnit } = validateDuration(contractType, duration);
+        parameters.duration = finalDuration;
+        parameters.duration_unit = finalDurationUnit;
+    }
 
     parameters[isCustomLegacyOAuthDomain() ? 'underlying_symbol' : 'symbol'] = symbol;
 
@@ -581,10 +607,11 @@ const FlipperSwitcherPage = observer(() => {
     const [rounds, setRounds] = useProfitdockPersistentState('profitdock.flipper.rounds', '');
     const [takeProfit, setTakeProfit] = useProfitdockPersistentState('profitdock.flipper.takeProfit', '');
     const [stopLoss, setStopLoss] = useProfitdockPersistentState('profitdock.flipper.stopLoss', '');
-    const [positions, setPositions] = useState<FlipperPosition[]>([]);
-    const [feedback, setFeedback] = useState(localize('No positions'));
+    const [, setPositions] = useState<FlipperPosition[]>([]);
+    const [, setFeedback] = useState('');
     const [isRunning, setIsRunning] = useState(false);
-    const [stats, setStats] = useState({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
+    const [openMultiplierSlot, setOpenMultiplierSlot] = useState<0 | 1 | null>(null);
+    const [, setStats] = useState({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
     const cleanupRef = useRef<Map<number, () => void>>(new Map());
     const runningRef = useRef(false);
     // Stores the market the user had selected before the bot started running
@@ -623,6 +650,9 @@ const FlipperSwitcherPage = observer(() => {
     const [quoteTwo, setQuoteTwo] = useState<{ askPrice: number; payout: number; error?: string } | null>(null);
     const isSmartRiskOnRef = useRef(isSmartRiskOn);
     const isAnalysisOnRef = useRef(isAnalysisOn);
+    // Tracks the latest user-set stake values so the loop can pick up live changes
+    const userBaseStakeOneRef = useRef(stakeOne);
+    const userBaseStakeTwoRef = useRef(stakeTwo);
 
     useEffect(() => {
         turboRef.current = turbo;
@@ -666,6 +696,13 @@ const FlipperSwitcherPage = observer(() => {
     useEffect(() => {
         isAnalysisOnRef.current = isAnalysisOn;
     }, [isAnalysisOn]);
+    // Keep live user stake refs in sync so the loop can detect user changes
+    useEffect(() => {
+        userBaseStakeOneRef.current = stakeOne;
+    }, [stakeOne]);
+    useEffect(() => {
+        userBaseStakeTwoRef.current = stakeTwo;
+    }, [stakeTwo]);
 
     const selectedLegs = useMemo(() => getSelectedLegs(customLegs), [customLegs]);
     const selectedPair = useMemo(
@@ -748,7 +785,9 @@ const FlipperSwitcherPage = observer(() => {
 
                 let val = pred;
                 if (!val) {
-                    if (leg.predictionMode === 'barrier') {
+                    if (leg.predictionMode === 'multiplier') {
+                        val = '80';
+                    } else if (leg.predictionMode === 'barrier') {
                         val = leg.contractType.includes('DIGIT') ? '5' : '0.1';
                     } else {
                         val = entryPoint || '0';
@@ -868,11 +907,15 @@ const FlipperSwitcherPage = observer(() => {
                 contract => {
                     onUpdate(contract);
                     const status = contract.status;
-                    if (!resolved && (status === 'won' || status === 'lost')) {
+                    // 'won'/'lost' for standard contracts; 'sold' for multipliers closed
+                    // by stop-loss, take-profit, or manual sell before expiry
+                    if (!resolved && (status === 'won' || status === 'lost' || status === 'sold')) {
                         resolved = true;
                         if (cleanup) cleanup();
-                        // Use status field directly — never infer win/loss from profit amount
-                        resolve({ profit: Number(contract.profit ?? 0), won: status === 'won' });
+                        const profit = Number(contract.profit ?? 0);
+                        // For multipliers 'sold' is the only terminal state — win if profit > 0
+                        const won = status === 'won' || (status === 'sold' && profit > 0);
+                        resolve({ profit, won });
                     }
                 },
                 errorMsg => {
@@ -897,6 +940,9 @@ const FlipperSwitcherPage = observer(() => {
             let currentStakeTwo = toPositiveNumber(stakeTwo, 0);
             baseStakeOneRef.current = currentStakeOne;
             baseStakeTwoRef.current = currentStakeTwo;
+            // Initialize user-base refs to the same so change detection works
+            userBaseStakeOneRef.current = stakeOne;
+            userBaseStakeTwoRef.current = stakeTwo;
 
             let currentLossStreakOne = 0;
             let currentLossStreakTwo = 0;
@@ -925,10 +971,12 @@ const FlipperSwitcherPage = observer(() => {
 
             const updatePositionsUi = (contract: any, legIndex: number, activeLegs: any) => {
                 const liveContract = contract;
-                transactions.pushTransaction({
+                const enriched = {
                     ...contract,
                     accountID: getActiveTransactionAccountId(),
-                });
+                };
+                transactions.pushTransaction(enriched);
+                store.summary_card.onBotContractEvent(enriched as any);
                 const status = contract.status;
                 const isSettled = status === 'won' || status === 'lost';
                 setPositions(prev => {
@@ -1093,6 +1141,19 @@ const FlipperSwitcherPage = observer(() => {
                     break;
                 }
 
+                // --- LIVE SETTINGS UPDATE: pick up any stake/settings the user changed mid-run ---
+                const latestStakeOne = toPositiveNumber(userBaseStakeOneRef.current, 0);
+                const latestStakeTwo = toPositiveNumber(userBaseStakeTwoRef.current, 0);
+                // Only reset to user's new value if we're currently at base (i.e. no martingale escalation pending)
+                if (latestStakeOne > 0 && latestStakeOne !== baseStakeOneRef.current) {
+                    baseStakeOneRef.current = latestStakeOne;
+                    currentStakeOne = latestStakeOne;
+                }
+                if (latestStakeTwo > 0 && latestStakeTwo !== baseStakeTwoRef.current) {
+                    baseStakeTwoRef.current = latestStakeTwo;
+                    currentStakeTwo = latestStakeTwo;
+                }
+
                 const api: any = await ensureTradingApi();
 
                 const marketCandidates =
@@ -1153,6 +1214,10 @@ const FlipperSwitcherPage = observer(() => {
 
                 const getPredictionValue = (refValue: string, leg: StrategyLeg) => {
                     let val = refValue;
+                    if (leg.predictionMode === 'multiplier') {
+                        const num = Number(val);
+                        return FLIPPER_MULTIPLIER_OPTIONS.includes(num) ? num : 80;
+                    }
                     if (!val) {
                         val = leg.predictionMode === 'barrier' ? '+0.25' : entryPointRef.current || '0';
                     }
@@ -1190,7 +1255,7 @@ const FlipperSwitcherPage = observer(() => {
                                 activeLegs[1].predictionMode || 'none',
                                 currentStakeTwo,
                                 marketInfo.symbol
-                            )
+                            ),
                         ]);
                         firstId = b1.contract_id;
                         secondId = b2.contract_id;
@@ -1432,7 +1497,7 @@ const FlipperSwitcherPage = observer(() => {
         emitProfitdockTradeStatus({
             canStop: isRunning,
             feature: 'flipper',
-            label: isRunning ? localize('Flipper running') : localize('Flipper stopped'),
+            label: isRunning ? localize('Flipper is running') : localize('Flipper is not running'),
             running: isRunning,
         });
     }, [isRunning]);
@@ -1482,6 +1547,14 @@ const FlipperSwitcherPage = observer(() => {
             next[slot] = leg;
             nextLegSlotRef.current = slot === 0 ? 1 : 0;
 
+            if (leg.predictionMode === 'multiplier') {
+                if (slot === 0 && !FLIPPER_MULTIPLIER_OPTIONS.includes(Number(predictionOne))) {
+                    setPredictionOne('80');
+                } else if (slot === 1 && !FLIPPER_MULTIPLIER_OPTIONS.includes(Number(predictionTwo))) {
+                    setPredictionTwo('80');
+                }
+            }
+
             return next;
         });
     };
@@ -1513,8 +1586,9 @@ const FlipperSwitcherPage = observer(() => {
                     const quote = index === 0 ? quoteOne : quoteTwo;
                     return (
                         <div className='flipper-page__active-row' key={leg?.contractType || `empty-${index}`}>
-                            <strong>
-                                #{index + 1} - {leg?.label || localize('Select contract')}
+                            <strong style={{ display: 'inline-flex', alignItems: 'center', gap: '0.8rem' }}>
+                                #{index + 1} - {leg && <TradeTypeIcon type={leg.contractType} size='sm' />}
+                                <span>{leg?.label || localize('Select contract')}</span>
                             </strong>
                             <label className='flipper-page__stake-label'>
                                 <span>{localize('Stake')}</span>
@@ -1556,16 +1630,37 @@ const FlipperSwitcherPage = observer(() => {
                             </label>
                             {leg?.predictionMode && leg?.predictionMode !== 'none' && (
                                 <label>
-                                    {leg?.predictionMode === 'barrier' ? localize('Barrier') : localize('Prediction')}
-                                    <input
-                                        value={index === 0 ? predictionOne : predictionTwo}
-                                        onChange={event =>
-                                            index === 0
-                                                ? setPredictionOne(event.target.value)
-                                                : setPredictionTwo(event.target.value)
-                                        }
-                                        inputMode='text'
-                                    />
+                                    {leg?.predictionMode === 'multiplier'
+                                        ? localize('Multiplier')
+                                        : leg?.predictionMode === 'barrier'
+                                          ? localize('Barrier')
+                                          : localize('Prediction')}
+                                    {leg?.predictionMode === 'multiplier' ? (
+                                        <div
+                                            className='flipper-page__multiplier-picker-trigger'
+                                            role='button'
+                                            tabIndex={0}
+                                            onClick={() => setOpenMultiplierSlot(index as 0 | 1)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    setOpenMultiplierSlot(index as 0 | 1);
+                                                }
+                                            }}
+                                        >
+                                            <span>×{(index === 0 ? predictionOne : predictionTwo) || '80'}</span>
+                                            <span className='flipper-page__multiplier-picker-chevron'>▾</span>
+                                        </div>
+                                    ) : (
+                                        <input
+                                            value={index === 0 ? predictionOne : predictionTwo}
+                                            onChange={event =>
+                                                index === 0
+                                                    ? setPredictionOne(event.target.value)
+                                                    : setPredictionTwo(event.target.value)
+                                            }
+                                            inputMode='text'
+                                        />
+                                    )}
                                 </label>
                             )}
                         </div>
@@ -1611,7 +1706,12 @@ const FlipperSwitcherPage = observer(() => {
                 </button>
 
                 <label className='flipper-page__field'>
-                    {localize('Ticks')}
+                    {(() => {
+                        const hasMinutesLeg = selectedPair.legs.some(
+                            leg => leg && isMinutesDurationContract(leg.contractType)
+                        );
+                        return hasMinutesLeg ? localize('Minutes') : localize('Ticks');
+                    })()}
                     <input
                         value={durationTicks}
                         onChange={event => setDurationTicks(event.target.value)}
@@ -1675,36 +1775,6 @@ const FlipperSwitcherPage = observer(() => {
                     {localize('Stop Loss ($)')}
                     <input value={stopLoss} onChange={event => setStopLoss(event.target.value)} inputMode='decimal' />
                 </label>
-                <button type='button' className='flipper-page__run' onClick={handleRun}>
-                    <span className='flipper-page__play' />
-                    {isRunning ? localize('Stop') : localize('Run')}
-                </button>
-                <div className={`flipper-page__status ${isRunning ? 'flipper-page__status--on' : ''}`}>
-                    {isRunning ? 'ON' : 'OFF'}
-                </div>
-
-                <div className='flipper-page__positions'>
-                    <div>{localize('Type|Market')}</div>
-                    <div>{localize('Entry|Exit spot')}</div>
-                    <div>{localize('Buy price & P/L')}</div>
-                    {positions.length ? (
-                        positions.map(position => (
-                            <React.Fragment key={position.contractId}>
-                                <span>
-                                    {position.label} - {position.market}
-                                </span>
-                                <span>
-                                    {position.entrySpot ?? '--'} | {position.exitSpot ?? '--'}
-                                </span>
-                                <span>
-                                    {position.buyPrice.toFixed(2)} - {formatMoney(position.profit, currency)}
-                                </span>
-                            </React.Fragment>
-                        ))
-                    ) : (
-                        <span className='flipper-page__no-positions'>{localize('No positions')}</span>
-                    )}
-                </div>
             </section>
 
             {isSwitchMarketPickerOpen && (
@@ -1795,32 +1865,51 @@ const FlipperSwitcherPage = observer(() => {
                 </div>
             )}
 
-            <button
-                type='button'
-                className='flipper-page__reset'
-                onClick={() => {
-                    setPositions([]);
-                    currentRoundRef.current = 0;
-                    currentRunIdRef.current = 0;
-                    processedRunIdsRef.current = new Set();
-                    runCountRef.current = 0;
-                    sessionPnlRef.current = 0;
-                    lossStreakRef.current = 0;
-                    stakeOneRef.current = 0;
-                    stakeTwoRef.current = 0;
-                    setStats({ lost: 0, runs: 0, totalPnl: 0, won: 0 });
-                    setFeedback(localize('No positions'));
-                }}
-            >
-                {localize('Reset')}
-            </button>
-
-            <div className='flipper-page__feedback'>
-                {feedback}
-                {stats.runs
-                    ? ` ${localize('Runs')}: ${stats.runs} | ${localize('P/L')}: ${formatMoney(stats.totalPnl, currency)}`
-                    : ''}
-            </div>
+            {openMultiplierSlot !== null && (
+                <div className='flipper-page__multiplier-modal-backdrop' onClick={() => setOpenMultiplierSlot(null)}>
+                    <div className='flipper-page__multiplier-modal' onClick={e => e.stopPropagation()}>
+                        <div className='flipper-page__multiplier-modal-header'>
+                            <h3 className='flipper-page__multiplier-modal-title'>
+                                {localize('Select Multiplier')} (Leg #{openMultiplierSlot + 1})
+                            </h3>
+                            <button
+                                type='button'
+                                className='flipper-page__multiplier-modal-close'
+                                onClick={() => setOpenMultiplierSlot(null)}
+                            >
+                                ✕
+                            </button>
+                        </div>
+                        <div className='flipper-page__multiplier-modal-options'>
+                            {FLIPPER_MULTIPLIER_OPTIONS.map(opt => {
+                                const currentVal = Number(
+                                    (openMultiplierSlot === 0 ? predictionOne : predictionTwo) || '80'
+                                );
+                                const isSelected = currentVal === opt;
+                                return (
+                                    <button
+                                        key={opt}
+                                        type='button'
+                                        className={`flipper-page__multiplier-option-btn ${
+                                            isSelected ? 'flipper-page__multiplier-option-btn--selected' : ''
+                                        }`}
+                                        onClick={() => {
+                                            if (openMultiplierSlot === 0) {
+                                                setPredictionOne(String(opt));
+                                            } else {
+                                                setPredictionTwo(String(opt));
+                                            }
+                                            setOpenMultiplierSlot(null);
+                                        }}
+                                    >
+                                        ×{opt}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 });
