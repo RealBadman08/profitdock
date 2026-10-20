@@ -360,12 +360,44 @@ const getDisplayItems = ({
     contractType,
     detector,
     prediction,
+    ticks = 5,
 }: {
     contractType: CorsaDirection;
     detector?: DetectorState;
     prediction: number;
+    ticks?: number;
 }) =>
     Array.from({ length: 9 }).map((_, index) => {
+        if (contractType === 'RUNHIGH' || contractType === 'RUNLOW') {
+            const priceHistory = detector?.priceHistory;
+            const windowTicks = Math.max(2, ticks);
+            if (!priceHistory || priceHistory.length < index + windowTicks) {
+                return { label: '--', tone: 'empty' } as CorsaDisplayItem;
+            }
+
+            let allMatch = true;
+            for (let step = 0; step < windowTicks - 1; step++) {
+                const current = priceHistory[index + step];
+                const previous = priceHistory[index + step + 1];
+                if (contractType === 'RUNHIGH' && !(current > previous)) {
+                    allMatch = false;
+                    break;
+                }
+                if (contractType === 'RUNLOW' && !(current < previous)) {
+                    allMatch = false;
+                    break;
+                }
+            }
+
+            if (allMatch) {
+                return {
+                    label: contractType === 'RUNHIGH' ? '↑' : '↓',
+                    tone: 'positive',
+                } as CorsaDisplayItem;
+            }
+            return { label: 'X', tone: 'negative' } as CorsaDisplayItem;
+        }
+
         const digit = detector?.history?.[index];
 
         if (typeof digit !== 'number') {
@@ -451,6 +483,9 @@ const CorsaPage = observer(() => {
 
     useEffect(() => {
         contractTypeRef.current = contractType;
+        if ((contractType === 'RUNHIGH' || contractType === 'RUNLOW') && Number(durationTicks) < 5) {
+            setDurationTicks('5');
+        }
     }, [contractType]);
     useEffect(() => {
         signalStreakRef.current = signalStreak;
@@ -659,7 +694,10 @@ const CorsaPage = observer(() => {
                 const digit = getLastDigit(tick.quote, tick.pip_size || 2);
 
                 const liveContractType = contractTypeRef.current;
-                const targetStreak = toPositiveInteger(signalStreakRef.current, 1);
+                const targetStreak =
+                    liveContractType === 'RUNHIGH' || liveContractType === 'RUNLOW'
+                        ? Math.max(1, toPositiveInteger(durationTicksRef.current, 5) - 1)
+                        : toPositiveInteger(signalStreakRef.current, 1);
                 const targetDigit = clampDigit(predictionRef.current, 0);
 
                 detector.history = [digit, ...detector.history].slice(0, 50);
@@ -698,6 +736,10 @@ const CorsaPage = observer(() => {
 
                     void (async () => {
                         try {
+                            const tradeDuration = ['RUNHIGH', 'RUNLOW'].includes(liveContractType)
+                                ? Math.max(5, toPositiveInteger(durationTicksRef.current, 5))
+                                : toPositiveInteger(durationTicksRef.current, 1);
+
                             // --- VIRTUAL MODE ---
                             if (client.is_dummy_active) {
                                 // Insufficient balance guard
@@ -718,7 +760,7 @@ const CorsaPage = observer(() => {
                                     stake: currentStake,
                                     symbol: market.symbol,
                                     displayName: market.display_name || market.symbol,
-                                    duration: toPositiveInteger(durationTicksRef.current, 1),
+                                    duration: tradeDuration,
                                     onUpdate: contract => {
                                         transactions.pushTransaction(contract as any);
                                         summary_card.onBotContractEvent(contract as any);
@@ -743,7 +785,7 @@ const CorsaPage = observer(() => {
                                 api,
                                 contractType: liveContractType,
                                 currency,
-                                duration: toPositiveInteger(durationTicksRef.current, 1),
+                                duration: tradeDuration,
                                 prediction: targetDigit,
                                 symbol: market.symbol,
                             });
@@ -1042,6 +1084,7 @@ const CorsaPage = observer(() => {
                                     contractType,
                                     detector,
                                     prediction: clampDigit(prediction, 0),
+                                    ticks: toPositiveInteger(durationTicks, 5),
                                 }).map((item, index) => {
                                     const isXMark = item.label === 'X';
                                     return (

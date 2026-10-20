@@ -692,14 +692,46 @@ export default class RunPanelStore {
         }
     };
 
-    onClickSell = () => {
+    onClickSell = (contract_id?: number | string) => {
+        const id = Number(
+            contract_id ||
+                this.root_store.summary_card.contract_info?.contract_id ||
+                (this.root_store.summary_card.contract_info as any)?.id ||
+                this.root_store.summary_card.contract_info?.transaction_ids?.buy
+        );
+
         const { is_multiplier } = this.root_store.summary_card;
 
         if (is_multiplier) {
             this.setContractStage(contract_stages.IS_STOPPING);
         }
 
-        this.dbot.interpreter.bot.getInterface().sellAtMarket();
+        this.is_sell_requested = true;
+
+        if (id) {
+            const api = api_base.api as any;
+            if (api?.send) {
+                api.send({ sell: id, price: 0 })
+                    .then((res: any) => {
+                        this.is_sell_requested = false;
+                        if (res?.error) {
+                            console.warn('[onClickSell] Direct sell error:', res.error);
+                            this.showErrorMessage(res.error.message || 'Unable to close contract');
+                        }
+                    })
+                    .catch((err: unknown) => {
+                        this.is_sell_requested = false;
+                        console.warn('[onClickSell] Direct sell failed:', err);
+                    });
+            }
+            return;
+        }
+
+        if (this.dbot?.interpreter?.bot) {
+            this.dbot.interpreter.bot.getInterface().sellAtMarket();
+        } else {
+            this.is_sell_requested = false;
+        }
     };
 
     clear = () => {

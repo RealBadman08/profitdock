@@ -127,16 +127,34 @@ export const isEnded = (contract_info: TContractInfo) =>
         contract_info.is_settleable
     );
 
-export const isOpen = (contract_info: TContractInfo) => getContractStatus(contract_info) === 'open';
+export const isOpen = (contract_info: TContractInfo) => {
+    if (
+        contract_info.is_sold ||
+        contract_info.status === 'sold' ||
+        contract_info.status === 'won' ||
+        contract_info.status === 'lost'
+    ) {
+        return false;
+    }
+    return getContractStatus(contract_info) === 'open' || !contract_info.status;
+};
 
 export const isUserSold = (contract_info: TContractInfo) => contract_info.status === 'sold';
 
 export const isValidToCancel = (contract_info: TContractInfo) => !!contract_info.is_valid_to_cancel;
 
 export const isValidToSell = (contract_info: TContractInfo) =>
-    !isEnded(contract_info) && !isUserSold(contract_info) && !!contract_info.is_valid_to_sell;
+    !isEnded(contract_info) &&
+    !isUserSold(contract_info) &&
+    (contract_info.is_valid_to_sell === undefined || !!contract_info.is_valid_to_sell);
 
-export const hasContractEntered = (contract_info: TContractInfo) => !!contract_info.entry_spot;
+export const hasContractEntered = (contract_info: TContractInfo) =>
+    !!(
+        contract_info.entry_spot ||
+        contract_info.entry_tick ||
+        contract_info.current_spot ||
+        contract_info.date_start
+    );
 
 export const hasBarrier = (contract_type = '') => /VANILLA|TURBOS|HIGH_LOW|TOUCH/i.test(contract_type);
 

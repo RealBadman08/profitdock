@@ -1213,7 +1213,7 @@ const AccumulatorsPage = observer(() => {
                            };
                            changed = true;
                            
-                           transactions.pushTransaction({
+                            const virtualLossContract = {
                                accountID: 'VIRTUAL',
                                buy_price: trade.buyPrice,
                                contract_id: trade.contractId as any,
@@ -1233,7 +1233,9 @@ const AccumulatorsPage = observer(() => {
                                    sell: `dummy_loss_${Date.now()}` as any,
                                },
                                underlying: symbol,
-                           } as any);
+                            } as any;
+                            transactions.pushTransaction(virtualLossContract);
+                            summary_card.onBotContractEvent(virtualLossContract);
                            
                        } else if (currentStat > lastStat) {
                            const ticksPassed = trade.tickPassed + (currentStat - lastStat);
@@ -1255,7 +1257,7 @@ const AccumulatorsPage = observer(() => {
                                    isValidToSell: false
                                };
                                
-                               transactions.pushTransaction({
+                                const virtualTakeProfitContract = {
                                    accountID: 'VIRTUAL',
                                    buy_price: trade.buyPrice,
                                    contract_id: trade.contractId as any,
@@ -1277,7 +1279,9 @@ const AccumulatorsPage = observer(() => {
                                        sell: `dummy_tp_${Date.now()}` as any,
                                    },
                                    underlying: symbol,
-                               } as any);
+                                } as any;
+                                transactions.pushTransaction(virtualTakeProfitContract);
+                                summary_card.onBotContractEvent(virtualTakeProfitContract);
                                
                            } else {
                                next[symbol] = {
@@ -1293,7 +1297,16 @@ const AccumulatorsPage = observer(() => {
              });
              return changed ? next : prev;
         });
-    }, [manualProposal.currentStat, store.client.is_dummy_active, growthRatePercent, manualConfigs, store.client, transactions, currency]);
+    }, [
+        manualProposal.currentStat,
+        store.client.is_dummy_active,
+        growthRatePercent,
+        manualConfigs,
+        store.client,
+        transactions,
+        summary_card,
+        currency,
+    ]);
     // --------------------------
 
     const [manualTickError, setManualTickError] = useState<string | null>(null);
@@ -2228,10 +2241,12 @@ const AccumulatorsPage = observer(() => {
                 onUpdate: contract => {
                     const bidPrice = getAccumulatorBidPrice(contract);
 
-                    transactions.pushTransaction({
+                    const enriched = {
                         ...(contract as ProposalOpenContract),
                         accountID: getActiveTransactionAccountId(),
-                    } as ProposalOpenContract);
+                    } as ProposalOpenContract;
+                    transactions.pushTransaction(enriched);
+                    summary_card.onBotContractEvent(enriched as any);
 
                     setManualTrades(previous => ({
                         ...previous,
@@ -2302,7 +2317,7 @@ const AccumulatorsPage = observer(() => {
                 const entryTimeStr = new Date().toUTCString();
                 store.client.setDummyBalance(store.client.dummy_balance - stake);
                 
-                transactions.pushTransaction({
+                const virtualOpenContract = {
                     accountID: 'VIRTUAL',
                     buy_price: stake,
                     contract_id: dummyId as any,
@@ -2320,7 +2335,9 @@ const AccumulatorsPage = observer(() => {
                         buy: dummyId as any,
                     },
                     underlying: market.symbol,
-                } as any);
+                } as any;
+                transactions.pushTransaction(virtualOpenContract);
+                summary_card.onBotContractEvent(virtualOpenContract);
 
                 setManualTrades(previous => ({
                     ...previous,
@@ -2470,7 +2487,7 @@ const AccumulatorsPage = observer(() => {
                     throw new Error('Accumulator trade was sent but no contract id was returned.');
                 }
 
-                transactions.pushTransaction({
+                const openContract = {
                     accountID: getActiveTransactionAccountId(),
                     buy_price: stake,
                     contract_id: contractId,
@@ -2486,7 +2503,9 @@ const AccumulatorsPage = observer(() => {
                     },
                     underlying: market.symbol,
                     underlying_symbol: market.symbol,
-                } as ProposalOpenContract);
+                } as ProposalOpenContract;
+                transactions.pushTransaction(openContract);
+                summary_card.onBotContractEvent(openContract as any);
 
                 setManualTrades(previous => ({
                     ...previous,
@@ -2525,6 +2544,7 @@ const AccumulatorsPage = observer(() => {
             hasRecoverableProfitdockSession,
             manualConfigs,
             manualProposal,
+            summary_card,
             transactions,
         ]
     );
@@ -2537,7 +2557,7 @@ const AccumulatorsPage = observer(() => {
                 const finalProfit = activeTrade.profit;
                 store.client.setDummyBalance(store.client.dummy_balance + activeTrade.buyPrice + finalProfit);
                 
-                transactions.pushTransaction({
+                const virtualSellContract = {
                     accountID: 'VIRTUAL',
                     buy_price: activeTrade.buyPrice,
                     contract_id: activeTrade.contractId,
@@ -2553,7 +2573,9 @@ const AccumulatorsPage = observer(() => {
                         sell: `dummy_sell_${Date.now()}` as any,
                     },
                     underlying: market.symbol,
-                });
+                };
+                transactions.pushTransaction(virtualSellContract);
+                summary_card.onBotContractEvent(virtualSellContract as any);
 
                 setManualTrades(previous => ({
                     ...previous,
@@ -2618,7 +2640,7 @@ const AccumulatorsPage = observer(() => {
                 const soldFor = toFiniteNumber(sellResponse?.sell?.sold_for ?? sellResponse?.sell?.price);
 
                 if (soldFor !== null) {
-                    transactions.pushTransaction({
+                    const sellContract = {
                         accountID: getActiveTransactionAccountId(),
                         buy_price: activeTrade.buyPrice,
                         contract_id: activeTrade.contractId,
@@ -2633,7 +2655,9 @@ const AccumulatorsPage = observer(() => {
                         },
                         underlying: market.symbol,
                         underlying_symbol: market.symbol,
-                    } as ProposalOpenContract);
+                    } as ProposalOpenContract;
+                    transactions.pushTransaction(sellContract);
+                    summary_card.onBotContractEvent(sellContract as any);
                 }
             } catch (error) {
                 setManualTrades(previous => ({
@@ -2646,7 +2670,7 @@ const AccumulatorsPage = observer(() => {
                 }));
             }
         },
-        [currency, ensureAccumulatorTradingApi, manualTrades, transactions]
+        [currency, ensureAccumulatorTradingApi, manualTrades, summary_card, transactions]
     );
 
     const stopAutoMonitoring = useCallback(
@@ -2681,15 +2705,13 @@ const AccumulatorsPage = observer(() => {
             const liveProfit = typeof contract.profit === 'number' ? contract.profit : 0;
             const tickPassed = contract.tick_passed || 0;
 
-            transactions.pushTransaction({
+            const enriched = {
                 ...(contract as ProposalOpenContract),
                 accountID: getActiveTransactionAccountId(),
-            } as ProposalOpenContract);
+            } as ProposalOpenContract;
 
-            summary_card.onBotContractEvent({
-                ...(contract as ProposalOpenContract),
-                accountID: getActiveTransactionAccountId(),
-            } as any);
+            transactions.pushTransaction(enriched);
+            summary_card.onBotContractEvent(enriched as any);
 
             setAutoEngine(previous => ({
                 ...previous,
@@ -2831,6 +2853,7 @@ const AccumulatorsPage = observer(() => {
             resolvedAutoStopLoss,
             resolvedAutoStreakLength,
             resolvedAutoThresholdBelow,
+            summary_card,
             transactions,
         ]
     );
@@ -2946,7 +2969,7 @@ const AccumulatorsPage = observer(() => {
 
             autoActiveBuyPriceRef.current = stake;
 
-            transactions.pushTransaction({
+            const openContract = {
                 accountID: getActiveTransactionAccountId(),
                 buy_price: stake,
                 contract_id: contractId,
@@ -2962,7 +2985,9 @@ const AccumulatorsPage = observer(() => {
                 },
                 underlying: tradeMarket.symbol,
                 underlying_symbol: tradeMarket.symbol,
-            } as ProposalOpenContract);
+            } as ProposalOpenContract;
+            transactions.pushTransaction(openContract);
+            summary_card.onBotContractEvent(openContract as any);
 
             setAutoEngine(previous => ({
                 ...previous,
@@ -3005,6 +3030,7 @@ const AccumulatorsPage = observer(() => {
         handleAutoContractUpdate,
         hasRecoverableProfitdockSession,
         resolvedAutoMarket,
+        summary_card,
         transactions,
     ]);
 
@@ -3323,7 +3349,7 @@ const AccumulatorsPage = observer(() => {
         emitProfitdockTradeStatus({
             canStop: isAutoActive,
             feature: 'accumulators',
-            label: isAutoActive ? localize('Accumulator auto trader running') : localize('Accumulator auto trader stopped'),
+            label: isAutoActive ? localize('Accumulators is running') : localize('Accumulators is not running'),
             running: isAutoActive,
         });
     }, [autoEngine.activeContractId, autoEngine.running]);
@@ -4082,41 +4108,7 @@ const AccumulatorsPage = observer(() => {
                                             : localize('Start Auto Trading')}
                                     </span>
                                 </button>
-                                {autoEngine.feedback && (
-                                    <div className='accumulators-page__engine-copy'>{autoEngine.feedback}</div>
-                                )}
-                                <div className='accumulators-page__engine-metrics'>
-                                    <div>
-                                        <span>{localize('Current stat')}</span>
-                                        <strong>{visibleAutoStream.currentStat ?? '--'}</strong>
-                                    </div>
-                                    <div>
-                                        <span>{localize('Entry streak')}</span>
-                                        <strong>{autoEngine.entryStreak}/{resolvedAutoStreakLength}</strong>
-                                    </div>
-                                    <div>
-                                        <span>{localize('Next stake')}</span>
-                                        <strong>{formatMoney(autoEngine.nextStake, currency)}</strong>
-                                    </div>
-                                    <div>
-                                        <span>{localize('Active tick')}</span>
-                                        <strong>{autoEngine.tickPassed || '--'}</strong>
-                                    </div>
-                                    <div>
-                                        <span>{localize('Profit')}</span>
-                                        <strong
-                                            className={`accumulators-page__metric-value accumulators-page__metric-value--${
-                                                autoEngine.activeProfit > 0 ? 'good' : autoEngine.activeProfit < 0 ? 'bad' : 'neutral'
-                                            }`}
-                                        >
-                                            {formatMoney(autoEngine.activeProfit, currency)}
-                                        </strong>
-                                    </div>
-                                    <div>
-                                        <span>{localize('Market price')}</span>
-                                        <strong>{visibleAutoStream.priceDisplay}</strong>
-                                    </div>
-                                </div>
+
                                 {autoMarketMode === 'single' && (
                                     <div className='accumulators-page__tick-stream accumulators-page__auto-stat-panel'>
                                         <div className='accumulators-page__tick-stream-head accumulators-page__tick-stream-head--market-only'>

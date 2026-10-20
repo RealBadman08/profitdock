@@ -153,6 +153,10 @@ class VirtualTradingEngine {
                 return currentSpot > entry;
             case 'RUNLOW': // Only Downs
                 return currentSpot < entry;
+            case 'MULTUP':
+                return currentSpot > entry;
+            case 'MULTDOWN':
+                return currentSpot < entry;
             case 'DIGITEVEN':
                 return lastDigit % 2 === 0;
             case 'DIGITODD':
@@ -511,6 +515,13 @@ class VirtualTradingEngine {
             if (contract && !contract.is_sold) {
                 const spot = this.lastSpots.get(contract.symbol) ?? contract.current_spot ?? 0;
                 this._settle(contract, spot, Math.floor(Date.now() / 1000), contract.pip_size ?? 2);
+                if (contract.contract_type === 'MULTUP' || contract.contract_type === 'MULTDOWN') {
+                    contract.status = 'sold';
+                    this._emit({
+                        msg_type: 'proposal_open_contract',
+                        proposal_open_contract: this._contractPayload(contract),
+                    });
+                }
                 const store = (window as any)._clientStore;
                 return {
                     msg_type: 'sell',
